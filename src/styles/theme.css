@@ -1,0 +1,25 @@
+:root {
+  --bg-main: #0b132b;
+  --bg-card: #1c2541;
+  --bg-sidebar: #1e293b;
+  --text-main: #ffffff;
+  --text-muted: #94a3b8;
+  --accent-yellow: #facc15;
+  --border-color: #2a3656;
+}
+
+[data-theme='light'] {
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-sidebar: #1e293b;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: system-ui, -apple-system, sans-serif;
+}
