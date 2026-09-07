@@ -1,21 +1,29 @@
 import { useState } from 'react';
+import { RecuperarContrasena, Registro } from './AuthForms';
 
 export function Login({ onLogin }) {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [vista, setVista] = useState('login');
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validación estricta con credenciales fijas
-    if (usuario === 'admin' && password === '1033490682') {
+    const usuariosGuardados = localStorage.getItem('mca_usuarios');
+    const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [{ usuario: 'admin', correo: 'admin@electricosmca.com', password: '1033490682' }];
+    const usuarioValido = usuarios.find((cuenta) => cuenta.usuario === usuario && cuenta.password === password);
+
+    if (usuarioValido) {
       setError('');
       onLogin(); // Autoriza el acceso
     } else {
       setError('Usuario o contraseña incorrectos');
     }
   };
+
+  if (vista === 'registro') return <Registro onBack={() => setVista('login')} />;
+  if (vista === 'recuperar') return <RecuperarContrasena onBack={() => setVista('login')} />;
 
   return (
     <div style={{
@@ -126,6 +134,14 @@ export function Login({ onLogin }) {
           >
             Iniciar Sesión
           </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '4px' }}>
+            <button type="button" onClick={() => { setError(''); setVista('recuperar'); }} style={{ border: 'none', background: 'none', color: '#facc15', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+              ¿Olvidaste tu contraseña?
+            </button>
+            <button type="button" onClick={() => { setError(''); setVista('registro'); }} style={{ border: 'none', background: 'none', color: '#facc15', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+              Crear cuenta
+            </button>
+          </div>
         </form>
       </div>
     </div>
