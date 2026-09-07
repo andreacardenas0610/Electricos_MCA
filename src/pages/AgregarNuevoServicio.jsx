@@ -17,7 +17,7 @@ export function AgregarNuevoServicio() {
   // PALETA DINÁMICA DE COLORES
   const theme = {
     bgApp: esOscuro ? '#0b1329' : '#f8fafc',
-    bgSidebar: esOscuro ? '#0e1830' : '#111c38',
+    bgSidebar: esOscuro ? '#0e1830' : '#e8eef3',
     bgCard: esOscuro ? '#111c38' : '#ffffff',
     bgInner: esOscuro ? '#0b1329' : '#f1f5f9',
     bgPriceBox: esOscuro ? '#21241a' : '#fefde8',

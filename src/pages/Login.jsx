@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { RecuperarContrasena, Registro } from './AuthForms';
+import { ThemeContext } from '../context/ThemeContext';
+import '../styles/auth.css';
 
 export function Login({ onLogin }) {
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [vista, setVista] = useState('login');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -26,124 +30,82 @@ export function Login({ onLogin }) {
   if (vista === 'recuperar') return <RecuperarContrasena onBack={() => setVista('login')} />;
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      width: '100vw',
-      backgroundColor: '#0f172a',
-      fontFamily: 'sans-serif'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '380px',
-        backgroundColor: '#1b2a47',
-        padding: '32px',
-        borderRadius: '12px',
-        border: '1px solid #243556',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <h1 style={{ color: '#facc15', fontSize: '26px', fontWeight: 'bold', margin: '0 0 6px 0' }}>
-            Eléctricos MCA
-          </h1>
-          <span style={{ fontSize: '12px', color: '#8899ac', letterSpacing: '1.5px', fontWeight: '600' }}>
-            GESTIÓN INDUSTRIAL
-          </span>
-        </div>
+    <main className="auth-page">
+      <div className="auth-backdrop" aria-hidden="true" />
+      <button className="auth-theme-toggle" type="button" onClick={toggleTheme} aria-label={`Cambiar a modo ${theme === 'dark' ? 'claro' : 'oscuro'}`}>
+        <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+        {theme === 'dark' ? 'Light' : 'Dark'}
+      </button>
+      <section className="auth-card" aria-labelledby="login-title">
+        <header className="auth-brand">
+          <div className="auth-brand-mark" aria-hidden="true">⚡</div>
+          <h1 id="login-title">ELÉCTRICOS MCA</h1>
+          <span>GESTIÓN INDUSTRIAL</span>
+        </header>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form className="auth-form" onSubmit={handleSubmit}>
           {error && (
-            <div style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-              color: '#ef4444',
-              padding: '10px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              textAlign: 'center',
-              border: '1px solid rgba(239, 68, 68, 0.3)'
-            }}>
+            <div className="auth-error" role="alert">
               {error}
             </div>
           )}
 
-          <div>
-            <label style={{ display: 'block', color: '#a0aec0', fontSize: '13px', marginBottom: '6px' }}>
-              Usuario
-            </label>
-            <input
-              type="text"
-              value={usuario}
-              onChange={(e) => setUsuario(e.target.value)}
-              placeholder="Ingresa tu usuario"
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '6px',
-                border: '1px solid #243556',
-                backgroundColor: '#0f172a',
-                color: '#fff',
-                fontSize: '14px',
-                boxSizing: 'border-box',
-                outline: 'none'
-              }}
-            />
-          </div>
+          <label className="auth-field">
+            <span>USUARIO</span>
+            <div className="auth-input-wrap">
+              <span className="auth-input-icon" aria-hidden="true">@</span>
+              <input
+                type="text"
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                placeholder="Ingresa tu usuario"
+                autoComplete="username"
+                required
+              />
+            </div>
+          </label>
 
-          <div>
-            <label style={{ display: 'block', color: '#a0aec0', fontSize: '13px', marginBottom: '6px' }}>
-              Contraseña
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '6px',
-                border: '1px solid #243556',
-                backgroundColor: '#0f172a',
-                color: '#fff',
-                fontSize: '14px',
-                boxSizing: 'border-box',
-                outline: 'none'
-              }}
-            />
-          </div>
+          <label className="auth-field">
+            <span>CONTRASEÑA</span>
+            <div className="auth-input-wrap">
+              <span className="auth-input-icon" aria-hidden="true">&#9679;</span>
+              <input
+                type={mostrarPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Ingresa tu contraseña"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                className="auth-password-toggle"
+                type="button"
+                onClick={() => setMostrarPassword((visible) => !visible)}
+                aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {mostrarPassword ? 'Ocultar' : 'Ver'}
+              </button>
+            </div>
+          </label>
 
-          <button
-            type="submit"
-            style={{
-              marginTop: '8px',
-              padding: '12px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: '#facc15',
-              color: '#0f172a',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            Iniciar Sesión
+          <button className="auth-submit" type="submit">
+            Iniciar sesión <span aria-hidden="true">&#8594;</span>
           </button>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '4px' }}>
-            <button type="button" onClick={() => { setError(''); setVista('recuperar'); }} style={{ border: 'none', background: 'none', color: '#facc15', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+
+          <div className="auth-links">
+            <button type="button" onClick={() => { setError(''); setVista('recuperar'); }}>
               ¿Olvidaste tu contraseña?
             </button>
-            <button type="button" onClick={() => { setError(''); setVista('registro'); }} style={{ border: 'none', background: 'none', color: '#facc15', cursor: 'pointer', fontSize: '12px', padding: 0 }}>
+            <button type="button" onClick={() => { setError(''); setVista('registro'); }}>
               Crear cuenta
             </button>
           </div>
         </form>
-      </div>
-    </div>
+
+        <footer className="auth-footer">
+          © 2024 Eléctricos MCA S.A.S. - Sistema de control interno
+        </footer>
+      </section>
+    </main>
   );
 }

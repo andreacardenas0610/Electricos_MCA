@@ -1,0 +1,12 @@
+.splash-screen { display: grid; min-height: 100vh; min-height: 100dvh; width: 100vw; place-items: center; overflow: hidden; background: #102836; color: #f8fafc; font-family: Arial, Helvetica, sans-serif; }
+[data-theme='light'] .splash-screen { background: #f1f4f6; color: #1b2732; }
+.splash-content { display: flex; flex-direction: column; align-items: center; animation: splash-appear 600ms ease-out both; }
+.splash-mark { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; background: #ffd200; color: #172536; font-size: 31px; font-weight: 700; box-shadow: 0 0 0 10px rgba(255, 210, 0, 0.08); }
+.splash-content h1 { margin: 18px 0 4px; font-size: 19px; letter-spacing: 1px; }
+.splash-content p { margin: 0; color: #a9b8c8; font-size: 9px; font-weight: 700; letter-spacing: 1.8px; }
+[data-theme='light'] .splash-content p { color: #6d7880; }
+.splash-loader { width: 78px; height: 3px; margin-top: 28px; overflow: hidden; border-radius: 4px; background: rgba(169, 184, 200, 0.28); }
+.splash-loader::after { display: block; width: 38%; height: 100%; border-radius: inherit; background: #ffd200; content: ''; animation: splash-loading 1.1s ease-in-out infinite; }
+@keyframes splash-appear { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes splash-loading { from { transform: translateX(-110%); } to { transform: translateX(280%); } }
+@media (prefers-reduced-motion: reduce) { .splash-content, .splash-loader::after { animation: none; } }

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Login } from './Login';
+import { SplashScreen } from '../components/SplashScreen.jsx';
 
 // Importación de las vistas
 import { PanelControl } from './PanelControl';
@@ -14,14 +15,23 @@ import { Clientes, GestionTerceros, OrdenesServicio } from './ModulosGestion';
 
 export function Dashboard() {
   const [autenticado, setAutenticado] = useState(() => {
-    return localStorage.getItem('isLoggedIn') === 'true';
+    return false;
   });
 
   const [seccionActual, setSeccionActual] = useState('panel');
+  const [mostrandoSplash, setMostrandoSplash] = useState(false);
+
+  useEffect(() => {
+    if (!mostrandoSplash) return undefined;
+
+    const temporizador = window.setTimeout(() => setMostrandoSplash(false), 1800);
+    return () => window.clearTimeout(temporizador);
+  }, [mostrandoSplash]);
 
   const handleLogin = () => {
     localStorage.setItem('isLoggedIn', 'true');
     setAutenticado(true);
+    setMostrandoSplash(true);
   };
 
   const handleLogout = () => {
@@ -31,6 +41,10 @@ export function Dashboard() {
 
   if (!autenticado) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  if (mostrandoSplash) {
+    return <SplashScreen />;
   }
 
   // Agrupación del menú por categorías
@@ -73,11 +87,11 @@ export function Dashboard() {
           width: 5px;
         }
         .sidebar-scroll::-webkit-scrollbar-track {
-          background: #1e293b;
+          background: var(--bg-sidebar);
           border-radius: 4px;
         }
         .sidebar-scroll::-webkit-scrollbar-thumb {
-          background: #334155;
+          background: var(--sidebar-border);
           border-radius: 4px;
         }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover {
@@ -89,8 +103,8 @@ export function Dashboard() {
       <aside style={{ 
         width: '270px', 
         minWidth: '270px',
-        backgroundColor: '#1e293b', 
-        borderRight: '1px solid #334155', 
+        backgroundColor: 'var(--bg-sidebar)', 
+        borderRight: '1px solid var(--sidebar-border)', 
         padding: '24px 16px', 
         display: 'flex', 
         flexDirection: 'column', 
@@ -109,7 +123,7 @@ export function Dashboard() {
                   Eléctricos MCA
                 </h1>
               </div>
-              <span style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1.2px', fontWeight: '700', display: 'block', marginTop: '4px', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '10px', color: 'var(--sidebar-muted)', letterSpacing: '1.2px', fontWeight: '700', display: 'block', marginTop: '4px', textTransform: 'uppercase' }}>
                 Gestión Industrial
               </span>
             </div>
@@ -149,7 +163,7 @@ export function Dashboard() {
                 <span style={{ 
                   fontSize: '10px', 
                   fontWeight: '700', 
-                  color: '#64748b', 
+                  color: 'var(--sidebar-muted)', 
                   letterSpacing: '1px', 
                   padding: '0 12px 8px 12px', 
                   display: 'block' 
@@ -172,8 +186,8 @@ export function Dashboard() {
                           padding: '10px 14px',
                           borderRadius: '8px',
                           border: 'none',
-                          backgroundColor: activo ? '#334155' : 'transparent',
-                          color: activo ? '#facc15' : '#cbd5e1',
+                          backgroundColor: activo ? 'var(--sidebar-active)' : 'transparent',
+                          color: activo ? '#facc15' : 'var(--sidebar-text)',
                           fontWeight: activo ? '700' : '500',
                           cursor: 'pointer',
                           textAlign: 'left',
@@ -184,14 +198,14 @@ export function Dashboard() {
                         }}
                         onMouseEnter={(e) => {
                           if (!activo) {
-                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                            e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)';
                             e.currentTarget.style.color = '#ffffff';
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!activo) {
                             e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = '#cbd5e1';
+                            e.currentTarget.style.color = 'var(--sidebar-text)';
                           }
                         }}
                       >
@@ -207,7 +221,7 @@ export function Dashboard() {
         </div>
 
         {/* Acciones Inferiores y Perfil */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px', borderTop: '1px solid #334155' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px', borderTop: '1px solid var(--sidebar-border)' }}>
           
           {/* Botón de Acción Principal */}
           <button style={{ 
@@ -238,10 +252,10 @@ export function Dashboard() {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
-            backgroundColor: '#0f172a', 
+            backgroundColor: 'var(--sidebar-user)', 
             padding: '10px 12px', 
             borderRadius: '8px',
-            border: '1px solid #334155'
+            border: '1px solid var(--sidebar-border)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ 
@@ -259,8 +273,8 @@ export function Dashboard() {
                 AD
               </div>
               <div>
-                <span style={{ color: '#f8fafc', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>Admin MCA</span>
-                <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>Administrador</span>
+                <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>Admin MCA</span>
+                <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>Administrador</span>
               </div>
             </div>
 
