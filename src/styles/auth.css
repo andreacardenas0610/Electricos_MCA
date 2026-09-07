@@ -88,10 +88,10 @@
 .auth-field > span { display: block; margin-bottom: 6px; color: var(--auth-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.8px; }
 .auth-input-wrap { position: relative; display: flex; align-items: center; }
 .auth-input-icon { position: absolute; left: 11px; color: var(--auth-muted); font-size: 13px; pointer-events: none; }
-.auth-input-wrap input { width: 100%; box-sizing: border-box; min-height: 34px; padding: 8px 12px 8px 31px; border: 1px solid var(--auth-input-border); border-radius: 20px; outline: none; background: var(--auth-input); color: var(--auth-text); font: inherit; font-size: 11px; }
+.auth-input-wrap input { width: 100%; box-sizing: border-box; min-height: 34px; padding: 8px 36px 8px 31px; border: 1px solid var(--auth-input-border); border-radius: 20px; outline: none; background: var(--auth-input); color: var(--auth-text); font: inherit; font-size: 11px; }
 .auth-input-wrap input::placeholder { color: var(--auth-muted); opacity: 0.75; }
 .auth-input-wrap input:focus { border-color: var(--auth-accent); box-shadow: 0 0 0 2px rgba(255, 210, 0, 0.16); }
-.auth-password-toggle { position: absolute; right: 10px; padding: 0; border: 0; background: transparent; color: var(--auth-muted); cursor: pointer; font-size: 9px; }
+.auth-password-toggle { position: absolute; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--auth-muted); cursor: pointer; font-size: 14px; }
 .auth-submit { min-height: 34px; margin-top: 5px; border: 0; border-radius: 18px; background: var(--auth-accent); color: #172536; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; transition: filter 160ms ease, transform 160ms ease; }
 .auth-submit:hover { filter: brightness(1.05); transform: translateY(-1px); }
 .auth-links { display: flex; justify-content: space-between; gap: 12px; }

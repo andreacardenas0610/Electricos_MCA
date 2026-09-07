@@ -9,6 +9,7 @@ const configuraciones = {
     almacenamiento: 'mca_clientes',
     columnas: [
       ['nombre', 'Nombre / Razón social'],
+      ['tipoPropiedad', 'Tipo de propiedad'],
       ['documento', 'Documento / NIT'],
       ['contacto', 'Contacto'],
       ['telefono', 'Teléfono'],
@@ -21,10 +22,11 @@ const configuraciones = {
       ['telefono', 'Teléfono', 'tel'],
       ['correo', 'Correo electrónico', 'email'],
       ['direccion', 'Dirección', 'text'],
+      ['tipoPropiedad', 'Tipo de propiedad', 'segmented', ['Residencial', 'Comercial', 'Industrial']],
     ],
     iniciales: [
-      { id: 1, nombre: 'Constructora Horizonte S.A.', documento: '900.458.221-1', contacto: 'Laura Villamizar', telefono: '300 458 2211', correo: 'contacto@horizonte.com', direccion: 'Av. Central 450', estado: 'Activo' },
-      { id: 2, nombre: 'Corporativo Andes S.A.', documento: '901.220.874-6', contacto: 'Carlos Ruiz', telefono: '310 854 9021', correo: 'compras@andes.com', direccion: 'Zona Industrial Sur', estado: 'Activo' },
+      { id: 1, nombre: 'Constructora Horizonte S.A.', tipoPropiedad: 'Comercial', documento: '900.458.221-1', contacto: 'Laura Villamizar', telefono: '300 458 2211', correo: 'contacto@horizonte.com', direccion: 'Av. Central 450', estado: 'Activo' },
+      { id: 2, nombre: 'Corporativo Andes S.A.', tipoPropiedad: 'Industrial', documento: '901.220.874-6', correo: 'compras@andes.com', contacto: 'Carlos Ruiz', telefono: '310 854 9021', direccion: 'Zona Industrial Sur', estado: 'Activo' },
     ],
   },
   terceros: {
@@ -134,7 +136,7 @@ export function ModuloGestion({ modulo }) {
   }, [busqueda, registros]);
 
   const abrirNuevo = () => {
-    const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [nombre, tipo === 'select' ? opciones[0] : '']));
+    const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [nombre, ['select', 'segmented'].includes(tipo) ? opciones[0] : '']));
     setRegistroEditado({ id: Date.now(), ...valoresIniciales });
     setMostrarFormulario(true);
   };
@@ -237,7 +239,7 @@ export function ModuloGestion({ modulo }) {
       {mostrarFormulario && <div style={styles.overlay}>
         <form onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
           <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => setMostrarFormulario(false)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.formGrid}>{config.campos.map(([nombre, etiqueta, tipo, opciones]) => <label key={nombre} style={{ ...styles.label, color: tema.subtext }}>{etiqueta}<>{tipo === 'select' ? <select required value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}>{opciones.map((opcion) => <option key={opcion}>{opcion}</option>)}</select> : <input required type={tipo} value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }} />}</></label>)}</div>
+          <div style={styles.formGrid}>{config.campos.map(([nombre, etiqueta, tipo, opciones]) => <label key={nombre} style={{ ...styles.label, ...(tipo === 'segmented' ? styles.fullWidthField : {}), color: tema.subtext }}>{etiqueta}<>{tipo === 'select' ? <select required value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}>{opciones.map((opcion) => <option key={opcion}>{opcion}</option>)}</select> : tipo === 'segmented' ? <div role="radiogroup" aria-label={etiqueta} style={styles.segmentedControl}>{opciones.map((opcion) => <button key={opcion} type="button" role="radio" aria-checked={registroEditado?.[nombre] === opcion} onClick={() => setRegistroEditado({ ...registroEditado, [nombre]: opcion })} style={{ ...styles.segmentedButton, backgroundColor: registroEditado?.[nombre] === opcion ? '#facc15' : tema.input, borderColor: registroEditado?.[nombre] === opcion ? '#eab308' : tema.border, color: registroEditado?.[nombre] === opcion ? '#172033' : tema.text }}>{opcion}</button>)}</div> : <input required type={tipo} value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }} />}</></label>)}</div>
           <div style={styles.modalActions}><button type="button" onClick={() => setMostrarFormulario(false)} style={styles.secondaryButton}>Cancelar</button><button type="submit" style={styles.primaryButton}>Guardar registro</button></div>
         </form>
       </div>}
@@ -312,10 +314,13 @@ const styles = {
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' },
   closeButton: { border: 'none', background: 'transparent', color: '#64748b', fontSize: '28px', cursor: 'pointer', lineHeight: 1 },
   formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' },
+  fullWidthField: { gridColumn: '1 / -1' },
   detailGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
   detailItem: { display: 'flex', flexDirection: 'column', gap: '5px', borderBottom: '1px solid', padding: '9px 0', fontSize: '13px' },
   label: { display: 'flex', flexDirection: 'column', gap: '6px', color: '#475569', fontSize: '12px', fontWeight: '700' },
   input: { width: '100%', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px', color: '#0f172a', backgroundColor: '#fff', fontSize: '13px' },
+  segmentedControl: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' },
+  segmentedButton: { border: '1px solid', borderRadius: '6px', padding: '10px 8px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' },
   modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' },
   notificationOverlay: { position: 'fixed', top: '24px', right: '24px', zIndex: 30 },
   notification: { minWidth: '300px', maxWidth: '380px', display: 'flex', alignItems: 'flex-start', gap: '10px', backgroundColor: '#fff', border: '1px solid', borderRadius: '9px', padding: '14px 16px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.2)', color: '#0f172a' },

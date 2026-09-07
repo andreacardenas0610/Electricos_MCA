@@ -3,6 +3,16 @@ import { RecuperarContrasena, Registro } from './AuthForms';
 import { ThemeContext } from '../context/ThemeContext';
 import '../styles/auth.css';
 
+function IconoContrasena({ visible }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+      {visible && <path d="m4 4 16 16" />}
+    </svg>
+  );
+}
+
 export function Login({ onLogin }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [usuario, setUsuario] = useState('');
@@ -53,7 +63,7 @@ export function Login({ onLogin }) {
           <label className="auth-field">
             <span>USUARIO</span>
             <div className="auth-input-wrap">
-              <span className="auth-input-icon" aria-hidden="true">@</span>
+              <span className="auth-input-icon" aria-hidden="true">👤</span>
               <input
                 type="text"
                 value={usuario}
@@ -68,7 +78,7 @@ export function Login({ onLogin }) {
           <label className="auth-field">
             <span>CONTRASEÑA</span>
             <div className="auth-input-wrap">
-              <span className="auth-input-icon" aria-hidden="true">&#9679;</span>
+              <span className="auth-input-icon" aria-hidden="true">🔒</span>
               <input
                 type={mostrarPassword ? 'text' : 'password'}
                 value={password}
@@ -83,7 +93,7 @@ export function Login({ onLogin }) {
                 onClick={() => setMostrarPassword((visible) => !visible)}
                 aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
-                {mostrarPassword ? 'Ocultar' : 'Ver'}
+                <IconoContrasena visible={mostrarPassword} />
               </button>
             </div>
           </label>
