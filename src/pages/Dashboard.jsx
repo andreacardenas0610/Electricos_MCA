@@ -11,6 +11,7 @@ import { ProgramacionActividades } from './ProgramacionActividades';
 import { GestionUsuarios } from './GestionUsuarios';
 import { GestionRolesPermisos } from './GestionRolesPermisos';
 import { Personal } from './Personal';
+import { Clientes, GestionTerceros, OrdenesServicio } from './ModulosGestion';
 
 export function Dashboard() {
   const [autenticado, setAutenticado] = useState(() => {
@@ -39,6 +40,8 @@ export function Dashboard() {
       titulo: 'GENERAL',
       items: [
         { id: 'panel', label: 'Panel de Control', icon: '🎛️' },
+        { id: 'clientes', label: 'Clientes', icon: '🏢' },
+        { id: 'terceros', label: 'Gestión de Terceros', icon: '🤝' },
       ]
     },
     {
@@ -49,13 +52,14 @@ export function Dashboard() {
         { id: 'Cotizacion', label: 'Cotizaciones', icon: '📋' },
         { id: 'AbonosVentas', label: 'Abonos y Ventas', icon: '💵' },
         { id: 'programacion', label: 'Programación', icon: '🗓️' },
+        { id: 'ordenes', label: 'Órdenes de Servicio', icon: '🧾' },
       ]
     },
     {
       titulo: 'ADMINISTRACIÓN',
       items: [
         { id: 'usuarios', label: 'Gestión Usuarios', icon: '👤' },
-        { id: 'roles', label: 'Roles y Permisos', icon: '🛡️' },
+        { id: 'roles', label: 'Gestión de Acceso', icon: '🛡️' },
         { id: 'personal', label: 'Personal', icon: '👷' },
       ]
     }
@@ -290,11 +294,14 @@ export function Dashboard() {
       {/* ÁREA DE CONTENIDO DINÁMICO */}
       <main style={{ flex: 1, backgroundColor: '#0f172a', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
         {seccionActual === 'panel' && <PanelControl />}
+        {seccionActual === 'clientes' && <Clientes />}
+        {seccionActual === 'terceros' && <GestionTerceros />}
         {seccionActual === 'materiales' && <Materiales />}
         {seccionActual === 'servicios' && <CatalogoServicios />}
         {seccionActual === 'Cotizacion' && <Cotizacion />}
         {seccionActual === 'AbonosVentas' && <AbonosVentas />}
         {seccionActual === 'programacion' && <ProgramacionActividades />}
+        {seccionActual === 'ordenes' && <OrdenesServicio />}
         {seccionActual === 'usuarios' && <GestionUsuarios />}
         {seccionActual === 'roles' && <GestionRolesPermisos />}
         {seccionActual === 'personal' && <Personal />}
