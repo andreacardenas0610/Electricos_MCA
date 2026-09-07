@@ -10,7 +10,6 @@ import { CatalogoServicios } from './CatalogoServicios';
 import { ProgramacionActividades } from './ProgramacionActividades';
 import { GestionUsuarios } from './GestionUsuarios';
 import { GestionRolesPermisos } from './GestionRolesPermisos';
-import { Personal } from './Personal';
 import { Clientes, GestionTerceros, OrdenesServicio } from './ModulosGestion';
 
 export function Dashboard() {
@@ -60,7 +59,7 @@ export function Dashboard() {
       items: [
         { id: 'usuarios', label: 'Gestión Usuarios', icon: '👤' },
         { id: 'roles', label: 'Gestión de Acceso', icon: '🛡️' },
-        { id: 'personal', label: 'Personal', icon: '👷' },
+       
       ]
     }
   ];
@@ -304,7 +303,7 @@ export function Dashboard() {
         {seccionActual === 'ordenes' && <OrdenesServicio />}
         {seccionActual === 'usuarios' && <GestionUsuarios />}
         {seccionActual === 'roles' && <GestionRolesPermisos />}
-        {seccionActual === 'personal' && <Personal />}
+       
       </main>
 
     </div>
