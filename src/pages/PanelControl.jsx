@@ -26,7 +26,7 @@ export function PanelControl() {
     textoPrincipal: esOscuro ? '#ffffff' : '#0f172a',
     textoSecundario: esOscuro ? '#94a3b8' : '#64748b',
     textoMuted: esOscuro ? '#64748b' : '#94a3b8',
-    primario: esOscuro ? '#facc15' : '#d97706',
+    primario: esOscuro ? '#facc15' : '#facc15',
     primarioTexto: esOscuro ? '#0f172a' : '#ffffff',
     barraGrafico: esOscuro ? '#c7d2fe' : '#93c5fd',
     iconoBg: esOscuro ? '#23385d' : '#f1f5f9'
