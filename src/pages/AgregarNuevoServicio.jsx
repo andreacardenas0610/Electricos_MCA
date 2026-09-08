@@ -326,3 +326,4 @@ const styles = {
   featureTitle: { fontSize: '12px', fontWeight: 'bold', marginBottom: '2px' },
   featureDesc: { fontSize: '10px', lineHeight: '1.3' },
 };
+export default AgregarNuevoServicio;

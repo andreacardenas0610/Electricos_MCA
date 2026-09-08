@@ -427,9 +427,9 @@ const getToggleButtonStyle = (estado) => {
     outline: 'none',
   };
 
-  if (estado === 'Óptimo') return { ...base, backgroundColor: '#0d9488', color: '#fff' };
-  if (estado === 'Bajo Stock') return { ...base, backgroundColor: '#d97706', color: '#fff' };
-  if (estado === 'Crítico') return { ...base, backgroundColor: '#dc2626', color: '#fff' };
+  if (estado === 'Óptimo') return { ...base, backgroundColor: '#dcfce7', color: '#166534' };
+  if (estado === 'Bajo Stock') return { ...base, backgroundColor: '#fef3c7', color: '#92400e'};
+  if (estado === 'Crítico') return { ...base, backgroundColor: '#fee2e2', color: '#b91c1c'};
   return base;
 };
 

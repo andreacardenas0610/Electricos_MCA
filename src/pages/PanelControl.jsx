@@ -1,20 +1,91 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export function PanelControl() {
   const [periodoGrafico, setPeriodoGrafico] = useState('1A');
+  const [mostrarModal, setMostrarModal] = useState(false);
 
-  // Cargar el estado inicial guardado en localStorage (por defecto oscuro si no existe)
+  // Lista de cotizaciones para el modal
+  const [cotizaciones] = useState([
+    { id: 'COT-101', cliente: 'Industrias Alfa S.A.', monto: '$2,400,000', prioridad: 'Alta' },
+    { id: 'COT-102', cliente: 'Constructora del Norte', monto: '$1,850,000', prioridad: 'Media' },
+    { id: 'COT-103', cliente: 'Servicios Logísticos Global', monto: '$950,000', prioridad: 'Alta' },
+    { id: 'COT-104', cliente: 'Mantenimientos P-92', monto: '$3,004,000', prioridad: 'Por Vencer' },
+  ]);
+
+  // Estados de actividades
+  const [actividades, setActividades] = useState([
+    {
+      id: 1,
+      evento: 'Reposición de Stock',
+      subtexto: 'Unidad Transformadora XT-400',
+      icono: '📦',
+      personal: 'Carlos M.',
+      hora: '10:45 AM',
+      fecha: 'Hoy',
+      estado: 'Completado',
+    },
+    {
+      id: 2,
+      evento: 'Nueva Cotización Creada',
+      subtexto: 'Complejo Industrial P-92',
+      icono: '💰',
+      personal: 'S. Peterson',
+      hora: '09:12 AM',
+      fecha: 'Hoy',
+      estado: 'Pendiente',
+    },
+    {
+      id: 3,
+      evento: 'Retraso en Mantenimiento',
+      subtexto: 'Unidad de Flota #4',
+      icono: '⚠️',
+      personal: 'Sistema',
+      hora: '',
+      fecha: 'Ayer',
+      estado: 'Finalizado',
+    },
+    {
+      id: 4,
+      evento: 'Inspección de Equipos',
+      subtexto: 'Planta Principal',
+      icono: '🔍',
+      personal: 'M. López',
+      hora: '08:30 AM',
+      fecha: 'Hoy',
+      estado: 'Completado',
+    }
+  ]);
+
+  const cambiarEstado = (id) => {
+    setActividades(prev => prev.map(item => {
+      if (item.id === id) {
+        const siguiente = item.estado === 'Completado' ? 'Pendiente' : item.estado === 'Pendiente' ? 'Finalizado' : 'Completado';
+        return { ...item, estado: siguiente };
+      }
+      return item;
+    }));
+  };
+
+  const estilosEstado = {
+    'Completado': { bg: '#e6f7ea', texto: '#1b5e20', posicionCirculo: '4px' },
+    'Pendiente': { bg: '#fef3d6', texto: '#8c4a00', posicionCirculo: '42px' },
+    'Finalizado': { bg: '#fde8e8', texto: '#991b1b', posicionCirculo: '80px' }
+  };
+
   const [esOscuro, setEsOscuro] = useState(() => {
-    const temaGuardado = localStorage.getItem('tema_panel');
-    return temaGuardado !== null ? JSON.parse(temaGuardado) : true;
+    try {
+      const temaGuardado = localStorage.getItem('tema_panel');
+      return temaGuardado !== null ? JSON.parse(temaGuardado) : true;
+    } catch {
+      return true;
+    }
   });
 
-  // Guardar en localStorage cada vez que cambie 'esOscuro'
   useEffect(() => {
     localStorage.setItem('tema_panel', JSON.stringify(esOscuro));
   }, [esOscuro]);
 
-  // Paleta de colores dinámica según el modo
   const tema = {
     bgPrincipal: esOscuro ? '#0b1329' : '#f8fafc',
     bgCard: esOscuro ? '#182642' : '#ffffff',
@@ -46,7 +117,7 @@ export function PanelControl() {
       transition: 'all 0.3s ease'
     }}>
       
-      {/* BARRA SUPERIOR DE BÚSQUEDA Y USUARIO */}
+      {/* BARRA SUPERIOR */}
       <header style={{ 
         display: 'flex', 
         justify: 'space-between', 
@@ -56,8 +127,7 @@ export function PanelControl() {
         borderRadius: '10px', 
         border: `1px solid ${tema.border}`,
         width: '100%',
-        boxSizing: 'border-box',
-        boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+        boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
           <span style={{ color: tema.textoMuted }}>🔍</span>
@@ -74,9 +144,8 @@ export function PanelControl() {
             }}
           />
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          {/* BOTÓN CONMUTADOR MODO CLARO / OSCURO */}
           <button 
             onClick={() => setEsOscuro(!esOscuro)}
             style={{
@@ -111,7 +180,7 @@ export function PanelControl() {
         </div>
       </header>
 
-      {/* CONTENIDO EN REJILLA QUE OCUPA EL 100% DE ANCHO */}
+      {/* CONTENIDO PRINCIPAL */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'minmax(0, 1fr) 320px', 
@@ -119,17 +188,15 @@ export function PanelControl() {
         width: '100%',
         boxSizing: 'border-box'
       }}>
-        
-        {/* COLUMNA IZQUIERDA: GRÁFICO + TABLA */}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
           
-          {/* CARD: GRÁFICO DE INGRESOS */}
+          {/* GRÁFICO */}
           <div style={{ 
             backgroundColor: tema.bgCard, 
             border: `1px solid ${tema.border}`, 
             borderRadius: '12px', 
-            padding: '24px',
-            boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+            padding: '24px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
@@ -161,21 +228,12 @@ export function PanelControl() {
                 ))}
               </div>
             </div>
-
-            {/* BARRAS DEL GRÁFICO */}
+            
             <div style={{ height: '180px', display: 'flex', alignItems: 'flex-end', gap: '12px', paddingTop: '20px', borderBottom: `1px solid ${tema.border}` }}>
               {[
-                { alt: '35%' },
-                { alt: '50%' },
-                { alt: '40%' },
-                { alt: '60%' },
-                { alt: '52%' },
-                { alt: '70%' },
-                { alt: '64%' },
-                { alt: '82%' },
-                { alt: '88%' },
-                { alt: '92%' },
-                { alt: '100%', destacar: true }
+                { alt: '35%' }, { alt: '50%' }, { alt: '40%' }, { alt: '60%' },
+                { alt: '52%' }, { alt: '70%' }, { alt: '64%' }, { alt: '82%' },
+                { alt: '88%' }, { alt: '92%' }, { alt: '100%', destacar: true }
               ].map((bar, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
                   <div style={{ 
@@ -189,23 +247,17 @@ export function PanelControl() {
               ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '10px', color: tema.textoMuted, fontWeight: 'bold' }}>
-              <span>ENE</span>
-              <span>MAR</span>
-              <span>MAY</span>
-              <span>JUL</span>
-              <span>SEP</span>
-              <span>NOV</span>
+              <span>ENE</span><span>MAR</span><span>MAY</span><span>JUL</span><span>SEP</span><span>NOV</span>
               <span style={{ color: tema.primario }}>ACTUAL</span>
             </div>
           </div>
 
-          {/* CARD: ACTIVIDAD OPERATIVA RECIENTE */}
+          {/* TABLA CON TOGGLE-BADGE */}
           <div style={{ 
             backgroundColor: tema.bgCard, 
             border: `1px solid ${tema.border}`, 
             borderRadius: '12px', 
-            padding: '24px',
-            boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+            padding: '24px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: tema.textoPrincipal }}>Actividad Operativa Reciente</h3>
@@ -218,45 +270,76 @@ export function PanelControl() {
                   <th style={{ padding: '8px 4px' }}>EVENTO</th>
                   <th style={{ padding: '8px 4px' }}>PERSONAL</th>
                   <th style={{ padding: '8px 4px' }}>FECHA/HORA</th>
-                  <th style={{ padding: '8px 4px', textAlign: 'right' }}>ESTADO</th>
+                  <th style={{ padding: '8px 4px', textAlign: 'center' }}>ESTADO</th>
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: `1px solid ${tema.borderSubtil}` }}>
-                  <td style={{ padding: '12px 4px' }}>
-                    <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>📦 Reposición de Stock</div>
-                    <div style={{ fontSize: '10px', color: tema.textoMuted }}>Unidad Transformadora XT-400</div>
-                  </td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>Carlos M.</td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>10:45 AM<br/><span style={{ fontSize: '10px', color: tema.textoMuted }}>Hoy</span></td>
-                  <td style={{ padding: '12px 4px', textAlign: 'right' }}>
-                    <span style={{ backgroundColor: esOscuro ? '#064e3b' : '#d1fae5', color: esOscuro ? '#6ee7b7' : '#047857', padding: '4px 8px', borderRadius: '12px', fontSize: '9px', fontWeight: 'bold' }}>COMPLETADO</span>
-                  </td>
-                </tr>
+                {actividades.map((item, idx) => {
+                  const infoEst = estilosEstado[item.estado] || estilosEstado['Completado'];
 
-                <tr style={{ borderBottom: `1px solid ${tema.borderSubtil}` }}>
-                  <td style={{ padding: '12px 4px' }}>
-                    <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>💰 Nueva Cotización Creada</div>
-                    <div style={{ fontSize: '10px', color: tema.textoMuted }}>Complejo Industrial P-92</div>
-                  </td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>S. Peterson</td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>09:12 AM<br/><span style={{ fontSize: '10px', color: tema.textoMuted }}>Hoy</span></td>
-                  <td style={{ padding: '12px 4px', textAlign: 'right' }}>
-                    <span style={{ backgroundColor: esOscuro ? '#1e3a8a' : '#dbeafe', color: esOscuro ? '#93c5fd' : '#1d4ed8', padding: '4px 8px', borderRadius: '12px', fontSize: '9px', fontWeight: 'bold' }}>BORRADOR</span>
-                  </td>
-                </tr>
+                  return (
+                    <tr key={item.id} style={{ borderBottom: idx !== actividades.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
+                      <td style={{ padding: '12px 4px' }}>
+                        <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>{item.icono} {item.evento}</div>
+                        <div style={{ fontSize: '10px', color: tema.textoMuted }}>{item.subtexto}</div>
+                      </td>
+                      <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>{item.personal}</td>
+                      <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>
+                        {item.hora && <>{item.hora}<br/></>}
+                        <span style={{ fontSize: '10px', color: tema.textoMuted }}>{item.fecha}</span>
+                      </td>
+                      <td style={{ padding: '12px 4px', textAlign: 'center' }}>
+                        
+                        <div
+                          onClick={() => cambiarEstado(item.id)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            position: 'relative',
+                            width: '110px',
+                            height: '32px',
+                            backgroundColor: infoEst.bg,
+                            borderRadius: '16px',
+                            padding: '3px 5px',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            boxSizing: 'border-box',
+                            transition: 'background-color 0.25s ease'
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: '3px',
+                              width: '26px',
+                              height: '26px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                              transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              left: infoEst.posicionCirculo,
+                              zIndex: 2
+                            }}
+                          />
 
-                <tr>
-                  <td style={{ padding: '12px 4px' }}>
-                    <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>⚠️ Retraso en Mantenimiento</div>
-                    <div style={{ fontSize: '10px', color: tema.textoMuted }}>Unidad de Flota #4</div>
-                  </td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>Sistema</td>
-                  <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>Ayer</td>
-                  <td style={{ padding: '12px 4px', textAlign: 'right' }}>
-                    <span style={{ backgroundColor: esOscuro ? '#78350f' : '#fef3c7', color: esOscuro ? '#fde047' : '#b45309', padding: '4px 8px', borderRadius: '12px', fontSize: '9px', fontWeight: 'bold' }}>PENDIENTE</span>
-                  </td>
-                </tr>
+                          <span
+                            style={{
+                              width: '100%',
+                              textAlign: 'center',
+                              color: infoEst.texto,
+                              fontWeight: '700',
+                              fontSize: '11px',
+                              zIndex: 1
+                            }}
+                          >
+                            {item.estado}
+                          </span>
+                        </div>
+
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -273,8 +356,7 @@ export function PanelControl() {
             padding: '24px', 
             display: 'flex', 
             flexDirection: 'column', 
-            justify: 'space-between',
-            boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+            justify: 'space-between'
           }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
@@ -300,18 +382,21 @@ export function PanelControl() {
               </div>
             </div>
 
-            <button style={{ 
-              width: '100%', 
-              marginTop: '24px', 
-              padding: '12px', 
-              borderRadius: '8px', 
-              border: 'none', 
-              backgroundColor: tema.primario, 
-              color: tema.primarioTexto, 
-              fontWeight: 'bold', 
-              cursor: 'pointer', 
-              fontSize: '13px' 
-            }}>
+            <button 
+              onClick={() => setMostrarModal(true)}
+              style={{ 
+                width: '100%', 
+                marginTop: '24px', 
+                padding: '12px', 
+                borderRadius: '8px', 
+                border: 'none', 
+                backgroundColor: tema.primario, 
+                color: tema.primarioTexto, 
+                fontWeight: 'bold', 
+                cursor: 'pointer', 
+                fontSize: '13px'
+              }}
+            >
               Revisar Fila →
             </button>
           </div>
@@ -323,8 +408,7 @@ export function PanelControl() {
             padding: '20px', 
             display: 'flex', 
             justify: 'space-between', 
-            alignItems: 'center',
-            boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+            alignItems: 'center'
           }}>
             <div>
               <div style={{ fontSize: '11px', color: tema.textoSecundario, fontWeight: 'bold' }}>Proyectos Activos</div>
@@ -340,8 +424,7 @@ export function PanelControl() {
             padding: '20px', 
             display: 'flex', 
             justify: 'space-between', 
-            alignItems: 'center',
-            boxShadow: esOscuro ? 'none' : '0 1px 3px rgba(0,0,0,0.05)'
+            alignItems: 'center'
           }}>
             <div>
               <div style={{ fontSize: '11px', color: tema.textoSecundario, fontWeight: 'bold' }}>Eficiencia de Materiales</div>
@@ -353,6 +436,107 @@ export function PanelControl() {
         </div>
 
       </div>
+
+      {/* MODAL ORGANIZADO Y CENTRADO */}
+      {mostrarModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(11, 19, 41, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999,
+          padding: '16px'
+        }}>
+          <div style={{
+            backgroundColor: tema.bgCard,
+            border: `1px solid ${tema.border}`,
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '600px',
+            padding: '24px',
+            color: tema.textoPrincipal,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            margin: 'auto'
+          }}>
+            {/* ENCABEZADO */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${tema.border}`, paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>📋 Fila de Cotizaciones Pendientes</h3>
+              <button 
+                onClick={() => setMostrarModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: tema.textoSecundario }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* RESUMEN INFORMATIVO */}
+            <p style={{ fontSize: '13px', color: tema.textoSecundario, marginTop: '16px', marginBottom: '8px' }}>
+              Hay <strong style={{ color: tema.primario }}>24 cotizaciones</strong> pendientes por un total estimado de <strong>$8,204,000</strong>.
+            </p>
+
+            {/* TABLA DE DETALLES */}
+            <div style={{ overflowY: 'auto', margin: '12px 0', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ color: tema.textoMuted, borderBottom: `1px solid ${tema.border}`, fontSize: '11px' }}>
+                    <th style={{ padding: '8px 4px' }}>CÓDIGO</th>
+                    <th style={{ padding: '8px 4px' }}>CLIENTE</th>
+                    <th style={{ padding: '8px 4px' }}>MONTO</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>PRIORIDAD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cotizaciones.map((cot, idx) => (
+                    <tr key={cot.id} style={{ borderBottom: idx !== cotizaciones.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
+                      <td style={{ padding: '10px 4px', fontWeight: 'bold', color: tema.primario }}>{cot.id}</td>
+                      <td style={{ padding: '10px 4px', color: tema.textoPrincipal }}>{cot.cliente}</td>
+                      <td style={{ padding: '10px 4px', fontWeight: 'bold' }}>{cot.monto}</td>
+                      <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: 'bold',
+                          backgroundColor: cot.prioridad === 'Alta' ? '#fde8e8' : cot.prioridad === 'Por Vencer' ? '#fef3d6' : tema.bgBadge,
+                          color: cot.prioridad === 'Alta' ? '#991b1b' : cot.prioridad === 'Por Vencer' ? '#8c4a00' : tema.textoPrincipal
+                        }}>
+                          {cot.prioridad}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ACCIONES */}
+            <div style={{ borderTop: `1px solid ${tema.border}`, paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setMostrarModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: `1px solid ${tema.border}`,
+                  backgroundColor: tema.bgInput,
+                  color: tema.textoPrincipal,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );
