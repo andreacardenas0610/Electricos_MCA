@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { CrearCotizacion } from './CrearCotizacion';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function Cotizaciones() {
   const [modoEdicion, setModoEdicion] = useState(false);
-  const [esModoOscuro, setEsModoOscuro] = useState(false); // Estado para cambiar el tema
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esModoOscuro = temaGlobal === 'dark';
 
   // Si le damos clic a Generar Cotización, cambia la pantalla al formulario detallado
   if (modoEdicion) {
@@ -40,7 +42,7 @@ export function Cotizaciones() {
 
         {/* Botón para cambiar entre Modo Claro y Oscuro */}
         <button
-          onClick={() => setEsModoOscuro(!esModoOscuro)}
+          onClick={toggleTheme}
           style={{
             backgroundColor: theme.cardBg,
             color: theme.textColor,

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function CatalogoServicios() {
   // CONTROL DE TEMA (oscuro / claro)
-  const [esOscuro, setEsOscuro] = useState(false);
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
 
   // FILTRO ACTIVO DE CATEGORÍA
   const [filtroActivo, setFiltroActivo] = useState('Todos');
@@ -101,7 +103,7 @@ export function CatalogoServicios() {
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <button style={styles.btnCrearDocumento}>Crear Nuevo Documento</button>
             <button
-              onClick={() => setEsOscuro(!esOscuro)}
+              onClick={toggleTheme}
               style={{ ...styles.btnThemeToggle, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
               title="Cambiar tema"
             >

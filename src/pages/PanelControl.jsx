@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useContext, useState, useEffect } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function PanelControl() {
   const [periodoGrafico, setPeriodoGrafico] = useState('1A');
 
   // Cargar el estado inicial guardado en localStorage (por defecto oscuro si no existe)
-  const [esOscuro, setEsOscuro] = useState(() => {
-    const temaGuardado = localStorage.getItem('tema_panel');
-    return temaGuardado !== null ? JSON.parse(temaGuardado) : true;
-  });
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
 
   // Guardar en localStorage cada vez que cambie 'esOscuro'
   useEffect(() => {
@@ -78,7 +77,7 @@ export function PanelControl() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           {/* BOTÓN CONMUTADOR MODO CLARO / OSCURO */}
           <button 
-            onClick={() => setEsOscuro(!esOscuro)}
+            onClick={toggleTheme}
             style={{
               backgroundColor: tema.bgBadge,
               border: `1px solid ${tema.border}`,

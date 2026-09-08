@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
-export function CrearCotizacion({ onVolver, esModoOscuro: esModoOscuroProp = false }) {
+export function CrearCotizacion({ onVolver }) {
   // Estado para el tema (usa la prop por defecto, pero permite alternarlo localmente)
-  const [esModoOscuro, setEsModoOscuro] = useState(esModoOscuroProp);
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esModoOscuro = temaGlobal === 'dark';
 
   // 1. ESTADOS FORMULARIO GENERAL
   const [numCotizacion, setNumCotizacion] = useState('COT-ELEC-2024-001 (Autogenerado)');
@@ -107,7 +109,7 @@ export function CrearCotizacion({ onVolver, esModoOscuro: esModoOscuroProp = fal
         <div style={styles.topButtons}>
           {/* Botón cambiar tema */}
           <button
-            onClick={() => setEsModoOscuro(!esModoOscuro)}
+            onClick={toggleTheme}
             style={{
               backgroundColor: theme.cardBg,
               color: theme.textColor,

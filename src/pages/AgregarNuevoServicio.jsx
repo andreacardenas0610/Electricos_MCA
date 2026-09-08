@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function AgregarNuevoServicio() {
   // CONTROL DE TEMA (oscuro / claro)
-  const [esOscuro, setEsOscuro] = useState(false);
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
 
   // ESTADO DEL FORMULARIO DE NUEVO SERVICIO
   const [formData, setFormData] = useState({
@@ -65,7 +67,7 @@ export function AgregarNuevoServicio() {
 
           <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
             <button
-              onClick={() => setEsOscuro(!esOscuro)}
+              onClick={toggleTheme}
               style={{ ...styles.btnThemeToggle, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
               title="Cambiar tema"
             >

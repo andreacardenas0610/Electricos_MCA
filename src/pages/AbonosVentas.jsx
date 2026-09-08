@@ -1,35 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function SistemaAbonos() {
   // =========================================================
   // CONTROL DE TEMA
   // Se guarda en localStorage para que persista al recargar
   // =========================================================
-  const [esOscuro, setEsOscuro] = useState(() => {
-    const temaGuardado = localStorage.getItem('temaSistema');
-
-    if (temaGuardado !== null) {
-      return temaGuardado === 'dark';
-    }
-
-    // Primera vez que se abre: modo oscuro
-    return true;
-  });
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
 
   // =========================================================
   // CAMBIAR TEMA Y GUARDARLO
   // =========================================================
-  const cambiarTema = () => {
-    const nuevoEstado = !esOscuro;
-
-    setEsOscuro(nuevoEstado);
-
-    localStorage.setItem(
-      'temaSistema',
-      nuevoEstado ? 'dark' : 'light'
-    );
-  };
+  const cambiarTema = toggleTheme;
 
   // CONTROL DE VISTAS
   const [vistaActual, setVistaActual] = useState('dashboard');

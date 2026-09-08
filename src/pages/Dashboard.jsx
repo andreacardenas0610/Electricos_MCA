@@ -187,7 +187,7 @@ export function Dashboard() {
                           borderRadius: '8px',
                           border: 'none',
                           backgroundColor: activo ? 'var(--sidebar-active)' : 'transparent',
-                          color: activo ? '#facc15' : 'var(--sidebar-text)',
+                          color: activo ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
                           fontWeight: activo ? '700' : '500',
                           cursor: 'pointer',
                           textAlign: 'left',
@@ -199,7 +199,7 @@ export function Dashboard() {
                         onMouseEnter={(e) => {
                           if (!activo) {
                             e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)';
-                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.color = 'var(--sidebar-hover-text)';
                           }
                         }}
                         onMouseLeave={(e) => {

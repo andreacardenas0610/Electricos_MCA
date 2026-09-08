@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 const configuraciones = {
   clientes: {
@@ -105,9 +106,37 @@ const siguienteEstado = (modulo, estado) => {
   return estados[(estados.indexOf(estado) + 1) % estados.length];
 };
 
+const estadosDelModulo = (modulo) => modulo === 'ordenes'
+  ? ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']
+  : ['Activo', 'Inactivo'];
+
+const estadoToggleStyle = (modulo, estado) => ({
+  ...estadoColor(estado),
+  justifyContent: 'center',
+});
+
+const estadoToggleCircleStyle = (modulo, estado) => {
+  const estados = estadosDelModulo(modulo);
+  const indice = Math.max(estados.indexOf(estado), 0);
+  const desplazamiento = estados.length === 1 ? 0 : (104 / (estados.length - 1)) * indice;
+
+  return {
+    position: 'absolute',
+    top: '3px',
+    left: `${4 + desplazamiento}px`,
+    width: '22px',
+    height: '22px',
+    borderRadius: '50%',
+    backgroundColor: '#ffffff',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+  };
+};
+
 export function ModuloGestion({ modulo }) {
   const config = configuraciones[modulo];
-  const [esOscuro, setEsOscuro] = useState(() => localStorage.getItem('mca_tema') === 'oscuro');
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
   const [registros, setRegistros] = useState(() => {
     const guardados = localStorage.getItem(config.almacenamiento);
     return guardados ? JSON.parse(guardados) : config.iniciales;
@@ -181,9 +210,7 @@ export function ModuloGestion({ modulo }) {
   };
 
   const cambiarTema = () => {
-    const nuevoEstado = !esOscuro;
-    setEsOscuro(nuevoEstado);
-    localStorage.setItem('mca_tema', nuevoEstado ? 'oscuro' : 'claro');
+    toggleTheme();
   };
 
   return (
@@ -227,7 +254,7 @@ export function ModuloGestion({ modulo }) {
             <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
             <tbody>
               {registrosFiltrados.map((registro) => <tr key={registro.id}>
-                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <button type="button" onClick={() => cambiarEstado(registro.id)} title="Cambiar estado" style={{ ...styles.badge, ...estadoColor(registro[campo]), cursor: 'pointer', border: 'none' }}><span style={styles.statusDot}>{estadoIcono(registro[campo])}</span>{registro[campo]}</button> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
+                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <button type="button" onClick={() => cambiarEstado(registro.id)} title="Cambiar estado" style={{ ...styles.badge, ...estadoToggleStyle(modulo, registro[campo]), cursor: 'pointer' }}><span style={estadoToggleCircleStyle(modulo, registro[campo])}></span><span style={styles.statusLabel}>{registro[campo]}</span></button> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
                 <td style={{ ...styles.td, borderColor: tema.rowBorder }}><div style={styles.actions}><button type="button" onClick={() => { setRegistroEditado(registro); setMostrarFormulario(true); }} style={{ ...styles.actionButton, color: '#a16207' }} title="Editar registro">✏️</button><button type="button" onClick={() => setRegistroDetalle(registro)} style={{ ...styles.actionButton, color: '#1d4ed8' }} title="Ver detalle">👁️</button><button type="button" onClick={() => eliminarRegistro(registro.id)} style={{ ...styles.actionButton, color: '#b91c1c' }} title="Eliminar registro">🗑️</button></div></td>
               </tr>)}
               {registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
@@ -302,8 +329,8 @@ const styles = {
   th: { padding: '12px 8px', borderBottom: '1px solid', textAlign: 'left', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.4px' },
   td: { padding: '14px 8px', borderBottom: '1px solid' },
   tableHead: { color: '#64748b' },
-  badge: { display: 'inline-block', borderRadius: '999px', padding: '4px 9px', fontSize: '11px', fontWeight: '800' },
-  statusDot: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', marginRight: '4px', fontWeight: '900' },
+  badge: { position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '132px', height: '28px', boxSizing: 'border-box', borderRadius: '16px', padding: '0 8px', fontSize: '10px', fontWeight: '800', transition: 'all 0.3s ease', outline: 'none' },
+  statusLabel: { position: 'relative', zIndex: 1, whiteSpace: 'nowrap' },
   nameCell: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: '700' },
   rowIcon: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '7px', fontSize: '14px' },
   actions: { display: 'flex', gap: '8px' },

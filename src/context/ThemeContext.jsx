@@ -4,14 +4,18 @@ import { createContext, useState, useEffect } from 'react';
 export const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('mca_tema') || 'dark');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setTheme((prev) => {
+      const nuevoTema = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('mca_tema', nuevoTema);
+      return nuevoTema;
+    });
   };
 
   return (

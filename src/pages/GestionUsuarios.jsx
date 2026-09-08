@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
 
 export function GestionUsuarios() {
   // CONTROL DE TEMA (oscuro / claro)
-  const [esOscuro, setEsOscuro] = useState(false);
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
 
   // ESTADO DE BÚSQUEDA Y USUARIOS
   const [busqueda, setBusqueda] = useState('');
@@ -89,7 +91,7 @@ export function GestionUsuarios() {
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <button
-              onClick={() => setEsOscuro(!esOscuro)}
+              onClick={toggleTheme}
               style={{ ...styles.btnThemeToggle, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
               title="Cambiar tema"
             >
