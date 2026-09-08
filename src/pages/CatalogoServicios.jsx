@@ -1,306 +1,474 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext.jsx';
+
+// ==========================================
+// ICONOS SVG
+// ==========================================
+const SearchIcon = ({ color = "#94a3b8" }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const ClockIcon = ({ color = "#64748b" }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const EyeIcon = ({ color = "#475569" }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EditIcon = ({ color = "#475569" }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+const BellIcon = ({ color = "#334155" }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
+
+const HelpIcon = ({ color = "#334155" }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const SunIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5" />
+    <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+    <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="#38bdf8" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </svg>
+);
+
+const ShieldWatermark = ({ color = "#e2e8f0" }) => (
+  <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const INITIAL_DATA = [
+  { id: 1, codigo: 'ELEC-001', nombre: 'Instalación de Tablero Trifásico', desc: 'Montaje, cableado y...', unidad: 'Proyecto', precio: '$850.00', subPrecio: 'USD', tiempo: '2 Días', categoria: 'Instalación', estado: 'Activo' },
+  { id: 2, codigo: 'ELEC-042', nombre: 'Mantenimiento Preventivo', desc: 'Limpieza, reapriete de...', unidad: 'Hora', precio: '$65.00', subPrecio: 'USD / HORA', tiempo: '4 Horas', categoria: 'Mantenimiento', estado: 'Activo' },
+  { id: 3, codigo: 'ELEC-203', nombre: 'Medición de Pozo a Tierra', desc: 'Certificación con...', unidad: 'Punto', precio: '$120.00', subPrecio: 'USD / POZO', tiempo: '1 Día', categoria: 'Protocolos', estado: 'Activo' },
+  { id: 4, codigo: 'ELEC-009', nombre: 'Instalación Luminarias LED', desc: 'Colocación de paneles...', unidad: 'Punto', precio: '$18.00', subPrecio: 'USD / PUNTO', tiempo: 'Inmediato', categoria: 'Instalación', estado: 'Pausado' }
+];
 
 export function CatalogoServicios() {
-  // CONTROL DE TEMA (oscuro / claro)
-  const [esOscuro, setEsOscuro] = useState(false);
-
-  // FILTRO ACTIVO DE CATEGORÍA
-  const [filtroActivo, setFiltroActivo] = useState('Todos');
-
-  // BÚSQUEDA
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const [servicios, setServicios] = useState(INITIAL_DATA);
+  const [tab, setTab] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
+  const darkMode = temaGlobal === 'dark';
+  
+  // Modales
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modoModal, setModoModal] = useState('crear');
+  const [selectedItem, setSelectedItem] = useState(null);
 
-  // LISTADO DE SERVICIOS
-  const [servicios, setServicios] = useState([
-    {
-      id: 1,
-      codigo: 'ELEC-001',
-      nombre: 'Instalación de Tablero Trifásico',
-      descripcion: 'Montaje, cableado y...',
-      categoria: 'Instalación',
-      unidad: 'Proyecto',
-      precio: 850.00,
-      tiempo: '2 Días',
-      estado: 'Activo',
-    },
-    {
-      id: 2,
-      codigo: 'ELEC-002',
-      nombre: 'Mantenimiento Preventivo',
-      descripcion: 'Limpieza, reajuste de...',
-      categoria: 'Mantenimiento',
-      unidad: 'Hora',
-      precio: 65.00,
-      tiempo: '4 Horas',
-      estado: 'Activo',
-    },
-    {
-      id: 3,
-      codigo: 'ELEC-003',
-      nombre: 'Medición de Pozo a Tierra',
-      descripcion: 'Certificación con...',
-      categoria: 'Protocolos',
-      unidad: 'Punto',
-      precio: 120.00,
-      tiempo: '1 Día',
-      estado: 'Activo',
-    },
-    {
-      id: 4,
-      codigo: 'ELEC-004',
-      nombre: 'Instalación Luminarias LED',
-      descripcion: 'Colocación de paneles...',
-      categoria: 'Instalación',
-      unidad: 'Punto',
-      precio: 18.00,
-      tiempo: 'Inmediato',
-      estado: 'Pausado',
-    },
-  ]);
+  const [formData, setFormData] = useState({
+    codigo: '', nombre: '', desc: '', unidad: 'Proyecto', precio: '', subPrecio: 'USD', tiempo: '', categoria: 'Instalación', estado: 'Activo'
+  });
 
-  // PALETA DINÁMICA DE COLORES
+  // Tema dinámico de colores
   const theme = {
-    bgApp: esOscuro ? '#0b1329' : '#f8fafc',
-    bgSidebar: esOscuro ? '#0e1830' : '#e8eef3',
-    bgCard: esOscuro ? '#111c38' : '#ffffff',
-    bgInner: esOscuro ? '#0b1329' : '#f1f5f9',
-    border: esOscuro ? '#1e2d4a' : '#e2e8f0',
-    textMain: esOscuro ? '#ffffff' : '#0f172a',
-    textSub: esOscuro ? '#94a3b8' : '#64748b',
-    textMuted: esOscuro ? '#64748b' : '#94a3b8',
-    inputBg: esOscuro ? '#0b1329' : '#ffffff',
+    bg: darkMode ? '#0b0f19' : '#eef2f6',
+    cardBg: darkMode ? '#151c2c' : '#ffffff',
+    headerBg: darkMode ? '#111827' : '#ffffff',
+    textMain: darkMode ? '#f8fafc' : '#0f172a',
+    textSub: darkMode ? '#94a3b8' : '#64748b',
+    border: darkMode ? '#1e293b' : '#e2e8f0',
+    inputBg: darkMode ? '#1e293b' : '#f1f5f9',
+    tableBorder: darkMode ? '#1e293b' : '#f1f5f9',
+    iconColor: darkMode ? '#cbd5e1' : '#475569'
   };
 
-  // FILTRADO DE SERVICIOS
-  const serviciosFiltrados = servicios.filter((s) => {
-    const coincideFiltro = filtroActivo === 'Todos' || s.categoria === filtroActivo;
-    const coincideBusqueda =
-      s.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      s.codigo.toLowerCase().includes(busqueda.toLowerCase());
-    return coincideFiltro && coincideBusqueda;
+  const handleOpenCrear = () => {
+    setModoModal('crear');
+    setFormData({
+      codigo: `ELEC-0${Math.floor(Math.random() * 899 + 100)}`,
+      nombre: '', desc: '', unidad: 'Proyecto', precio: '$0.00', subPrecio: 'USD', tiempo: '1 Día', categoria: 'Instalación', estado: 'Activo'
+    });
+    setModalOpen(true);
+  };
+
+  const handleOpenVer = (item) => {
+    setModoModal('ver');
+    setSelectedItem(item);
+    setModalOpen(true);
+  };
+
+  const handleOpenEditar = (item) => {
+    setModoModal('editar');
+    setSelectedItem(item);
+    setFormData({ ...item });
+    setModalOpen(true);
+  };
+
+  const handleEliminar = (id) => {
+    if (window.confirm('¿Está seguro de eliminar este servicio?')) {
+      setServicios(prev => prev.filter(s => s.id !== id));
+    }
+  };
+
+  const handleToggleEstado = (id) => {
+    setServicios(prev => prev.map(s => s.id === id ? { ...s, estado: s.estado === 'Activo' ? 'Pausado' : 'Activo' } : s));
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (modoModal === 'crear') {
+      const nuevoServicio = { ...formData, id: Date.now() };
+      setServicios(prev => [nuevoServicio, ...prev]);
+    } else if (modoModal === 'editar') {
+      setServicios(prev => prev.map(s => s.id === selectedItem.id ? { ...formData } : s));
+    }
+    setModalOpen(false);
+  };
+
+  const serviciosFiltrados = servicios.filter(item => {
+    const matchTab = tab === 'Todos' || item.categoria === tab;
+    const matchSearch = item.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
+                        item.codigo.toLowerCase().includes(busqueda.toLowerCase());
+    return matchTab && matchSearch;
   });
 
   return (
-    <div style={{ ...styles.appWrapper, backgroundColor: theme.bgApp, color: theme.textMain }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: theme.bg, fontFamily: 'system-ui, -apple-system, sans-serif', transition: 'all 0.2s ease' }}>
       
-
-      {/* CONTENIDO PRINCIPAL */}
-      <main style={styles.mainContainer}>
-        {/* BARRA SUPERIOR DE BÚSQUEDA Y ACCIONES */}
-        <header style={styles.topBar}>
-          <div style={styles.searchContainer}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        
+        {/* HEADER BAR */}
+        <header style={{ backgroundColor: theme.headerBg, height: '50px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px' }}>
+          <div style={{ position: 'relative', width: '280px' }}>
+            <span style={{ position: 'absolute', left: '10px', top: '7px' }}><SearchIcon color={theme.textSub} /></span>
             <input
               type="text"
-              placeholder="🔍 Buscar servicios eléctricos..."
+              placeholder="Buscar servicios eléctricos..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              style={{ ...styles.topSearchInput, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
+              style={{ width: '100%', padding: '5px 10px 5px 30px', borderRadius: '14px', border: 'none', backgroundColor: theme.inputBg, color: theme.textMain, fontSize: '11px', outline: 'none' }}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <button style={styles.btnCrearDocumento}>Crear Nuevo Documento</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* BOTÓN DE MODO CLARO / OSCURO */}
             <button
-              onClick={() => setEsOscuro(!esOscuro)}
-              style={{ ...styles.btnThemeToggle, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
-              title="Cambiar tema"
+              onClick={toggleTheme}
+              style={{
+                backgroundColor: darkMode ? '#1e293b' : '#1e293b',
+                color: '#ffffff',
+                border: `1px solid ${darkMode ? '#334155' : '#1e293b'}`,
+                padding: '5px 14px',
+                borderRadius: '20px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}
             >
-              {esOscuro ? '☀️ Claro' : '🌙 Oscuro'}
+              {darkMode ? <SunIcon /> : <SunIcon />}
+              <span>{darkMode ? 'Modo Oscuro' : 'Modo Claro'}</span>
             </button>
-            <span style={{ cursor: 'pointer' }}>🔔</span>
-            <span style={{ cursor: 'pointer' }}>❓</span>
-            <div style={{ ...styles.userAvatar, backgroundColor: theme.border }}>👤</div>
+
+            <button onClick={handleOpenCrear} style={{ backgroundColor: '#facc15', border: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px', color: '#0f172a', cursor: 'pointer' }}>
+              Crear Nuevo Documento
+            </button>
+            <BellIcon color={theme.iconColor} />
+            <HelpIcon color={theme.iconColor} />
+            <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80" alt="Avatar" style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} />
           </div>
         </header>
 
-        {/* HEADER DE SECCIÓN */}
-        <div style={styles.headerSection}>
-          <div>
-            <h1 style={styles.pageTitle}>Servicios Eléctricos</h1>
-            <p style={{ ...styles.pageSubtitle, color: theme.textSub }}>
-              Gestione las partidas, instalaciones y mantenimientos eléctricos.
-            </p>
-          </div>
-          <button style={styles.btnAgregarServicio}>➕ Agregar Servicio</button>
-        </div>
-
-        {/* METRICAS / METRICS CARDS (GRID 4 COLUMNAS) */}
-        <div style={styles.metricsGrid}>
-          {/* CARD 1 */}
-          <div style={{ ...styles.metricCard, backgroundColor: theme.bgCard, borderColor: theme.border }}>
-            <div style={{ ...styles.metricLabel, color: theme.textMuted }}>PARTIDAS ACTIVAS</div>
-            <div style={styles.metricValue}>38</div>
-            <div style={{ fontSize: '10px', color: '#16a34a', marginTop: '4px' }}>⚡ +5 nuevas este mes</div>
-          </div>
-
-          {/* CARD 2 */}
-          <div style={{ ...styles.metricCard, backgroundColor: theme.bgCard, borderColor: theme.border }}>
-            <div style={{ ...styles.metricLabel, color: theme.textMuted }}>TIPO MÁS SOLICITADO</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold' }}>Instalación</div>
-            <div style={{ fontSize: '10px', color: theme.textSub, marginTop: '4px' }}>42% del volumen total</div>
-          </div>
-
-          {/* CARD 3 */}
-          <div style={{ ...styles.metricCard, backgroundColor: theme.bgCard, borderColor: theme.border }}>
-            <div style={{ ...styles.metricLabel, color: theme.textMuted }}>COSTO PROMEDIO PUNTO</div>
-            <div style={styles.metricValue}>$45.00</div>
-            <div style={{ fontSize: '10px', color: theme.textSub, marginTop: '4px' }}>Actualizado hace 2 días</div>
-          </div>
-
-          {/* CARD 4 */}
-          <div style={{ ...styles.metricCard, backgroundColor: theme.bgCard, borderColor: theme.border, position: 'relative' }}>
-            <div style={{ ...styles.metricLabel, color: theme.textMuted }}>CERTIFICACIONES VIGENTES</div>
-            <div style={styles.metricValue}>100%</div>
-            <div style={styles.progressBarBg}>
-              <div style={styles.progressBarFill} />
+        {/* BODY */}
+        <div style={{ padding: '20px', flex: 1 }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '18px', color: theme.textMain, fontWeight: 'bold' }}>Servicios Eléctricos</h1>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: theme.textSub }}>Gestione las partidas, instalaciones y mantenimientos eléctricos.</p>
             </div>
-            <span style={{ position: 'absolute', right: '14px', bottom: '14px', fontSize: '16px' }}>🛡️</span>
+            <button onClick={handleOpenCrear} style={{ backgroundColor: '#facc15', border: 'none', padding: '7px 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px', color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <PlusIcon /> Agregar Servicio
+            </button>
           </div>
-        </div>
 
-        {/* CONTENEDOR DE TABLA DE SERVICIOS */}
-        <div style={{ ...styles.tableCard, backgroundColor: theme.bgCard, borderColor: theme.border }}>
-          {/* FILTROS Y BUSQUEDA */}
-          <div style={styles.filtersBar}>
-            <div style={styles.tabsContainer}>
-              {['Todos', 'Instalación', 'Mantenimiento', 'Protocolos'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setFiltroActivo(tab)}
-                  style={{
-                    ...styles.tabButton,
-                    backgroundColor: filtroActivo === tab ? '#0b1329' : 'transparent',
-                    color: filtroActivo === tab ? '#ffffff' : theme.textSub,
-                  }}
-                >
-                  {tab}
-                </button>
-              ))}
+          {/* TARJETAS MÉTRICAS */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.border }}>
+              <span style={{ ...styles.cardTag, color: theme.textSub }}>PARTIDAS ACTIVAS</span>
+              <div style={{ ...styles.cardNum, color: theme.textMain }}>{servicios.filter(s => s.estado === 'Activo').length}</div>
+              <span style={{ fontSize: '10px', color: '#854d0e', fontWeight: 'bold' }}>⚡ Actualizado en vivo</span>
             </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button style={{ ...styles.btnIconFilter, backgroundColor: theme.bgInner, borderColor: theme.border }}>🎛️</button>
-              <button style={{ ...styles.btnIconFilter, backgroundColor: theme.bgInner, borderColor: theme.border }}>☰</button>
+            <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.border }}>
+              <span style={{ ...styles.cardTag, color: theme.textSub }}>TIPO MÁS SOLICITADO</span>
+              <div style={{ ...styles.cardNum, color: theme.textMain, fontSize: '16px' }}>Instalación</div>
+              <span style={{ fontSize: '10px', color: theme.textSub }}>42% del volumen total</span>
+            </div>
+            <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.border }}>
+              <span style={{ ...styles.cardTag, color: theme.textSub }}>COSTO PROMEDIO PUNTO</span>
+              <div style={{ ...styles.cardNum, color: theme.textMain }}>$45.00</div>
+              <span style={{ fontSize: '10px', color: theme.textSub }}>Actualizado hace 2 días</span>
+            </div>
+            <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.border, position: 'relative' }}>
+              <span style={{ ...styles.cardTag, color: theme.textSub }}>CERTIFICACIONES VIGENTES</span>
+              <div style={{ ...styles.cardNum, color: theme.textMain }}>100%</div>
+              <div style={{ height: '3px', backgroundColor: theme.border, marginTop: '10px', borderRadius: '2px' }}>
+                <div style={{ width: '100%', height: '100%', backgroundColor: '#facc15' }} />
+              </div>
+              <div style={{ position: 'absolute', right: '4px', bottom: '0px', opacity: 0.3 }}>
+                <ShieldWatermark color={theme.textSub} />
+              </div>
             </div>
           </div>
 
-          {/* TABLA DE DATOS */}
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>CÓDIGO</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>NOMBRE DEL SERVICIO</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>UNIDAD DE MEDIDA</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>PRECIO BASE</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>TIEMPO ESTIMADO</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border }}>ESTADO</th>
-                <th style={{ ...styles.th, color: theme.textMuted, borderColor: theme.border, textAlign: 'center' }}>ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody>
-              {serviciosFiltrados.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ ...styles.td, borderColor: theme.border }}>
-                    <div style={styles.badgeCodigo}>{item.codigo}</div>
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{item.nombre}</div>
-                    <div style={{ fontSize: '10px', color: theme.textSub }}>{item.descripcion}</div>
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border }}>
-                    <span style={{ ...styles.badgeUnidad, backgroundColor: theme.bgInner, color: theme.textSub }}>
-                      {item.unidad}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>${item.precio.toFixed(2)}</div>
-                    <div style={{ fontSize: '9px', color: theme.textSub }}>USD / {item.unidad.toUpperCase()}</div>
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border, color: theme.textSub }}>
-                    ⏱️ {item.tiempo}
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border }}>
-                    <span
-                      style={
-                        item.estado === 'Activo'
-                          ? styles.badgeEstadoActivo
-                          : styles.badgeEstadoPausado
-                      }
-                    >
-                      ● {item.estado}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, borderColor: theme.border, textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                      <button style={styles.btnActionIcon} title="Ver detalles">👁️</button>
-                      <button style={styles.btnActionIcon} title="Editar">✏️</button>
-                      <button style={styles.btnActionIcon} title="Eliminar">🗑️</button>
-                    </div>
-                  </td>
+          {/* CAJA TABLA */}
+          <div style={{ backgroundColor: theme.cardBg, borderRadius: '8px', border: `1px solid ${theme.border}`, padding: '12px' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {['Todos', 'Instalación', 'Mantenimiento', 'Protocolos'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    style={{
+                      border: 'none',
+                      backgroundColor: tab === t ? (darkMode ? '#3b82f6' : '#1e293b') : 'transparent',
+                      color: tab === t ? '#ffffff' : theme.textSub,
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* TABLA PRINCIPAL */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${theme.border}`, color: theme.textSub, textAlign: 'left', fontSize: '9px', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '8px' }}>CÓDIGO</th>
+                  <th style={{ padding: '8px' }}>NOMBRE DEL SERVICIO</th>
+                  <th style={{ padding: '8px' }}>UNIDAD DE MEDIDA</th>
+                  <th style={{ padding: '8px' }}>PRECIO BASE</th>
+                  <th style={{ padding: '8px' }}>TIEMPO ESTIMADO</th>
+                  <th style={{ padding: '8px' }}>ESTADO</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>ACCIONES</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {serviciosFiltrados.length > 0 ? (
+                  serviciosFiltrados.map((row) => (
+                    <tr key={row.id} style={{ borderBottom: `1px solid ${theme.tableBorder}` }}>
+                      <td style={{ padding: '10px 8px' }}>
+                        <span style={{ backgroundColor: darkMode ? '#1e3a8a' : '#dbeafe', color: darkMode ? '#93c5fd' : '#1e40af', fontWeight: 'bold', padding: '3px 6px', borderRadius: '3px', fontSize: '9px' }}>
+                          {row.codigo}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <div style={{ fontWeight: 'bold', color: theme.textMain }}>{row.nombre}</div>
+                        <div style={{ fontSize: '9px', color: theme.textSub }}>{row.desc}</div>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <span style={{ backgroundColor: theme.inputBg, border: `1px solid ${theme.border}`, color: theme.textSub, padding: '2px 8px', borderRadius: '10px', fontSize: '9px' }}>
+                          {row.unidad}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <div style={{ fontWeight: 'bold', color: theme.textMain }}>{row.precio}</div>
+                        <div style={{ fontSize: '8px', color: theme.textSub }}>{row.subPrecio}</div>
+                      </td>
+                      <td style={{ padding: '10px 8px', color: theme.textMain }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <ClockIcon color={theme.textSub} /> {row.tiempo}
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <button
+                          onClick={() => handleToggleEstado(row.id)}
+                          style={{
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: row.estado === 'Activo' ? (darkMode ? '#064e3b' : '#dcfce7') : (darkMode ? '#78350f' : '#fef3c7'),
+                            color: row.estado === 'Activo' ? (darkMode ? '#6ee7b7' : '#166534') : (darkMode ? '#fde047' : '#92400e'),
+                            padding: '2px 8px',
+                            borderRadius: '8px',
+                            fontSize: '9px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          • {row.estado}
+                        </button>
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <button onClick={() => handleOpenVer(row)} style={styles.btnIcon}><EyeIcon color={theme.iconColor} /></button>
+                          <button onClick={() => handleOpenEditar(row)} style={styles.btnIcon}><EditIcon color={theme.iconColor} /></button>
+                          <button onClick={() => handleEliminar(row.id)} style={styles.btnIcon}><TrashIcon /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: theme.textSub }}>
+                      No se encontraron servicios que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
 
-          {/* PAGINACIÓN DE LA TABLA */}
-          <div style={{ ...styles.paginationBar, color: theme.textSub }}>
-            <span>Mostrando {serviciosFiltrados.length} de 38 servicios</span>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-              <button style={styles.btnPage}>&lt;</button>
-              <button style={{ ...styles.btnPage, ...styles.btnPageActive }}>1</button>
-              <button style={styles.btnPage}>2</button>
-              <button style={styles.btnPage}>3</button>
-              <button style={styles.btnPage}>&gt;</button>
+            {/* PAGINACIÓN FOOTER */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', fontSize: '10px', color: theme.textSub }}>
+              <span>Mostrando {serviciosFiltrados.length} de {servicios.length} servicios</span>
+              <div style={{ display: 'flex', gap: '3px' }}>
+                <button style={{ ...styles.pBtn, backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textSub }}>&lt;</button>
+                <button style={{ ...styles.pBtn, backgroundColor: '#facc15', color: '#0f172a', fontWeight: 'bold', border: 'none' }}>1</button>
+                <button style={{ ...styles.pBtn, backgroundColor: theme.cardBg, borderColor: theme.border, color: theme.textSub }}>&gt;</button>
+              </div>
             </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      {/* MODAL (VER / EDITAR / CREAR) */}
+      {modalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.border}`, width: '400px', borderRadius: '8px', padding: '20px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '14px', color: theme.textMain }}>
+              {modoModal === 'crear' && 'Agregar Nuevo Servicio'}
+              {modoModal === 'editar' && 'Editar Servicio'}
+              {modoModal === 'ver' && 'Detalles del Servicio'}
+            </h3>
+
+            {modoModal === 'ver' ? (
+              <div style={{ fontSize: '12px', color: theme.textMain, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div><strong>Código:</strong> {selectedItem?.codigo}</div>
+                <div><strong>Nombre:</strong> {selectedItem?.nombre}</div>
+                <div><strong>Descripción:</strong> {selectedItem?.desc}</div>
+                <div><strong>Categoría:</strong> {selectedItem?.categoria}</div>
+                <div><strong>Unidad:</strong> {selectedItem?.unidad}</div>
+                <div><strong>Precio:</strong> {selectedItem?.precio} ({selectedItem?.subPrecio})</div>
+                <div><strong>Tiempo Estimado:</strong> {selectedItem?.tiempo}</div>
+                <div><strong>Estado:</strong> {selectedItem?.estado}</div>
+                <button onClick={() => setModalOpen(false)} style={{ ...styles.btnPrimary, marginTop: '12px' }}>Cerrar</button>
+              </div>
+            ) : (
+              <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '11px' }}>
+                <input
+                  type="text"
+                  placeholder="Nombre del servicio"
+                  required
+                  value={formData.nombre}
+                  onChange={e => setFormData({ ...formData, nombre: e.target.value })}
+                  style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                />
+                <input
+                  type="text"
+                  placeholder="Descripción corta"
+                  value={formData.desc}
+                  onChange={e => setFormData({ ...formData, desc: e.target.value })}
+                  style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <select
+                    value={formData.categoria}
+                    onChange={e => setFormData({ ...formData, categoria: e.target.value })}
+                    style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                  >
+                    <option value="Instalación">Instalación</option>
+                    <option value="Mantenimiento">Mantenimiento</option>
+                    <option value="Protocolos">Protocolos</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Precio (Ej: $850.00)"
+                    value={formData.precio}
+                    onChange={e => setFormData({ ...formData, precio: e.target.value })}
+                    style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Tiempo (Ej: 2 Días)"
+                    value={formData.tiempo}
+                    onChange={e => setFormData({ ...formData, tiempo: e.target.value })}
+                    style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                  />
+                  <select
+                    value={formData.estado}
+                    onChange={e => setFormData({ ...formData, estado: e.target.value })}
+                    style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.textMain }}
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Pausado">Pausado</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                  <button type="button" onClick={() => setModalOpen(false)} style={styles.btnSecondary}>Cancelar</button>
+                  <button type="submit" style={styles.btnPrimary}>Guardar</button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
-      </main>
+      )}
+
     </div>
   );
 }
 
-// ESTILOS EN OBJETO JAVASCRIPT
 const styles = {
-  appWrapper: { display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif', transition: 'background-color 0.2s, color 0.2s' },
-  sidebar: { width: '220px', borderRight: '1px solid', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' },
-  brandTitle: { fontSize: '15px', fontWeight: 'bold', color: '#facc15' },
-  brandSubtitle: { fontSize: '9px', marginBottom: '24px' },
-  navList: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  navItem: { padding: '8px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' },
-  navItemActive: { backgroundColor: '#1e2d4a', color: '#facc15', fontWeight: 'bold' },
-  btnNuevaVenta: { backgroundColor: '#facc15', border: 'none', width: '100%', padding: '10px', borderRadius: '6px', fontWeight: 'bold', color: '#0b1329', cursor: 'pointer', fontSize: '12px', marginBottom: '16px' },
-  sidebarFooter: { borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '4px' },
-  mainContainer: { flex: 1, padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: '16px' },
-  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  searchContainer: { width: '380px' },
-  topSearchInput: { border: '1px solid', padding: '8px 14px', borderRadius: '6px', width: '100%', outline: 'none', fontSize: '12px', boxSizing: 'border-box' },
-  btnCrearDocumento: { backgroundColor: '#fde047', border: 'none', color: '#0b1329', padding: '8px 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '11px', cursor: 'pointer' },
-  btnThemeToggle: { border: '1px solid', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
-  userAvatar: { width: '30px', height: '30px', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center' },
-  headerSection: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  pageTitle: { margin: 0, fontSize: '20px', fontWeight: 'bold' },
-  pageSubtitle: { margin: '2px 0 0 0', fontSize: '11px' },
-  btnAgregarServicio: { backgroundColor: '#facc15', border: 'none', color: '#0b1329', padding: '10px 18px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' },
-  metricsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
-  metricCard: { border: '1px solid', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column' },
-  metricLabel: { fontSize: '9px', fontWeight: 'bold', letterSpacing: '0.5px' },
-  metricValue: { fontSize: '22px', fontWeight: 'bold', marginTop: '6px' },
-  progressBarBg: { width: '100%', height: '4px', backgroundColor: '#e2e8f0', borderRadius: '2px', marginTop: '8px' },
-  progressBarFill: { width: '100%', height: '100%', backgroundColor: '#facc15', borderRadius: '2px' },
-  tableCard: { border: '1px solid', borderRadius: '10px', padding: '16px' },
-  filtersBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
-  tabsContainer: { display: 'flex', gap: '4px', backgroundColor: 'rgba(0,0,0,0.03)', padding: '4px', borderRadius: '20px' },
-  tabButton: { border: 'none', padding: '6px 14px', borderRadius: '16px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' },
-  btnIconFilter: { border: '1px solid', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { fontSize: '9px', padding: '10px 8px', borderBottom: '1px solid', textAlign: 'left', fontWeight: 'bold', letterSpacing: '0.4px' },
-  td: { padding: '12px 8px', borderBottom: '1px solid', fontSize: '11px' },
-  badgeCodigo: { backgroundColor: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', display: 'inline-block' },
-  badgeUnidad: { padding: '3px 8px', borderRadius: '12px', fontSize: '10px' },
-  badgeEstadoActivo: { backgroundColor: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' },
-  badgeEstadoPausado: { backgroundColor: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' },
-  btnActionIcon: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' },
-  paginationBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', fontSize: '11px' },
-  btnPage: { border: 'none', background: 'none', padding: '4px 8px', cursor: 'pointer', fontSize: '11px', borderRadius: '4px' },
-  btnPageActive: { backgroundColor: '#facc15', color: '#0b1329', fontWeight: 'bold' },
+  card: { padding: '12px', borderRadius: '6px', border: '1px solid' },
+  cardTag: { fontSize: '8px', fontWeight: 'bold', letterSpacing: '0.3px' },
+  cardNum: { fontSize: '18px', fontWeight: 'bold', margin: '2px 0' },
+  btnIcon: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' },
+  pBtn: { width: '20px', height: '20px', border: '1px solid', borderRadius: '3px', fontSize: '9px', cursor: 'pointer' },
+  input: { padding: '6px 10px', borderRadius: '4px', border: '1px solid', fontSize: '11px', outline: 'none' },
+  btnPrimary: { backgroundColor: '#facc15', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: 'bold', fontSize: '11px', color: '#0f172a', cursor: 'pointer' },
+  btnSecondary: { backgroundColor: '#94a3b8', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', color: '#ffffff', cursor: 'pointer' }
 };
+
+export default CatalogoServicios;

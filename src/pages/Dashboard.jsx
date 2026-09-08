@@ -79,7 +79,7 @@ export function Dashboard() {
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', backgroundColor: '#0f172a', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", overflowX: 'hidden' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", overflowX: 'hidden' }}>
       
       {/* Inyección de estilos dinámicos para la barra de scroll personalizada */}
       <style>{`

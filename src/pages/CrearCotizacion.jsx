@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo } from 'react';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function CrearCotizacion() {
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
   const [pantallaActual, setPantallaActual] = useState('formulario');
-  const [esModoOscuro, setEsModoOscuro] = useState(false);
+  const esModoOscuro = temaGlobal === 'dark';
   const [notificacion, setNotificacion] = useState(null);
 
   // Estados del Emisor
@@ -163,7 +165,7 @@ export function CrearCotizacion() {
       {/* Header Corregido */}
       <Header
         esModoOscuro={esModoOscuro}
-        setEsModoOscuro={setEsModoOscuro}
+        toggleTheme={toggleTheme}
         theme={theme}
         onGenerar={() => setPantallaActual('vista_previa')}
         onConvertir={() => mostrarNotificacion('Convertido a Orden de Servicio dinámicamente.')}
@@ -244,7 +246,7 @@ export function CrearCotizacion() {
 // SUBCOMPONENTES
 // ==========================================
 
-function Header({ esModoOscuro, setEsModoOscuro, theme, onGenerar, onConvertir }) {
+function Header({ esModoOscuro, toggleTheme, theme, onGenerar, onConvertir }) {
   return (
     <div style={styles.topHeader}>
       <div style={{ minWidth: '280px', flex: '1 1 auto' }}>
@@ -258,7 +260,7 @@ function Header({ esModoOscuro, setEsModoOscuro, theme, onGenerar, onConvertir }
 
       <div style={styles.topButtons}>
         <button
-          onClick={() => setEsModoOscuro(!esModoOscuro)}
+          onClick={toggleTheme}
           style={{
             backgroundColor: theme.cardBg,
             color: theme.textColor,

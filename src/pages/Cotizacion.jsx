@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { CrearCotizacion } from './CrearCotizacion';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function Cotizaciones() {
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
   const [modoEdicion, setModoEdicion] = useState(false);
-  const [esModoOscuro, setEsModoOscuro] = useState(false);
+  const esModoOscuro = temaGlobal === 'dark';
 
   // Estados dinámicos para Servicios y Materiales (Coinciden con $1.250.000 y $845.300)
   const [servicios, setServicios] = useState([
@@ -38,7 +40,7 @@ export function Cotizaciones() {
 
   // Si le damos clic a Generar Cotización, cambia la pantalla al formulario detallado
   if (modoEdicion) {
-    return <CrearCotizacion onVolver={() => setModoEdicion(false)} esModoOscuro={esModoOscuro} />;
+    return <CrearCotizacion onVolver={() => setModoEdicion(false)} />;
   }
 
   // Paleta de colores dinámica según el tema seleccionado
@@ -70,7 +72,7 @@ export function Cotizaciones() {
         </div>
 
         <button
-          onClick={() => setEsModoOscuro(!esModoOscuro)}
+          onClick={toggleTheme}
           style={{
             backgroundColor: theme.cardBg,
             color: theme.textColor,

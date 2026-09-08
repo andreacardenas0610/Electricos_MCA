@@ -15,7 +15,9 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      {cargando ? <SplashScreen /> : <Dashboard />}
+      <div className="app-root">
+        {cargando ? <SplashScreen /> : <Dashboard />}
+      </div>
     </ThemeProvider>
   );
 }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 const configuraciones = {
   clientes: {
@@ -107,7 +108,8 @@ const siguienteEstado = (modulo, estado) => {
 
 export function ModuloGestion({ modulo }) {
   const config = configuraciones[modulo];
-  const [esOscuro, setEsOscuro] = useState(() => localStorage.getItem('mca_tema') === 'oscuro');
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const esOscuro = temaGlobal === 'dark';
   const [registros, setRegistros] = useState(() => {
     const guardados = localStorage.getItem(config.almacenamiento);
     return guardados ? JSON.parse(guardados) : config.iniciales;
@@ -180,18 +182,13 @@ export function ModuloGestion({ modulo }) {
     page: '#f8fafc', card: '#ffffff', border: '#e2e8f0', text: '#0f172a', subtext: '#64748b', input: '#ffffff', rowBorder: '#f1f5f9', secondary: '#ffffff'
   };
 
-  const cambiarTema = () => {
-    const nuevoEstado = !esOscuro;
-    setEsOscuro(nuevoEstado);
-    localStorage.setItem('mca_tema', nuevoEstado ? 'oscuro' : 'claro');
-  };
-
+  
   return (
     <section style={{ ...styles.page, backgroundColor: tema.page, color: tema.text }}>
       <header style={{ ...styles.topBar, borderColor: tema.border }}>
         <div style={{ color: tema.subtext, fontSize: '12px' }}>Eléctricos MCA / {config.titulo}</div>
         <div style={styles.userTools}>
-          <button type="button" onClick={cambiarTema} style={{ ...styles.themeButton, backgroundColor: tema.card, borderColor: tema.border, color: tema.text }}>
+          <button type="button" onClick={toggleTheme} style={{ ...styles.themeButton, backgroundColor: tema.card, borderColor: tema.border, color: tema.text }}>
             {esOscuro ? '☀️ Claro' : '🌙 Oscuro'}
           </button>
           <div style={styles.userInfo}>

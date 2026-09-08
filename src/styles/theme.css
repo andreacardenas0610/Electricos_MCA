@@ -14,6 +14,17 @@
   --border-color: #2a3656;
 }
 
+:root,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 [data-theme='light'] {
   --bg-main: #f8fafc;
   --bg-card: #ffffff;
@@ -27,6 +38,10 @@
   --text-main: #0f172a;
   --text-muted: #64748b;
   --border-color: #e2e8f0;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
 }
 
 body {

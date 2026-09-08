@@ -4,10 +4,14 @@ import { createContext, useState, useEffect } from 'react';
 export const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    const temaGuardado = localStorage.getItem('mca_tema');
+    return temaGuardado === 'light' || temaGuardado === 'claro' ? 'light' : 'dark';
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('mca_tema', theme);
   }, [theme]);
 
   const toggleTheme = () => {

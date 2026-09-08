@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function Materiales() {
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
   const [busqueda, setBusqueda] = useState('');
   const [itemEditar, setItemEditar] = useState(null);
-  const [esModoOscuro, setEsModoOscuro] = useState(false); // Estado para alternar el tema
+  const esModoOscuro = temaGlobal === 'dark';
   
   // ESTADO PARA EL MODAL DE NUEVA ENTRADA
   const [modalNuevaEntrada, setModalNuevaEntrada] = useState(false);
@@ -118,7 +120,7 @@ export function Materiales() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
-            onClick={() => setEsModoOscuro(!esModoOscuro)}
+            onClick={toggleTheme}
             style={{
               backgroundColor: theme.cardBg,
               color: theme.textColor,

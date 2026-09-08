@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function PanelControl() {
+  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
   const [periodoGrafico, setPeriodoGrafico] = useState('1A');
   const [mostrarModal, setMostrarModal] = useState(false);
 
@@ -73,18 +75,7 @@ export function PanelControl() {
     'Finalizado': { bg: '#fde8e8', texto: '#991b1b', posicionCirculo: '80px' }
   };
 
-  const [esOscuro, setEsOscuro] = useState(() => {
-    try {
-      const temaGuardado = localStorage.getItem('tema_panel');
-      return temaGuardado !== null ? JSON.parse(temaGuardado) : true;
-    } catch {
-      return true;
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('tema_panel', JSON.stringify(esOscuro));
-  }, [esOscuro]);
+  const esOscuro = temaGlobal === 'dark';
 
   const tema = {
     bgPrincipal: esOscuro ? '#0b1329' : '#f8fafc',
@@ -147,7 +138,7 @@ export function PanelControl() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <button 
-            onClick={() => setEsOscuro(!esOscuro)}
+            onClick={toggleTheme}
             style={{
               backgroundColor: tema.bgBadge,
               border: `1px solid ${tema.border}`,
