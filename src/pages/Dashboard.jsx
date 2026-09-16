@@ -72,7 +72,8 @@ export function Dashboard() {
       titulo: 'ADMINISTRACIÓN',
       items: [
         { id: 'usuarios', label: 'Gestión Usuarios', icon: '👤' },
-        { id: 'roles', label: 'Gestión de Acceso', icon: '🛡️' },
+        { id: 'roles', label: 'Roles', icon: '🛡️' },
+
        
       ]
     }

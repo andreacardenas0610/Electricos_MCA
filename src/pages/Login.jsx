@@ -106,9 +106,7 @@ export function Login({ onLogin }) {
             <button type="button" onClick={() => { setError(''); setVista('recuperar'); }}>
               ¿Olvidaste tu contraseña?
             </button>
-            <button type="button" onClick={() => { setError(''); setVista('registro'); }}>
-              Crear cuenta
-            </button>
+            
           </div>
         </form>
 
