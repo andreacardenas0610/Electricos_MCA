@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
 import {
   EstadoToggle,
@@ -216,10 +216,20 @@ const INITIAL_DATA = [
 export function CatalogoServicios() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
 
-  const [servicios, setServicios] = useState(INITIAL_DATA);
+  const [servicios, setServicios] = useState(() => {
+    try {
+      const guardados = localStorage.getItem('mca_catalogo_servicios');
+      return guardados ? JSON.parse(guardados) : INITIAL_DATA;
+    } catch {
+      return INITIAL_DATA;
+    }
+  });
   const [tab, setTab] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
   const [paginaActual, setPaginaActual] = useState(1);
+
+  const darkMode = temaGlobal === 'dark';
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modoModal, setModoModal] = useState('crear');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -238,8 +248,7 @@ export function CatalogoServicios() {
     estado: 'Activo'
   });
 
-  const darkMode = temaGlobal === 'dark';
-
+  
   const theme = {
     bg: darkMode ? '#0b0f19' : '#eef2f6',
     cardBg: darkMode ? '#151c2c' : '#ffffff',

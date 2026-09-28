@@ -39,17 +39,15 @@ const configuraciones = {
     metricaIconos: ['🤝', '🔎', '✅'],
     almacenamiento: 'mca_terceros',
     columnas: [
-      ['nombre', 'Tercero'],
-      ['tipo', 'Tipo'],
       ['documento', 'Documento / NIT'],
-      ['contacto', 'Contacto'],
+      ['contacto', 'Nombre del técnico'],
+      ['telefono', 'Teléfono'],
+      ['correo', 'Correo electrónico'],
       ['estado', 'Estado'],
     ],
     campos: [
-      ['nombre', 'Nombre o razón social', 'text'],
-      ['tipo', 'Tipo de tercero', 'select', ['Proveedor', 'Contratista', 'Aliado']],
       ['documento', 'Documento o NIT', 'text'],
-      ['contacto', 'Persona de contacto', 'text'],
+      ['contacto', 'Nombre del técnico', 'text'],
       ['telefono', 'Teléfono', 'tel'],
       ['correo', 'Correo electrónico', 'email'],
     ],
@@ -74,17 +72,38 @@ const configuraciones = {
     ],
     campos: [
       ['codigo', 'Código de orden', 'text'],
-      ['cliente', 'Cliente', 'text'],
-      ['servicio', 'Servicio solicitado', 'text'],
+      ['clienteId', 'Cliente', 'fk', 'clientes'],
+      ['servicioId', 'Servicio solicitado', 'fk', 'servicios'],
       ['fecha', 'Fecha programada', 'date'],
-      ['responsable', 'Técnico responsable', 'text'],
+      ['responsableId', 'Técnico responsable', 'fk', 'tecnicos'],
       ['estado', 'Estado', 'select', ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']],
     ],
     iniciales: [
-      { id: 1, codigo: 'OS-9842', cliente: 'Corporativo Andes S.A.', servicio: 'Mantenimiento preventivo', fecha: '2026-09-12', responsable: 'Carlos Ruiz', estado: 'Programada' },
-      { id: 2, codigo: 'OS-9845', cliente: 'Constructora Horizonte S.A.', servicio: 'Instalación de celdas', fecha: '2026-09-15', responsable: 'Marta Gómez', estado: 'Pendiente' },
+      { id: 1, codigo: 'OS-9842', clienteId: '2', cliente: 'Corporativo Andes S.A.', servicioId: 'ELEC-002', servicio: 'Mantenimiento Preventivo', fecha: '2026-09-12', responsableId: '1', responsable: 'Carlos Mendoza', estado: 'Programada' },
+      { id: 2, codigo: 'OS-9845', clienteId: '1', cliente: 'Constructora Horizonte S.A.', servicioId: 'ELEC-001', servicio: 'Instalación Eléctrica Residencial', fecha: '2026-09-15', responsableId: '1', responsable: 'Carlos Mendoza', estado: 'Pendiente' },
     ],
   },
+};
+
+const estadoColor = (estado) => {
+  if (['Activo', 'Finalizada'].includes(estado)) return { backgroundColor: '#dcfce7', color: '#166534' };
+  if (['En ejecución', 'Programada'].includes(estado)) return { backgroundColor: '#dbeafe', color: '#1d4ed8' };
+  if (['Cancelada', 'Inactivo'].includes(estado)) return { backgroundColor: '#fee2e2', color: '#b91c1c' };
+  return { backgroundColor: '#fef3c7', color: '#92400e' };
+};
+
+const estadoIcono = (estado) => {
+  if (['Activo', 'Finalizada'].includes(estado)) return '✓';
+  if (['En ejecución', 'Programada'].includes(estado)) return '●';
+  if (['Cancelada', 'Inactivo'].includes(estado)) return '×';
+  return '!';
+};
+
+const siguienteEstado = (modulo, estado) => {
+  const estados = modulo === 'ordenes'
+    ? ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']
+    : ['Activo', 'Inactivo'];
+  return estados[(estados.indexOf(estado) + 1) % estados.length];
 };
 
 export function ModuloGestion({ modulo }) {
@@ -118,10 +137,29 @@ export function ModuloGestion({ modulo }) {
     return registros.filter((registro) => Object.values(registro).some((valor) => String(valor).toLowerCase().includes(texto)));
   }, [busqueda, registros]);
 
+  const generarCodigoOrden = () => {
+    const ultimoNumero = registros.reduce((mayor, registro) => {
+      const coincidencia = String(registro.codigo || '').match(/^OS-(\d+)$/i);
+      return coincidencia ? Math.max(mayor, Number(coincidencia[1])) : mayor;
+    }, 0);
+    return `OS-${String(ultimoNumero + 1).padStart(4, '0')}`;
+  };
+
   const abrirNuevo = () => {
     const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [nombre, ['select', 'segmented'].includes(tipo) ? opciones[0] : '']));
+    if (modulo === 'ordenes') valoresIniciales.codigo = generarCodigoOrden();
     setRegistroEditado({ id: Date.now(), ...valoresIniciales });
     setMostrarFormulario(true);
+  };
+
+  const seleccionarFK = (nombre, catalogo, id) => {
+    const opcion = obtenerOpcionesFK(catalogo).find((item) => item.id === id);
+    const campoNombre = nombre.replace(/Id$/, '');
+    setRegistroEditado((actual) => ({
+      ...actual,
+      [nombre]: id,
+      [campoNombre]: opcion?.nombre || '',
+    }));
   };
 
   const guardarRegistro = (evento) => {
@@ -207,8 +245,8 @@ export function ModuloGestion({ modulo }) {
             <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
             <tbody>
               {registrosFiltrados.map((registro) => <tr key={registro.id}>
-                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <EstadoToggle estado={registro[campo]} estados={estadosModulo} width={modulo === 'ordenes' ? 140 : 125} onClick={() => cambiarEstado(registro.id)} /> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
-                <td style={{ ...styles.td, borderColor: tema.rowBorder }}><AccionesFila onVer={() => setRegistroDetalle(registro)} onEditar={() => { setRegistroEditado(registro); setMostrarFormulario(true); }} onEliminar={() => eliminarRegistro(registro.id)} color={esOscuro ? '#cbd5e1' : '#475569'} alineacion="flex-start" /></td>
+                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <button type="button" onClick={() => cambiarEstado(registro.id)} title="Cambiar estado" style={{ ...styles.badge, ...estadoColor(registro[campo]), cursor: 'pointer', border: 'none' }}><span style={styles.statusDot}>{estadoIcono(registro[campo])}</span>{registro[campo]}</button> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
+                <td style={{ ...styles.td, borderColor: tema.rowBorder }}><div style={styles.actions}><button type="button" onClick={() => { setRegistroEditado(registro); setMostrarFormulario(true); }} style={{ ...styles.actionButton, color: '#a16207' }} title="Editar registro">✏️</button><button type="button" onClick={() => setRegistroDetalle(registro)} style={{ ...styles.actionButton, color: '#1d4ed8' }} title="Ver detalle">👁️</button><button type="button" onClick={() => eliminarRegistro(registro.id)} style={{ ...styles.actionButton, color: '#b91c1c' }} title="Eliminar registro">🗑️</button></div></td>
               </tr>)}
               {registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
             </tbody>
@@ -219,7 +257,7 @@ export function ModuloGestion({ modulo }) {
       {mostrarFormulario && <div style={styles.overlay}>
         <form onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
           <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => setMostrarFormulario(false)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.formGrid}>{config.campos.map(([nombre, etiqueta, tipo, opciones]) => <label key={nombre} style={{ ...styles.label, ...(tipo === 'segmented' ? styles.fullWidthField : {}), color: tema.subtext }}>{etiqueta}<>{tipo === 'select' ? <select required value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}>{opciones.map((opcion) => <option key={opcion}>{opcion}</option>)}</select> : tipo === 'segmented' ? <div role="radiogroup" aria-label={etiqueta} style={styles.segmentedControl}>{opciones.map((opcion) => <button key={opcion} type="button" role="radio" aria-checked={registroEditado?.[nombre] === opcion} onClick={() => setRegistroEditado({ ...registroEditado, [nombre]: opcion })} style={{ ...styles.segmentedButton, backgroundColor: registroEditado?.[nombre] === opcion ? '#facc15' : tema.input, borderColor: registroEditado?.[nombre] === opcion ? '#eab308' : tema.border, color: registroEditado?.[nombre] === opcion ? '#172033' : tema.text }}>{opcion}</button>)}</div> : <input required type={tipo} value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }} />}</></label>)}</div>
+          <div style={styles.formGrid}>{config.campos.map(([nombre, etiqueta, tipo, opciones]) => <label key={nombre} style={{ ...styles.label, ...(tipo === 'segmented' ? styles.fullWidthField : {}), color: tema.subtext }}>{etiqueta}<>{tipo === 'fk' ? <select required value={String(registroEditado?.[nombre] || '')} onChange={(evento) => seleccionarFK(nombre, opciones, evento.target.value)} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}><option value="">Selecciona {etiqueta.toLowerCase()}...</option>{obtenerOpcionesFK(opciones).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.etiqueta}</option>)}</select> : tipo === 'select' ? <select required value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}>{opciones.map((opcion) => <option key={opcion}>{opcion}</option>)}</select> : tipo === 'segmented' ? <div role="radiogroup" aria-label={etiqueta} style={styles.segmentedControl}>{opciones.map((opcion) => <button key={opcion} type="button" role="radio" aria-checked={registroEditado?.[nombre] === opcion} onClick={() => setRegistroEditado({ ...registroEditado, [nombre]: opcion })} style={{ ...styles.segmentedButton, backgroundColor: registroEditado?.[nombre] === opcion ? '#facc15' : tema.input, borderColor: registroEditado?.[nombre] === opcion ? '#eab308' : tema.border, color: registroEditado?.[nombre] === opcion ? '#172033' : tema.text }}>{opcion}</button>)}</div> : <input required type={tipo} readOnly={modulo === 'ordenes' && nombre === 'codigo'} value={registroEditado?.[nombre] || ''} onChange={(evento) => setRegistroEditado({ ...registroEditado, [nombre]: evento.target.value })} style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }} />}</></label>)}</div>
           <div style={styles.modalActions}><button type="button" onClick={() => setMostrarFormulario(false)} style={styles.secondaryButton}>Cancelar</button><button type="submit" style={styles.primaryButton}>Guardar registro</button></div>
         </form>
       </div>}
@@ -227,7 +265,7 @@ export function ModuloGestion({ modulo }) {
       {registroDetalle && <div style={styles.overlay}>
         <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
           <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} DETALLE</div><h2 style={{ margin: 0 }}>Información completa</h2></div><button type="button" onClick={() => setRegistroDetalle(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.detailGrid}>{config.campos.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{nombre === 'estado' ? <EstadoToggle estado={(registros.find((r) => r.id === registroDetalle.id) || registroDetalle)?.estado} estados={estadosModulo} width={modulo === 'ordenes' ? 140 : 125} onClick={() => cambiarEstado(registroDetalle.id)} /> : registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
+          <div style={styles.detailGrid}>{config.campos.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
           <div style={styles.modalActions}><button type="button" onClick={() => setRegistroDetalle(null)} style={styles.primaryButton}>Cerrar detalle</button></div>
         </div>
       </div>}
@@ -235,7 +273,7 @@ export function ModuloGestion({ modulo }) {
       {registroAEliminar && <div style={styles.overlay}>
         <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text, maxWidth: '430px' }}>
           <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: '#b91c1c' }}>⚠️ CONFIRMAR ACCIÓN</div><h2 style={{ margin: 0 }}>Eliminar registro</h2></div><button type="button" onClick={() => setRegistroAEliminar(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <p style={{ color: tema.subtext, fontSize: '14px', lineHeight: 1.5, margin: '0 0 20px' }}>¿Seguro que deseas eliminar <strong style={{ color: tema.text }}>{registroAEliminar.nombre || registroAEliminar.codigo}</strong>? Esta acción quitará el registro de la lista.</p>
+          <p style={{ color: tema.subtext, fontSize: '14px', lineHeight: 1.5, margin: '0 0 20px' }}>¿Seguro que deseas eliminar <strong style={{ color: tema.text }}>{registroAEliminar.nombre || registroAEliminar.contacto || registroAEliminar.documento || registroAEliminar.codigo}</strong>? Esta acción quitará el registro de la lista.</p>
           <div style={styles.modalActions}><button type="button" onClick={() => setRegistroAEliminar(null)} style={styles.secondaryButton}>Cancelar</button><button type="button" onClick={confirmarEliminacion} style={styles.deleteButton}>🗑️ Eliminar</button></div>
         </div>
       </div>}
