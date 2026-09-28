@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
@@ -258,12 +258,23 @@ const INITIAL_DATA = [
 export function CatalogoServicios() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
 
-  const [servicios, setServicios] = useState(INITIAL_DATA);
+  const [servicios, setServicios] = useState(() => {
+    try {
+      const guardados = localStorage.getItem('mca_catalogo_servicios');
+      return guardados ? JSON.parse(guardados) : INITIAL_DATA;
+    } catch {
+      return INITIAL_DATA;
+    }
+  });
   const [tab, setTab] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
   const [paginaActual, setPaginaActual] = useState(1);
 
   const darkMode = temaGlobal === 'dark';
+
+  useEffect(() => {
+    localStorage.setItem('mca_catalogo_servicios', JSON.stringify(servicios));
+  }, [servicios]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modoModal, setModoModal] = useState('crear');

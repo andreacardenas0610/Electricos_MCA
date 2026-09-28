@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
@@ -456,8 +456,22 @@ export function GestionUsuarios() {
   const { theme: temaGlobal, toggleTheme } =
     useContext(ThemeContext);
 
-  const [usuarios, setUsuarios] =
-    useState(INITIAL_USUARIOS);
+  const [usuarios, setUsuarios] = useState(() => {
+    try {
+      const guardados = localStorage.getItem('mca_usuarios_gestion');
+      return guardados ? JSON.parse(guardados) : INITIAL_USUARIOS;
+    } catch {
+      return INITIAL_USUARIOS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('mca_usuarios_gestion', JSON.stringify(usuarios));
+    localStorage.setItem(
+      'mca_tecnicos',
+      JSON.stringify(usuarios.filter((usuario) => usuario.rol === 'Técnico'))
+    );
+  }, [usuarios]);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('Todos');
