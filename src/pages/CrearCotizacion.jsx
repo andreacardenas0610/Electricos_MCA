@@ -1,772 +1,1145 @@
-import React, { useContext, useState, useMemo } from 'react';
+
+import { useState, useContext } from 'react';
+
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
-export function CrearCotizacion() {
+// --- CATÁLOGO BASE DE DATOS: CLIENTES (REPRESENTACIÓN DE FK) ---
+
+const CATALOGO_CLIENTES = [
+  {
+    id: 'CLI-001',
+    nombre: 'Residencial "Las Palmas" - Administración',
+    nit: '900.123.456-1',
+    direccion: 'Av. Insurgentes Sur 1450, Ciudad de México',
+  },
+  {
+    id: 'CLI-002',
+    nombre: 'Constructora Horizonte S.A.',
+    nit: '800.987.654-3',
+    direccion: 'Calle 50 # 12-34, Parque Industrial, Bogotá',
+  },
+  {
+    id: 'CLI-003',
+    nombre: 'Comercializadora del Norte Ltda.',
+    nit: '901.555.222-8',
+    direccion: 'Av. Las Américas 88-10, Medellín',
+  },
+];
+
+// --- CATÁLOGO BASE DE DATOS: MATERIALES (REPRESENTACIÓN DE FK) ---
+
+const CATALOGO_MATERIALES = [
+  {
+    id: 'EL-BUS-585',
+    sku: 'ELE-BUS-585-MOD',
+    ean: '7701234567890',
+    descripcion: 'Instalación de Tablero de Distribución Principal',
+    precioUnit: 4500,
+    categoria: 'Mano de Obra',
+  },
+  {
+    id: 'EL-CAB-254',
+    sku: 'ELE-CAB-254-PWR',
+    ean: '7704567890123',
+    descripcion: 'Cable de Cobre THHN Calibre 8 AWG (Rollo x 100m)',
+    precioUnit: 2800,
+    categoria: 'Conductores',
+  },
+  {
+    id: 'EL-INT-101',
+    sku: 'ELE-INT-101-BRK',
+    ean: '7709876543210',
+    descripcion: 'Interruptor Termomagnético 20A 2P Carga Alta',
+    precioUnit: 650,
+    categoria: 'Protección',
+  },
+  {
+    id: 'EL-CON-012',
+    sku: 'ELE-CON-012-DUX',
+    ean: '7705554443332',
+    descripcion: 'Tubo Conduit Pared Gruesa 3/4" (Tramo 3m)',
+    precioUnit: 320,
+    categoria: 'Canalización',
+  },
+];
+
+// --- CATÁLOGO BASE DE DATOS: SERVICIOS (REPRESENTACIÓN DE FK) ---
+
+const CATALOGO_SERVICIOS = [
+  {
+    id: 'SER-001',
+    codigo: 'SERV-ELE-001',
+    nombre: 'Instalación de Red Eléctrica Residencial',
+    descripcion: 'Instalación completa de red eléctrica residencial',
+    valor: 180000,
+    categoria: 'Instalación',
+  },
+  {
+    id: 'SER-002',
+    codigo: 'SERV-ELE-002',
+    nombre: 'Mantenimiento Preventivo Eléctrico',
+    descripcion: 'Revisión y mantenimiento preventivo de instalaciones eléctricas',
+    valor: 120000,
+    categoria: 'Mantenimiento',
+  },
+  {
+    id: 'SER-003',
+    codigo: 'SERV-ELE-003',
+    nombre: 'Diagnóstico y Reparación de Fallas',
+    descripcion: 'Diagnóstico técnico y reparación de fallas eléctricas',
+    valor: 95000,
+    categoria: 'Reparación',
+  },
+  {
+    id: 'SER-004',
+    codigo: 'SERV-ELE-004',
+    nombre: 'Instalación de Tablero Eléctrico',
+    descripcion: 'Instalación y configuración de tablero eléctrico',
+    valor: 150000,
+    categoria: 'Instalación',
+  },
+];
+
+export function CrearCotizacion({
+  cotizacionInicial,
+  esSoloLectura = false,
+  onVolver,
+  onGuardar,
+}) {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
-  const [pantallaActual, setPantallaActual] = useState('formulario');
-  const esModoOscuro = temaGlobal === 'dark';
-  const [notificacion, setNotificacion] = useState(null);
 
-  // Estados del Emisor
-  const [empresa] = useState({
-    nombre: 'ElectroServicios Profesionales S.A. de C.V.',
-    rfc: 'ESP100225ABC',
-    telefono: '+52 55 1234 5678',
-    email: 'contacto@electroservicios.com',
-  });
+  const esOscuro = temaGlobal === 'dark';
 
-  // Estados del Formulario
-  const [numCotizacion, setNumCotizacion] = useState('COT-ELEC-2026-001');
-  const [fechaEmision, setFechaEmision] = useState('2026-07-26');
-  const [cliente, setCliente] = useState('Residencial "Las Palmas" - Administración');
-  const [direccion, setDireccion] = useState('Av. Insurgentes Sur 1450, Ciudad de México');
-  const [diasVigencia, setDiasVigencia] = useState(30);
-  const [descuento, setDescuento] = useState(0);
-  const [tasaIva, setTasaIva] = useState(16);
-  const [notas, setNotas] = useState('Garantía de 12 meses en mano de obra. Instalación bajo normativas NOM-001-SEDE vigentes.');
+  // --- ESTADO FK CLIENTE ---
 
-  const [listaClientes, setListaClientes] = useState([
-    'Residencial "Las Palmas" - Administración',
-    'Constructora Horizonte S.A.',
-    'Industrial Norte C.A.',
-  ]);
+  const [clienteId, setClienteId] = useState(
+    cotizacionInicial?.clienteId || CATALOGO_CLIENTES[0].id
+  );
 
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      descripcion: 'Instalación de Tablero de Distribución Trifásico 200A',
-      cantidad: 1,
-      precioUnit: 4500.0,
-    },
-    {
-      id: 2,
-      descripcion: 'Cable de Cobre THHN Calibre 8 AWG (Rollo 100m)',
-      cantidad: 3,
-      precioUnit: 2800.0,
-    },
-  ]);
+  const [clienteNombre, setClienteNombre] = useState(
+    cotizacionInicial?.clienteNombre || CATALOGO_CLIENTES[0].nombre
+  );
 
-  const [itemEditar, setItemEditar] = useState(null);
-  const [itemVer, setItemVer] = useState(null);
+  const [direccion, setDireccion] = useState(
+    cotizacionInicial?.direccion || CATALOGO_CLIENTES[0].direccion
+  );
 
-  const mostrarNotificacion = (msj) => {
-    setNotificacion(msj);
-    setTimeout(() => setNotificacion(null), 3000);
+  // --- ESTADO FK SERVICIO ---
+
+  const [servicioId, setServicioId] = useState(
+    cotizacionInicial?.servicioId || CATALOGO_SERVICIOS[0].id
+  );
+
+  const [servicioNombre, setServicioNombre] = useState(
+    cotizacionInicial?.servicioNombre || CATALOGO_SERVICIOS[0].nombre
+  );
+
+  const [valorServicio, setValorServicio] = useState(
+    cotizacionInicial?.valorServicio ?? CATALOGO_SERVICIOS[0].valor
+  );
+
+  // --- ESTADOS GENERALES ---
+
+  const [fechaEmision, setFechaEmision] = useState(
+    cotizacionInicial?.fechaEmision || '2026-09-26'
+  );
+
+  const [diasVigencia, setDiasVigencia] = useState(
+    cotizacionInicial?.diasVigencia || 30
+  );
+
+  const [ivaPorcentaje, setIvaPorcentaje] = useState(
+    cotizacionInicial?.ivaPorcentaje ?? 16
+  );
+
+  const [descuento, setDescuento] = useState(
+    cotizacionInicial?.descuento || 0
+  );
+
+  const [notas, setNotas] = useState(
+    cotizacionInicial?.notas || 'Garantía de 12 meses en mano de obra.'
+  );
+
+  const [estadoDocumento, setEstadoDocumento] = useState(
+    cotizacionInicial?.estadoDocumento || 'Aprobado'
+  );
+
+  const [fkSeleccionadaCatalogo, setFkSeleccionadaCatalogo] = useState(
+    CATALOGO_MATERIALES[0].id
+  );
+
+  const [items, setItems] = useState(
+    cotizacionInicial?.items || [
+      {
+        id: 1,
+        materialId: 'EL-BUS-585',
+        sku: 'ELE-BUS-585-MOD',
+        ean: '7701234567890',
+        descripcion: 'Instalación de Tablero de Distribución Principal',
+        cantidad: 1,
+        precioUnit: 4500,
+      },
+    ]
+  );
+
+  const primerItem = items[0] || {
+    materialId: 'GRAL',
+    sku: '001',
   };
 
-  const handleAgregarFila = () => {
+  const numeroCotizacion =
+    cotizacionInicial?.id ||
+    `COT-${primerItem.materialId}-${primerItem.sku}`;
+
+  const theme = {
+    bg: esOscuro ? '#0b1329' : '#f1f5f9',
+    cardBg: esOscuro ? '#182642' : '#ffffff',
+    inputBg: esOscuro ? '#0f172a' : '#f8fafc',
+    borderColor: esOscuro ? '#213459' : '#e2e8f0',
+    inputBorder: esOscuro ? '#243556' : '#cbd5e1',
+    textColor: esOscuro ? '#ffffff' : '#0f172a',
+    subtextColor: esOscuro ? '#94a3b8' : '#64748b',
+    accentYellow: '#facc15',
+  };
+
+  // --- CÁLCULOS ---
+
+  const subtotalMateriales = items.reduce(
+    (acc, curr) => acc + curr.cantidad * curr.precioUnit,
+    0
+  );
+
+  const subtotalBruto = subtotalMateriales + valorServicio;
+
+  const baseImponible = Math.max(subtotalBruto - descuento, 0);
+
+  const montoImpuesto = (baseImponible * ivaPorcentaje) / 100;
+
+  const totalNeto = baseImponible + montoImpuesto;
+
+  const formatearMoneda = (val) =>
+    '$ ' +
+    Number(val).toLocaleString('es-CO', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  // --- MANEJADOR DE CAMBIO DE FK CLIENTE ---
+
+  const handleCambiarClienteFK = (nuevaFk) => {
+    const cli = CATALOGO_CLIENTES.find((c) => c.id === nuevaFk);
+
+    if (cli) {
+      setClienteId(cli.id);
+      setClienteNombre(cli.nombre);
+      setDireccion(cli.direccion);
+    }
+  };
+
+  // --- MANEJADOR DE CAMBIO DE FK SERVICIO ---
+
+  const handleCambiarServicioFK = (nuevaFk) => {
+    const servicio = CATALOGO_SERVICIOS.find(
+      (s) => s.id === nuevaFk
+    );
+
+    if (servicio) {
+      setServicioId(servicio.id);
+      setServicioNombre(servicio.nombre);
+      setValorServicio(servicio.valor);
+    }
+  };
+
+  // --- FK MATERIAL ---
+
+  const cambiarFKItem = (idFila, nuevaFK) => {
+    const mat = CATALOGO_MATERIALES.find(
+      (m) => m.id === nuevaFK
+    );
+
+    setItems(
+      items.map((item) =>
+        item.id === idFila
+          ? {
+              ...item,
+              materialId: nuevaFK,
+              sku: mat?.sku || '',
+              ean: mat?.ean || '',
+              descripcion:
+                mat?.descripcion || item.descripcion,
+              precioUnit:
+                mat?.precioUnit || item.precioUnit,
+            }
+          : item
+      )
+    );
+  };
+
+  const agregarItemDesdeCatalogo = () => {
+    const mat =
+      CATALOGO_MATERIALES.find(
+        (m) => m.id === fkSeleccionadaCatalogo
+      ) || CATALOGO_MATERIALES[0];
+
     setItems([
       ...items,
-      { id: Date.now(), descripcion: '', cantidad: 1, precioUnit: 0 },
+      {
+        id: Date.now(),
+        materialId: mat.id,
+        sku: mat.sku,
+        ean: mat.ean,
+        descripcion: mat.descripcion,
+        cantidad: 1,
+        precioUnit: mat.precioUnit,
+      },
     ]);
   };
 
-  const handleEliminarFila = (id) => {
-    if (items.length === 1) {
-      mostrarNotificacion('La cotización requiere al menos un ítem.');
-      return;
-    }
+  const eliminarItem = (id) =>
     setItems(items.filter((item) => item.id !== id));
-  };
 
-  const handleActualizarItem = (id, campo, valor) => {
-    setItems(items.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)));
-  };
-
-  const handleGuardarEdicionModal = (e) => {
-    e.preventDefault();
-    setItems(items.map((item) => (item.id === itemEditar.id ? itemEditar : item)));
-    setItemEditar(null);
-    mostrarNotificacion('Ítem actualizado correctamente.');
-  };
-
-  const handleAgregarClientePrompt = () => {
-    const nuevo = prompt('Nombre del nuevo cliente:');
-    if (nuevo && nuevo.trim()) {
-      setListaClientes([...listaClientes, nuevo.trim()]);
-      setCliente(nuevo.trim());
-    }
-  };
-
-  // Cálculos
-  const subtotalProyecto = useMemo(
-    () => items.reduce((acc, item) => acc + (parseFloat(item.cantidad) || 0) * (parseFloat(item.precioUnit) || 0), 0),
-    [items]
-  );
-
-  const montoDescuento = useMemo(
-    () => Math.min(subtotalProyecto, Math.max(0, parseFloat(descuento) || 0)),
-    [subtotalProyecto, descuento]
-  );
-
-  const subtotalConDescuento = useMemo(() => subtotalProyecto - montoDescuento, [subtotalProyecto, montoDescuento]);
-
-  const montoIva = useMemo(
-    () => (subtotalConDescuento * (parseFloat(tasaIva) || 0)) / 100,
-    [subtotalConDescuento, tasaIva]
-  );
-
-  const total = useMemo(() => subtotalConDescuento + montoIva, [subtotalConDescuento, montoIva]);
-
-  const formatMoney = (val) =>
-    `$ ${(parseFloat(val) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  const theme = useMemo(
-    () => ({
-      bg: esModoOscuro ? '#0f172a' : '#f8fafc',
-      cardBg: esModoOscuro ? '#1e293b' : '#ffffff',
-      inputBg: esModoOscuro ? '#0f172a' : '#ffffff',
-      borderColor: esModoOscuro ? '#334155' : '#e2e8f0',
-      inputBorder: esModoOscuro ? '#475569' : '#cbd5e1',
-      textColor: esModoOscuro ? '#f8fafc' : '#0f172a',
-      subtextColor: esModoOscuro ? '#94a3b8' : '#64748b',
-      labelColor: esModoOscuro ? '#cbd5e1' : '#475569',
-      btnSecBg: esModoOscuro ? '#334155' : '#ffffff',
-      btnSecText: esModoOscuro ? '#ffffff' : '#1e293b',
-      btnPriBg: '#ca8a04',
-      btnPriText: '#ffffff',
-      tableBorder: esModoOscuro ? '#334155' : '#f1f5f9',
-      modalOverlay: 'rgba(0, 0, 0, 0.65)',
-    }),
-    [esModoOscuro]
-  );
-
-  if (pantallaActual === 'vista_previa') {
-    return (
-      <VistaPreviaImpresion
-        empresa={empresa}
-        numCotizacion={numCotizacion}
-        fechaEmision={fechaEmision}
-        diasVigencia={diasVigencia}
-        cliente={cliente}
-        direccion={direccion}
-        items={items}
-        subtotalProyecto={subtotalProyecto}
-        descuento={montoDescuento}
-        tasaIva={tasaIva}
-        montoIva={montoIva}
-        total={total}
-        notas={notas}
-        formatMoney={formatMoney}
-        onVolver={() => setPantallaActual('formulario')}
-      />
+  const actualizarCampo = (id, campo, valor) =>
+    setItems(
+      items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              [campo]: valor,
+            }
+          : item
+      )
     );
-  }
+
+  // --- GUARDAR COTIZACIÓN ---
+
+  const guardarProceso = () => {
+    const cotizacionObjeto = {
+      id: numeroCotizacion,
+
+      // FK CLIENTE
+      clienteId,
+      clienteNombre,
+      direccion,
+
+      // FK SERVICIO
+      servicioId,
+      servicioNombre,
+      valorServicio,
+
+      // DATOS GENERALES
+      fechaEmision,
+      diasVigencia,
+      ivaPorcentaje,
+      descuento,
+      notas,
+      estadoDocumento,
+
+      // MATERIALES
+      items,
+
+      // TOTALES
+      subtotalMateriales,
+      subtotalBruto,
+      montoImpuesto,
+      totalNeto,
+    };
+
+    onGuardar(cotizacionObjeto);
+  };
 
   return (
-    <div style={{ ...styles.container, backgroundColor: theme.bg, color: theme.textColor }}>
-      {/* Toast Notificación */}
-      {notificacion && (
-        <div style={styles.toast}>
-          {notificacion}
-        </div>
-      )}
+    <div
+      style={{
+        backgroundColor: theme.bg,
+        color: theme.textColor,
+        minHeight: '100vh',
+        padding: '24px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}
+    >
+      {/* HEADER */}
 
-      {/* Header Corregido */}
-      <Header
-        esModoOscuro={esModoOscuro}
-        toggleTheme={toggleTheme}
-        theme={theme}
-        onGenerar={() => setPantallaActual('vista_previa')}
-        onConvertir={() => mostrarNotificacion('Convertido a Orden de Servicio dinámicamente.')}
-      />
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+        }}
+      >
+        <div>
+          <span
+            style={{
+              fontSize: '11px',
+              color: theme.subtextColor,
+              fontWeight: 'bold',
+            }}
+          >
+            {esSoloLectura
+              ? 'MODO LECTURA / DETALLE'
+              : 'NUEVA COTIZACIÓN'}
+          </span>
 
-      {/* Grid Principal */}
-      <div style={styles.mainGrid}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <DatosProyectoForm
-            theme={theme}
-            numCotizacion={numCotizacion}
-            setNumCotizacion={setNumCotizacion}
-            fechaEmision={fechaEmision}
-            setFechaEmision={setFechaEmision}
-            cliente={cliente}
-            setCliente={setCliente}
-            listaClientes={listaClientes}
-            onAgregarCliente={handleAgregarClientePrompt}
-            direccion={direccion}
-            setDireccion={setDireccion}
-            diasVigencia={diasVigencia}
-            setDiasVigencia={setDiasVigencia}
-          />
-
-          <TablaItems
-            theme={theme}
-            items={items}
-            onAgregar={handleAgregarFila}
-            onActualizar={handleActualizarItem}
-            onEliminar={handleEliminarFila}
-            onVer={setItemVer}
-            onEditar={setItemEditar}
-            formatMoney={formatMoney}
-          />
+          <h1
+            style={{
+              margin: 0,
+              fontSize: '22px',
+              fontWeight: 'bold',
+            }}
+          >
+            {numeroCotizacion}
+          </h1>
         </div>
 
-        <PanelTotales
-          theme={theme}
-          subtotalProyecto={subtotalProyecto}
-          descuento={descuento}
-          setDescuento={setDescuento}
-          tasaIva={tasaIva}
-          setTasaIva={setTasaIva}
-          montoIva={montoIva}
-          total={total}
-          notas={notas}
-          setNotas={setNotas}
-          formatMoney={formatMoney}
-          esModoOscuro={esModoOscuro}
-        />
-      </div>
-
-      {/* Modales */}
-      {itemEditar && (
-        <ModalEditarItem
-          theme={theme}
-          esModoOscuro={esModoOscuro}
-          itemEditar={itemEditar}
-          setItemEditar={setItemEditar}
-          onGuardar={handleGuardarEdicionModal}
-        />
-      )}
-
-      {itemVer && (
-        <ModalVerItem
-          theme={theme}
-          esModoOscuro={esModoOscuro}
-          itemVer={itemVer}
-          onCerrar={() => setItemVer(null)}
-          formatMoney={formatMoney}
-        />
-      )}
-    </div>
-  );
-}
-
-// ==========================================
-// SUBCOMPONENTES
-// ==========================================
-
-function Header({ esModoOscuro, toggleTheme, theme, onGenerar, onConvertir }) {
-  return (
-    <div style={styles.topHeader}>
-      <div style={{ minWidth: '280px', flex: '1 1 auto' }}>
-        <div style={{ ...styles.breadcrumb, color: theme.subtextColor }}>
-          Cotizaciones &gt; Nueva Cotización Eléctrica
-        </div>
-        <h1 style={{ ...styles.title, color: theme.textColor }}>
-          Cotización: Proyecto Eléctrico
-        </h1>
-      </div>
-
-      <div style={styles.topButtons}>
-        <button
-          onClick={toggleTheme}
+        <div
           style={{
-            backgroundColor: theme.cardBg,
-            color: theme.textColor,
-            border: `1px solid ${theme.borderColor}`,
-            padding: '8px 14px',
-            borderRadius: '20px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '600',
-            whiteSpace: 'nowrap',
+            display: 'flex',
+            gap: '10px',
           }}
         >
-          {esModoOscuro ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
-        </button>
-
-        <button
-          style={{ ...styles.btnSecondary, backgroundColor: theme.btnSecBg, color: theme.btnSecText, borderColor: theme.borderColor }}
-          onClick={onConvertir}
-        >
-          📋 Convertir a Orden
-        </button>
-
-        <button
-          style={{ ...styles.btnPrimary, backgroundColor: theme.btnPriBg, color: theme.btnPriText }}
-          onClick={onGenerar}
-        >
-          ✈️ Generar Cotización
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DatosProyectoForm({
-  theme,
-  numCotizacion,
-  setNumCotizacion,
-  fechaEmision,
-  setFechaEmision,
-  cliente,
-  setCliente,
-  listaClientes,
-  onAgregarCliente,
-  direccion,
-  setDireccion,
-  diasVigencia,
-  setDiasVigencia,
-}) {
-  return (
-    <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.borderColor }}>
-      <h2 style={{ ...styles.cardTitle, color: theme.textColor }}>📄 Información del Proyecto</h2>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-        <div>
-          <label style={{ ...styles.label, color: theme.labelColor }}>NÚMERO DE COTIZACIÓN</label>
-          <input
-            type="text"
-            value={numCotizacion}
-            onChange={(e) => setNumCotizacion(e.target.value)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-          />
-        </div>
-        <div>
-          <label style={{ ...styles.label, color: theme.labelColor }}>FECHA DE EMISIÓN</label>
-          <input
-            type="date"
-            value={fechaEmision}
-            onChange={(e) => setFechaEmision(e.target.value)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-          />
-        </div>
-        <div>
-          <label style={{ ...styles.label, color: theme.labelColor }}>DÍAS DE VIGENCIA</label>
-          <input
-            type="number"
-            min="1"
-            value={diasVigencia}
-            onChange={(e) => setDiasVigencia(parseInt(e.target.value) || 0)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-          />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ ...styles.label, color: theme.labelColor }}>SELECCIONAR CLIENTE</label>
-          <button type="button" onClick={onAgregarCliente} style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>
-            + Nuevo Cliente
+          <button
+            onClick={toggleTheme}
+            style={{
+              backgroundColor: theme.cardBg,
+              color: theme.textColor,
+              border: `1px solid ${theme.borderColor}`,
+              padding: '8px 14px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            {esOscuro ? '☀️ Claro' : '🌙 Oscuro'}
           </button>
-        </div>
-        <select
-          value={cliente}
-          onChange={(e) => setCliente(e.target.value)}
-          style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-        >
-          {listaClientes.map((item, idx) => (
-            <option key={idx} value={item}>{item}</option>
-          ))}
-        </select>
-      </div>
 
-      <div>
-        <label style={{ ...styles.label, color: theme.labelColor }}>DIRECCIÓN DEL PROYECTO</label>
-        <input
-          type="text"
-          value={direccion}
-          onChange={(e) => setDireccion(e.target.value)}
-          style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-        />
-      </div>
-    </div>
-  );
-}
+          <button
+            onClick={onVolver}
+            style={{
+              backgroundColor: theme.cardBg,
+              color: theme.textColor,
+              border: `1px solid ${theme.borderColor}`,
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            ← Volver al Listado
+          </button>
 
-function TablaItems({ theme, items, onAgregar, onActualizar, onEliminar, onVer, onEditar, formatMoney }) {
-  return (
-    <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.borderColor, overflowX: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ ...styles.cardTitle, color: theme.textColor }}>📋 Servicios y Materiales Eléctricos</h2>
-        <button onClick={onAgregar} style={styles.btnAgregar}>+ Agregar Fila</button>
-      </div>
-
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th style={{ ...styles.th, textAlign: 'left', width: '45%', color: theme.subtextColor, borderColor: theme.inputBorder }}>DESCRIPCIÓN</th>
-            <th style={{ ...styles.th, width: '10%', color: theme.subtextColor, borderColor: theme.inputBorder }}>CANT.</th>
-            <th style={{ ...styles.th, width: '18%', color: theme.subtextColor, borderColor: theme.inputBorder }}>PRECIO UNIT.</th>
-            <th style={{ ...styles.th, width: '17%', color: theme.subtextColor, borderColor: theme.inputBorder }}>SUBTOTAL</th>
-            <th style={{ ...styles.th, width: '10%', color: theme.subtextColor, borderColor: theme.inputBorder }}>ACCIONES</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const subtotalFila = (parseFloat(item.cantidad) || 0) * (parseFloat(item.precioUnit) || 0);
-            return (
-              <tr key={item.id}>
-                <td style={{ ...styles.td, borderColor: theme.tableBorder }}>
-                  <input
-                    type="text"
-                    value={item.descripcion}
-                    placeholder="Escriba descripción..."
-                    onChange={(e) => onActualizar(item.id, 'descripcion', e.target.value)}
-                    style={{ ...styles.tableInput, color: theme.textColor }}
-                  />
-                </td>
-                <td style={{ ...styles.td, textAlign: 'center', borderColor: theme.tableBorder }}>
-                  <input
-                    type="number"
-                    min="1"
-                    value={item.cantidad}
-                    onChange={(e) => onActualizar(item.id, 'cantidad', parseFloat(e.target.value) || 0)}
-                    style={{ ...styles.tableInput, textAlign: 'center', color: theme.textColor }}
-                  />
-                </td>
-                <td style={{ ...styles.td, textAlign: 'right', borderColor: theme.tableBorder }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.precioUnit}
-                    onChange={(e) => onActualizar(item.id, 'precioUnit', parseFloat(e.target.value) || 0)}
-                    style={{ ...styles.tableInput, textAlign: 'right', color: theme.textColor }}
-                  />
-                </td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 'bold', borderColor: theme.tableBorder, color: theme.textColor }}>
-                  {formatMoney(subtotalFila)}
-                </td>
-                <td style={{ ...styles.td, borderColor: theme.tableBorder }}>
-                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                    <button title="Ver Detalle" onClick={() => onVer(item)} style={styles.btnIcon}>👁️</button>
-                    <button title="Editar" onClick={() => onEditar({ ...item })} style={styles.btnIcon}>✏️</button>
-                    <button title="Eliminar" onClick={() => onEliminar(item.id)} style={styles.btnIcon}>🗑️</button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PanelTotales({ theme, subtotalProyecto, descuento, setDescuento, tasaIva, setTasaIva, montoIva, total, notas, setNotas, formatMoney, esModoOscuro }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.borderColor }}>
-        <h2 style={{ ...styles.cardTitle, color: theme.textColor }}>💳 Resumen de Totales</h2>
-
-        <div style={styles.resumenRow}>
-          <span style={{ color: theme.subtextColor }}>Subtotal Bruto</span>
-          <span style={{ color: theme.textColor, fontWeight: '600' }}>{formatMoney(subtotalProyecto)}</span>
-        </div>
-
-        <div style={styles.resumenRow}>
-          <span style={{ color: theme.subtextColor }}>Descuento ($)</span>
-          <input
-            type="number"
-            min="0"
-            value={descuento}
-            onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor, width: '90px', textAlign: 'right', padding: '4px 8px' }}
-          />
-        </div>
-
-        <div style={styles.resumenRow}>
-          <span style={{ color: theme.subtextColor }}>IVA (%)</span>
-          <input
-            type="number"
-            min="0"
-            max="100"
-            value={tasaIva}
-            onChange={(e) => setTasaIva(parseFloat(e.target.value) || 0)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor, width: '90px', textAlign: 'right', padding: '4px 8px' }}
-          />
-        </div>
-
-        {tasaIva > 0 && (
-          <div style={styles.resumenRow}>
-            <span style={{ color: theme.subtextColor }}>Monto Impuesto</span>
-            <span style={{ color: theme.textColor, fontWeight: '500' }}>{formatMoney(montoIva)}</span>
-          </div>
-        )}
-
-        <div style={styles.totalBox}>
-          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#0f172a', letterSpacing: '0.5px' }}>TOTAL NETO</span>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{formatMoney(total)}</div>
-        </div>
-
-        <div style={{ marginTop: '20px' }}>
-          <label style={{ ...styles.label, color: theme.labelColor }}>NOTAS DE INSTALACIÓN / GARANTÍA</label>
-          <textarea
-            rows="4"
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor, resize: 'vertical' }}
-          ></textarea>
-        </div>
-      </div>
-
-      <div style={{ ...styles.card, backgroundColor: theme.cardBg, borderColor: theme.borderColor }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: theme.textColor }}>Estado del Documento</h3>
-        <div style={{ ...styles.progressBarBg, backgroundColor: esModoOscuro ? '#0b1329' : '#e2e8f0' }}>
-          <div style={{ ...styles.progressBarFill, width: '85%' }}></div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: theme.subtextColor, marginTop: '8px' }}>
-          <span>Dirección y servicios completados</span>
-          <span style={{ color: theme.textColor, fontWeight: 'bold' }}>85%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModalEditarItem({ theme, esModoOscuro, itemEditar, setItemEditar, onGuardar }) {
-  return (
-    <div style={{ ...styles.modalOverlay, backgroundColor: theme.modalOverlay }}>
-      <div style={{ ...styles.modalCard, backgroundColor: theme.cardBg, borderColor: theme.borderColor }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: esModoOscuro ? '#facc15' : '#d97706' }}>✏️ Editar Ítem</h3>
-        <form onSubmit={onGuardar}>
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ ...styles.label, color: theme.labelColor }}>DESCRIPCIÓN</label>
-            <input
-              type="text"
-              value={itemEditar.descripcion}
-              onChange={(e) => setItemEditar({ ...itemEditar, descripcion: e.target.value })}
-              style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-              required
-            />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ ...styles.label, color: theme.labelColor }}>CANTIDAD</label>
-              <input
-                type="number"
-                min="1"
-                value={itemEditar.cantidad}
-                onChange={(e) => setItemEditar({ ...itemEditar, cantidad: parseFloat(e.target.value) || 0 })}
-                style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{ ...styles.label, color: theme.labelColor }}>PRECIO UNITARIO ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={itemEditar.precioUnit}
-                onChange={(e) => setItemEditar({ ...itemEditar, precioUnit: parseFloat(e.target.value) || 0 })}
-                style={{ ...styles.input, backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textColor }}
-                required
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          {!esSoloLectura && (
             <button
-              type="button"
-              onClick={() => setItemEditar(null)}
-              style={{ ...styles.btnSecondary, backgroundColor: theme.btnSecBg, color: theme.btnSecText, borderColor: theme.borderColor }}
+              onClick={guardarProceso}
+              style={{
+                backgroundColor: theme.accentYellow,
+                color: '#000',
+                border: 'none',
+                padding: '8px 18px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+              }}
             >
-              Cancelar
+              💾 Guardar Cotización
             </button>
-            <button type="submit" style={{ ...styles.btnPrimary, backgroundColor: theme.btnPriBg, color: theme.btnPriText }}>
-              Guardar Cambios
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ModalVerItem({ theme, esModoOscuro, itemVer, onCerrar, formatMoney }) {
-  return (
-    <div style={{ ...styles.modalOverlay, backgroundColor: theme.modalOverlay }}>
-      <div style={{ ...styles.modalCard, backgroundColor: theme.cardBg, borderColor: theme.borderColor }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: esModoOscuro ? '#38bdf8' : '#0284c7' }}>👁️ Detalle del Ítem</h3>
-        <div style={{ marginBottom: '10px', fontSize: '14px', color: theme.textColor }}><strong>Descripción:</strong> {itemVer.descripcion}</div>
-        <div style={{ marginBottom: '10px', fontSize: '14px', color: theme.textColor }}><strong>Cantidad:</strong> {itemVer.cantidad}</div>
-        <div style={{ marginBottom: '10px', fontSize: '14px', color: theme.textColor }}><strong>Precio Unitario:</strong> {formatMoney(itemVer.precioUnit)}</div>
-        <div style={{ marginBottom: '20px', fontSize: '14px', color: theme.textColor }}><strong>Subtotal:</strong> {formatMoney((itemVer.cantidad || 0) * (itemVer.precioUnit || 0))}</div>
-        <div style={{ textAlign: 'right' }}>
-          <button onClick={onCerrar} style={{ ...styles.btnPrimary, backgroundColor: theme.btnPriBg, color: theme.btnPriText }}>
-            Cerrar
-          </button>
+          )}
         </div>
       </div>
-    </div>
-  );
-}
 
-function VistaPreviaImpresion({
-  empresa,
-  numCotizacion,
-  fechaEmision,
-  diasVigencia,
-  cliente,
-  direccion,
-  items,
-  subtotalProyecto,
-  descuento,
-  tasaIva,
-  montoIva,
-  total,
-  notas,
-  formatMoney,
-  onVolver,
-}) {
-  return (
-    <div style={{ padding: '30px', backgroundColor: '#525659', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background-color: white !important; }
-          .printable-area { box-shadow: none !important; padding: 0 !important; width: 100% !important; }
-        }
-      `}</style>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 340px',
+          gap: '20px',
+        }}
+      >
+        {/* COLUMNA IZQUIERDA */}
 
-      <div className="no-print" style={{ width: '100%', maxWidth: '800px', display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <button
-          onClick={onVolver}
-          style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#0f172a', cursor: 'pointer', fontWeight: 'bold' }}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}
         >
-          ✏️ Volver a Editar
-        </button>
+          {/* SECCIÓN CLIENTE */}
 
-        <button
-          onClick={() => window.print()}
-          style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#ca8a04', color: '#ffffff', cursor: 'pointer', fontWeight: 'bold' }}
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.borderColor}`,
+              borderRadius: '12px',
+              padding: '18px',
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 14px 0',
+                fontSize: '14px',
+                fontWeight: 'bold',
+              }}
+            >
+              👤 Datos del Cliente (FK Externa)
+            </h3>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '12px',
+              }}
+            >
+              {/* SELECTOR FK CLIENTE */}
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  CLAVE FORÁNEA CLIENTE (FK)
+                </label>
+
+                <select
+                  disabled={esSoloLectura}
+                  value={clienteId}
+                  onChange={(e) =>
+                    handleCambiarClienteFK(e.target.value)
+                  }
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.accentYellow,
+                    padding: '8px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    outline: 'none',
+                  }}
+                >
+                  {CATALOGO_CLIENTES.map((cli) => (
+                    <option
+                      key={cli.id}
+                      value={cli.id}
+                    >
+                      [{cli.id}] - {cli.nombre} ({cli.nit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  NOMBRE / RAZÓN SOCIAL
+                </label>
+
+                <input
+                  disabled
+                  type="text"
+                  value={clienteNombre}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.subtextColor,
+                    padding: '6px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  DIRECCIÓN REGISTRADA
+                </label>
+
+                <input
+                  disabled
+                  type="text"
+                  value={direccion}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.subtextColor,
+                    padding: '6px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SECCIÓN SERVICIO CON FK */}
+
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.borderColor}`,
+              borderRadius: '12px',
+              padding: '18px',
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 14px 0',
+                fontSize: '14px',
+                fontWeight: 'bold',
+              }}
+            >
+              🔧 Servicio (FK Catálogo de Servicios)
+            </h3>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+              }}
+            >
+              <div style={{ gridColumn: 'span 2' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  CLAVE FORÁNEA SERVICIO (FK)
+                </label>
+
+                <select
+                  disabled={esSoloLectura}
+                  value={servicioId}
+                  onChange={(e) =>
+                    handleCambiarServicioFK(e.target.value)
+                  }
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.accentYellow,
+                    padding: '8px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    outline: 'none',
+                  }}
+                >
+                  {CATALOGO_SERVICIOS.map((servicio) => (
+                    <option
+                      key={servicio.id}
+                      value={servicio.id}
+                    >
+                      [{servicio.id}] {servicio.nombre} -{' '}
+                      {formatearMoneda(servicio.valor)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  SERVICIO SELECCIONADO
+                </label>
+
+                <input
+                  disabled
+                  type="text"
+                  value={servicioNombre}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.subtextColor,
+                    padding: '6px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '10px',
+                    color: theme.subtextColor,
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                  }}
+                >
+                  VALOR DEL SERVICIO
+                </label>
+
+                <input
+                  disabled
+                  type="text"
+                  value={formatearMoneda(valorServicio)}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    border: `1px solid ${theme.inputBorder}`,
+                    color: theme.accentYellow,
+                    padding: '6px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* AGREGAR MATERIAL CON FK */}
+
+          {!esSoloLectura && (
+            <div
+              style={{
+                backgroundColor: theme.cardBg,
+                border: `1px dashed ${theme.accentYellow}`,
+                borderRadius: '12px',
+                padding: '14px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'center',
+              }}
+            >
+              <select
+                value={fkSeleccionadaCatalogo}
+                onChange={(e) =>
+                  setFkSeleccionadaCatalogo(e.target.value)
+                }
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.inputBg,
+                  color: theme.textColor,
+                  border: `1px solid ${theme.inputBorder}`,
+                  padding: '6px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                }}
+              >
+                {CATALOGO_MATERIALES.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    [{item.id}] {item.descripcion}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={agregarItemDesdeCatalogo}
+                style={{
+                  backgroundColor: theme.accentYellow,
+                  color: '#000',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                + Agregar Ítem
+              </button>
+            </div>
+          )}
+
+          {/* TABLA ÍTEMS */}
+
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.borderColor}`,
+              borderRadius: '12px',
+              padding: '18px',
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 12px 0',
+                fontSize: '14px',
+              }}
+            >
+              📦 Detalle de Materiales y Servicios
+            </h3>
+
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '12px',
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    color: theme.subtextColor,
+                    borderBottom: `1px solid ${theme.borderColor}`,
+                    textAlign: 'left',
+                  }}
+                >
+                  <th style={{ padding: '8px' }}>
+                    FK / SKU
+                  </th>
+
+                  <th style={{ padding: '8px' }}>
+                    DESCRIPCIÓN
+                  </th>
+
+                  <th
+                    style={{
+                      padding: '8px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    CANT.
+                  </th>
+
+                  <th
+                    style={{
+                      padding: '8px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    P. UNIT
+                  </th>
+
+                  <th
+                    style={{
+                      padding: '8px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    SUBTOTAL
+                  </th>
+
+                  {!esSoloLectura && (
+                    <th
+                      style={{
+                        padding: '8px',
+                        textAlign: 'center',
+                      }}
+                    >
+                    </th>
+                  )}
+                </tr>
+              </thead>
+
+              <tbody>
+                {items.map((item) => (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderBottom: `1px solid ${theme.borderColor}`,
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: '8px',
+                        color: theme.accentYellow,
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {item.materialId}
+                    </td>
+
+                    <td style={{ padding: '8px' }}>
+                      {item.descripcion}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '8px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {item.cantidad}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '8px',
+                        textAlign: 'right',
+                      }}
+                    >
+                      {formatearMoneda(item.precioUnit)}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '8px',
+                        textAlign: 'right',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {formatearMoneda(
+                        item.cantidad * item.precioUnit
+                      )}
+                    </td>
+
+                    {!esSoloLectura && (
+                      <td
+                        style={{
+                          padding: '8px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <button
+                          onClick={() =>
+                            eliminarItem(item.id)
+                          }
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ❌
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+
+                {/* SERVICIO EN LA TABLA */}
+
+                <tr
+                  style={{
+                    borderBottom: `1px solid ${theme.borderColor}`,
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: '8px',
+                      color: theme.accentYellow,
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {servicioId}
+                  </td>
+
+                  <td style={{ padding: '8px' }}>
+                    {servicioNombre}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: '8px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    1
+                  </td>
+
+                  <td
+                    style={{
+                      padding: '8px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    {formatearMoneda(valorServicio)}
+                  </td>
+
+                  <td
+                    style={{
+                      padding: '8px',
+                      textAlign: 'right',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {formatearMoneda(valorServicio)}
+                  </td>
+
+                  {!esSoloLectura && (
+                    <td
+                      style={{
+                        padding: '8px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      🔧
+                    </td>
+                  )}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* COLUMNA DERECHA */}
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}
         >
-          🖨️ Imprimir / Guardar en PDF
-        </button>
-      </div>
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.borderColor}`,
+              borderRadius: '12px',
+              padding: '18px',
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 12px 0',
+                fontSize: '14px',
+              }}
+            >
+              💳 Resumen
+            </h3>
 
-      <div className="printable-area" style={{ width: '100%', maxWidth: '800px', backgroundColor: '#ffffff', padding: '40px', borderRadius: '8px', color: '#0f172a', fontFamily: 'sans-serif' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e2e8f0', paddingBottom: '20px', marginBottom: '20px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '20px', color: '#0f172a', fontWeight: 'bold' }}>{empresa.nombre}</h1>
-            <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '12px' }}>RFC: {empresa.rfc}</p>
-            <p style={{ margin: '2px 0 0 0', color: '#64748b', fontSize: '12px' }}>Tel: {empresa.telefono} | Email: {empresa.email}</p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <h2 style={{ margin: 0, color: '#ca8a04', fontSize: '18px' }}>{numCotizacion}</h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>Fecha: {fechaEmision}</p>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>Vigencia: {diasVigencia} días</p>
-          </div>
-        </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                fontSize: '12px',
+              }}
+            >
+              {/* MATERIALES */}
 
-        <div style={{ marginBottom: '24px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-          <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>DATOS DEL CLIENTE</p>
-          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{cliente}</div>
-          <div style={{ fontSize: '13px', color: '#334155', marginTop: '4px' }}>{direccion}</div>
-        </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>Materiales:</span>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #0f172a', textAlign: 'left', fontSize: '11px', color: '#475569' }}>
-              <th style={{ padding: '8px 0' }}>DESCRIPCIÓN</th>
-              <th style={{ padding: '8px 0', textAlign: 'center' }}>CANT.</th>
-              <th style={{ padding: '8px 0', textAlign: 'right' }}>PRECIO UNIT.</th>
-              <th style={{ padding: '8px 0', textAlign: 'right' }}>SUBTOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0', fontSize: '13px' }}>
-                <td style={{ padding: '10px 0' }}>{item.descripcion || 'Sin descripción'}</td>
-                <td style={{ padding: '10px 0', textAlign: 'center' }}>{item.cantidad}</td>
-                <td style={{ padding: '10px 0', textAlign: 'right' }}>{formatMoney(item.precioUnit)}</td>
-                <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 'bold' }}>{formatMoney((item.cantidad || 0) * (item.precioUnit || 0))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '30px' }}>
-          <div style={{ width: '240px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
-              <span>Subtotal:</span>
-              <span>{formatMoney(subtotalProyecto)}</span>
-            </div>
-            {descuento > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#ef4444', marginBottom: '6px' }}>
-                <span>Descuento:</span>
-                <span>- {formatMoney(descuento)}</span>
+                <span>
+                  {formatearMoneda(subtotalMateriales)}
+                </span>
               </div>
-            )}
-            {tasaIva > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
-                <span>IVA ({tasaIva}%):</span>
-                <span>{formatMoney(montoIva)}</span>
+
+              {/* SERVICIO */}
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>Servicio:</span>
+
+                <span>
+                  {formatearMoneda(valorServicio)}
+                </span>
               </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold', borderTop: '2px solid #0f172a', paddingTop: '8px', color: '#0f172a' }}>
-              <span>Total:</span>
-              <span>{formatMoney(total)}</span>
+
+              {/* SUBTOTAL */}
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 'bold',
+                }}
+              >
+                <span>Subtotal:</span>
+
+                <span>
+                  {formatearMoneda(subtotalBruto)}
+                </span>
+              </div>
+
+              {/* IVA */}
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>
+                  IVA ({ivaPorcentaje}%):
+                </span>
+
+                <span>
+                  {formatearMoneda(montoImpuesto)}
+                </span>
+              </div>
+
+              {/* TOTAL */}
+
+              <div
+                style={{
+                  backgroundColor: theme.accentYellow,
+                  color: '#000',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  marginTop: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  TOTAL A PAGAR
+                </span>
+
+                <div
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {formatearMoneda(totalNeto)}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
-        {notas && (
-          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', fontSize: '12px', color: '#64748b' }}>
-            <strong>Notas y Términos:</strong>
-            <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-line' }}>{notas}</p>
-          </div>
-        )}
       </div>
     </div>
   );
 }
-
-// ESTILOS INLINE
-const styles = {
-  container: {
-    padding: '24px',
-    minHeight: '100vh',
-    width: '100%',
-    boxSizing: 'border-box',
-    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  topHeader: {
-    display: 'flex',
-    justify: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '24px',
-    flexWrap: 'wrap',
-    gap: '16px',
-    width: '100%',
-  },
-  breadcrumb: { fontSize: '12px', marginBottom: '4px' },
-  title: { fontSize: '22px', margin: 0, fontWeight: 'bold', whiteSpace: 'nowrap' },
-  topButtons: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' },
-  btnSecondary: { border: '1px solid', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', whiteSpace: 'nowrap' },
-  btnPrimary: { border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', whiteSpace: 'nowrap' },
-  mainGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' },
-  card: { border: '1px solid', borderRadius: '12px', padding: '20px', boxSizing: 'border-box' },
-  cardTitle: { margin: '0 0 16px 0', fontSize: '15px', fontWeight: 'bold' },
-  label: { display: 'block', fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', letterSpacing: '0.5px' },
-  input: { width: '100%', border: '1px solid', padding: '10px', borderRadius: '6px', boxSizing: 'border-box', outline: 'none' },
-  tableInput: { width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '4px', fontSize: '13px' },
-  btnAgregar: { backgroundColor: 'transparent', border: 'none', color: '#0284c7', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
-  table: { width: '100%', borderCollapse: 'collapse', minWidth: '450px' },
-  th: { fontSize: '10px', padding: '10px 8px', borderBottom: '1px solid' },
-  td: { padding: '8px', borderBottom: '1px solid', fontSize: '13px' },
-  btnIcon: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '4px' },
-  resumenRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', marginBottom: '12px' },
-  totalBox: { backgroundColor: '#facc15', borderRadius: '8px', padding: '16px', textAlign: 'center', marginTop: '16px' },
-  progressBarBg: { height: '8px', borderRadius: '4px', overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: '#22c55e', borderRadius: '4px' },
-  modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalCard: { width: '400px', padding: '24px', borderRadius: '12px', border: '1px solid', boxSizing: 'border-box' },
-  toast: {
-    position: 'fixed',
-    top: '20px',
-    right: '20px',
-    backgroundColor: '#0f172a',
-    color: '#ffffff',
-    padding: '12px 20px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    zIndex: 9999,
-    fontSize: '13px',
-    fontWeight: 'bold',
-  },
-};
 
 export default CrearCotizacion;
