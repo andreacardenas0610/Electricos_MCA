@@ -1,5 +1,11 @@
 import React, { useContext, useMemo, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import {
+  EstadoToggle,
+  ESTADOS,
+  estadoSiguiente
+} from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
   <svg
@@ -33,22 +39,6 @@ const PlusIcon = () => (
   </svg>
 );
 
-const EyeIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
 const EditIcon = ({ color = '#475569' }) => (
   <svg
     width="13"
@@ -62,22 +52,6 @@ const EditIcon = ({ color = '#475569' }) => (
   >
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#ef4444"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 );
 
@@ -301,29 +275,6 @@ const formatearFecha = (fecha) => {
     month: 'short',
     year: 'numeric'
   });
-};
-
-const obtenerClaseEstado = (estado, esOscuro) => {
-  const estilos = {
-    Programada: {
-      fondo: esOscuro ? '#3f3210' : '#fef3c7',
-      texto: esOscuro ? '#facc15' : '#92400e'
-    },
-    'En proceso': {
-      fondo: esOscuro ? '#102c4a' : '#dbeafe',
-      texto: esOscuro ? '#60a5fa' : '#1d4ed8'
-    },
-    Completada: {
-      fondo: esOscuro ? '#103521' : '#dcfce7',
-      texto: esOscuro ? '#4ade80' : '#166534'
-    },
-    Cancelada: {
-      fondo: esOscuro ? '#3b1d1d' : '#fee2e2',
-      texto: esOscuro ? '#f87171' : '#991b1b'
-    }
-  };
-
-  return estilos[estado] || estilos.Programada;
 };
 
 const obtenerClasePrioridad = (prioridad) => {
@@ -615,6 +566,22 @@ export function ProgramacionActividades() {
     }
   };
 
+  const cambiarEstadoActividad = (id) => {
+    setActividades((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              estado: estadoSiguiente(
+                ESTADOS.actividad,
+                item.estado
+              )
+            }
+          : item
+      )
+    );
+  };
+
   const irAEditarDesdeDetalle = () => {
     if (!actividadSeleccionada) return;
 
@@ -663,16 +630,6 @@ export function ProgramacionActividades() {
   };
 
   const styles = {
-    btnIcon: {
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      padding: '3px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-
     card: {
       padding: '12px',
       borderRadius: '6px',
@@ -825,7 +782,7 @@ export function ProgramacionActividades() {
               color: colores.texto
             }}
           >
-            Programación de Actividades
+            Agendamiento
           </h1>
 
           <p
@@ -1395,7 +1352,7 @@ export function ProgramacionActividades() {
             style={{
               display: 'grid',
               gridTemplateColumns:
-                '90px 1.5fr 1fr 130px 100px 165px',
+                '90px 1.4fr 1fr 120px 88px 130px 105px',
               padding: '9px 14px',
               backgroundColor:
                 colores.tarjetaSecundaria,
@@ -1410,6 +1367,7 @@ export function ProgramacionActividades() {
             <div>Técnico</div>
             <div>Fecha</div>
             <div>Prioridad</div>
+            <div>Estado</div>
             <div style={{ textAlign: 'right' }}>
               Acciones
             </div>
@@ -1429,19 +1387,13 @@ export function ProgramacionActividades() {
             </div>
           ) : (
             actividadesDelMes.map((item) => {
-              const estado =
-                obtenerClaseEstado(
-                  item.estado,
-                  esOscuro
-                );
-
               return (
                 <div
                   key={item.id}
                   style={{
                     display: 'grid',
                     gridTemplateColumns:
-                      '90px 1.5fr 1fr 130px 100px 165px',
+                      '90px 1.4fr 1fr 120px 88px 130px 105px',
                     padding: '11px 14px',
                     borderBottom: `1px solid ${colores.borde}`,
                     alignItems: 'center',
@@ -1548,6 +1500,18 @@ export function ProgramacionActividades() {
                     </span>
                   </div>
 
+                  <div>
+                    <EstadoToggle
+                      estado={item.estado}
+                      estados={ESTADOS.actividad}
+                      onClick={() =>
+                        cambiarEstadoActividad(
+                          item.id
+                        )
+                      }
+                    />
+                  </div>
+
                   <div
                     style={{
                       display: 'flex',
@@ -1557,64 +1521,20 @@ export function ProgramacionActividades() {
                       gap: '6px'
                     }}
                   >
-                    <span
-                      style={{
-                        backgroundColor:
-                          estado.fondo,
-                        color: estado.texto,
-                        padding: '4px 6px',
-                        borderRadius: '4px',
-                        fontSize: '8px',
-                        fontWeight: '700',
-                        whiteSpace:
-                          'nowrap'
-                      }}
-                    >
-                      {item.estado}
-                    </span>
-
-                    <button
-                      type="button"
-                      title="Ver detalle"
-                      onClick={() =>
+                    <AccionesFila
+                      onVer={() =>
                         abrirDetalle(item)
                       }
-                      style={styles.btnIcon}
-                    >
-                      <EyeIcon
-                        color={
-                          colores.iconColor
-                        }
-                      />
-                    </button>
-
-                    <button
-                      type="button"
-                      title="Editar actividad"
-                      onClick={() =>
+                      onEditar={() =>
                         abrirEditar(item)
                       }
-                      style={styles.btnIcon}
-                    >
-                      <EditIcon
-                        color={
-                          colores.iconColor
-                        }
-                      />
-                    </button>
-
-                    <button
-                      type="button"
-                      title="Eliminar actividad"
-                      onClick={() =>
+                      onEliminar={() =>
                         eliminarActividad(
                           item.id
                         )
                       }
-                      style={styles.btnIcon}
-                    >
-                      <TrashIcon />
-                    </button>
+                      color={colores.iconColor}
+                    />
                   </div>
                 </div>
               );
@@ -2277,29 +2197,23 @@ export function ProgramacionActividades() {
                     ESTADO
                   </div>
 
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      backgroundColor:
-                        obtenerClaseEstado(
-                          actividadSeleccionada.estado,
-                          esOscuro
-                        ).fondo,
-                      color:
-                        obtenerClaseEstado(
-                          actividadSeleccionada.estado,
-                          esOscuro
-                        ).texto,
-                      padding: '4px 7px',
-                      borderRadius: '4px',
-                      fontSize: '9px',
-                      fontWeight: '700'
-                    }}
-                  >
-                    {
-                      actividadSeleccionada.estado
+                  <EstadoToggle
+                    estado={
+                      (
+                        actividades.find(
+                          (a) =>
+                            a.id ===
+                            actividadSeleccionada?.id
+                        ) || actividadSeleccionada
+                      )?.estado
                     }
-                  </span>
+                    estados={ESTADOS.actividad}
+                    onClick={() =>
+                      cambiarEstadoActividad(
+                        actividadSeleccionada.id
+                      )
+                    }
+                  />
                 </div>
 
                 <div

@@ -1,5 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS } from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 export function Materiales() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
@@ -566,29 +568,13 @@ export function Materiales() {
                           borderColor: theme.tableBorder
                         }}
                       >
-                        <button
+                        <EstadoToggle
+                          estado={item.estado}
+                          estados={ESTADOS.inventario}
                           onClick={() =>
                             toggleEstado(item.id)
                           }
-                          title="Haz clic para cambiar el estado"
-                          style={getToggleButtonStyle(
-                            item.estado
-                          )}
-                        >
-                          <span
-                            style={getToggleCircleStyle(
-                              item.estado
-                            )}
-                          />
-
-                          <span
-                            style={{
-                              zIndex: 1
-                            }}
-                          >
-                            {item.estado}
-                          </span>
-                        </button>
+                        />
                       </td>
 
                       <td
@@ -598,31 +584,23 @@ export function Materiales() {
                           borderColor: theme.tableBorder
                         }}
                       >
-                        <div style={styles.actions}>
-                          <button
-                            title="Editar Material"
-                            onClick={() =>
-                              setItemEditar({
-                                ...item
-                              })
-                            }
-                            style={styles.btnIcon}
-                          >
-                            ✏️
-                          </button>
-
-                          <button
-                            title="Eliminar Material"
-                            onClick={() =>
-                              handleEliminarMaterial(
-                                item.id
-                              )
-                            }
-                            style={styles.btnIcon}
-                          >
-                            🗑️
-                          </button>
-                        </div>
+                        <AccionesFila
+                          onEditar={() =>
+                            setItemEditar({
+                              ...item
+                            })
+                          }
+                          onEliminar={() =>
+                            handleEliminarMaterial(
+                              item.id
+                            )
+                          }
+                          color={
+                            esModoOscuro
+                              ? '#cbd5e1'
+                              : '#475569'
+                          }
+                        />
                       </td>
                     </tr>
                   ))
@@ -1118,75 +1096,6 @@ export function Materiales() {
   );
 }
 
-/* SWITCH DE ESTADO */
-
-const getToggleButtonStyle = (estado) => {
-  const base = {
-    position: 'relative',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent:
-      estado === 'Óptimo'
-        ? 'flex-end'
-        : 'flex-start',
-    width: '105px',
-    height: '28px',
-    borderRadius: '16px',
-    border: 'none',
-    padding: '0 10px',
-    fontSize: '10px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    outline: 'none'
-  };
-
-  if (estado === 'Óptimo') {
-    return {
-      ...base,
-      backgroundColor: '#dcfce7',
-      color: '#166534'
-    };
-  }
-
-  if (estado === 'Bajo Stock') {
-    return {
-      ...base,
-      backgroundColor: '#fef3c7',
-      color: '#92400e'
-    };
-  }
-
-  if (estado === 'Crítico') {
-    return {
-      ...base,
-      backgroundColor: '#fee2e2',
-      color: '#b91c1c'
-    };
-  }
-
-  return base;
-};
-
-const getToggleCircleStyle = (estado) => {
-  return {
-    position: 'absolute',
-    top: '3px',
-    left:
-      estado === 'Óptimo'
-        ? '4px'
-        : estado === 'Bajo Stock'
-        ? '41px'
-        : '78px',
-    width: '22px',
-    height: '22px',
-    borderRadius: '50%',
-    backgroundColor: '#ffffff',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-  };
-};
-
 const styles = {
   container: {
     padding: '24px',
@@ -1380,21 +1289,6 @@ const styles = {
     borderBottom: '1px solid',
     fontSize: '11px',
     fontFamily: 'monospace'
-  },
-
-  actions: {
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'center'
-  },
-
-  btnIcon: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '14px',
-    padding: '5px',
-    borderRadius: '5px'
   },
 
   tableFooter: {

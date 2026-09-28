@@ -1,5 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 const configuraciones = {
   clientes: {
@@ -85,27 +87,6 @@ const configuraciones = {
   },
 };
 
-const estadoColor = (estado) => {
-  if (['Activo', 'Finalizada'].includes(estado)) return { backgroundColor: '#dcfce7', color: '#166534' };
-  if (['En ejecución', 'Programada'].includes(estado)) return { backgroundColor: '#dbeafe', color: '#1d4ed8' };
-  if (['Cancelada', 'Inactivo'].includes(estado)) return { backgroundColor: '#fee2e2', color: '#b91c1c' };
-  return { backgroundColor: '#fef3c7', color: '#92400e' };
-};
-
-const estadoIcono = (estado) => {
-  if (['Activo', 'Finalizada'].includes(estado)) return '✓';
-  if (['En ejecución', 'Programada'].includes(estado)) return '●';
-  if (['Cancelada', 'Inactivo'].includes(estado)) return '×';
-  return '!';
-};
-
-const siguienteEstado = (modulo, estado) => {
-  const estados = modulo === 'ordenes'
-    ? ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']
-    : ['Activo', 'Inactivo'];
-  return estados[(estados.indexOf(estado) + 1) % estados.length];
-};
-
 export function ModuloGestion({ modulo }) {
   const config = configuraciones[modulo];
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
@@ -172,8 +153,10 @@ export function ModuloGestion({ modulo }) {
     setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó correctamente.' });
   };
 
+  const estadosModulo = modulo === 'ordenes' ? ESTADOS.orden : ESTADOS.usuario;
+
   const cambiarEstado = (id) => {
-    setRegistros((actuales) => actuales.map((registro) => registro.id === id ? { ...registro, estado: siguienteEstado(modulo, registro.estado) } : registro));
+    setRegistros((actuales) => actuales.map((registro) => registro.id === id ? { ...registro, estado: estadoSiguiente(estadosModulo, registro.estado) } : registro));
   };
 
   const tema = esOscuro ? {
@@ -224,8 +207,8 @@ export function ModuloGestion({ modulo }) {
             <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
             <tbody>
               {registrosFiltrados.map((registro) => <tr key={registro.id}>
-                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <button type="button" onClick={() => cambiarEstado(registro.id)} title="Cambiar estado" style={{ ...styles.badge, ...estadoColor(registro[campo]), cursor: 'pointer', border: 'none' }}><span style={styles.statusDot}>{estadoIcono(registro[campo])}</span>{registro[campo]}</button> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
-                <td style={{ ...styles.td, borderColor: tema.rowBorder }}><div style={styles.actions}><button type="button" onClick={() => { setRegistroEditado(registro); setMostrarFormulario(true); }} style={{ ...styles.actionButton, color: '#a16207' }} title="Editar registro">✏️</button><button type="button" onClick={() => setRegistroDetalle(registro)} style={{ ...styles.actionButton, color: '#1d4ed8' }} title="Ver detalle">👁️</button><button type="button" onClick={() => eliminarRegistro(registro.id)} style={{ ...styles.actionButton, color: '#b91c1c' }} title="Eliminar registro">🗑️</button></div></td>
+                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <EstadoToggle estado={registro[campo]} estados={estadosModulo} width={modulo === 'ordenes' ? 140 : 125} onClick={() => cambiarEstado(registro.id)} /> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9' }}>{config.icono}</span>{registro[campo]}</span> : registro[campo]}</td>)}
+                <td style={{ ...styles.td, borderColor: tema.rowBorder }}><AccionesFila onVer={() => setRegistroDetalle(registro)} onEditar={() => { setRegistroEditado(registro); setMostrarFormulario(true); }} onEliminar={() => eliminarRegistro(registro.id)} color={esOscuro ? '#cbd5e1' : '#475569'} alineacion="flex-start" /></td>
               </tr>)}
               {registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
             </tbody>
@@ -244,7 +227,7 @@ export function ModuloGestion({ modulo }) {
       {registroDetalle && <div style={styles.overlay}>
         <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
           <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} DETALLE</div><h2 style={{ margin: 0 }}>Información completa</h2></div><button type="button" onClick={() => setRegistroDetalle(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.detailGrid}>{config.campos.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
+          <div style={styles.detailGrid}>{config.campos.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{nombre === 'estado' ? <EstadoToggle estado={(registros.find((r) => r.id === registroDetalle.id) || registroDetalle)?.estado} estados={estadosModulo} width={modulo === 'ordenes' ? 140 : 125} onClick={() => cambiarEstado(registroDetalle.id)} /> : registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
           <div style={styles.modalActions}><button type="button" onClick={() => setRegistroDetalle(null)} style={styles.primaryButton}>Cerrar detalle</button></div>
         </div>
       </div>}
@@ -299,12 +282,8 @@ const styles = {
   th: { padding: '12px 8px', borderBottom: '1px solid', textAlign: 'left', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.4px' },
   td: { padding: '14px 8px', borderBottom: '1px solid' },
   tableHead: { color: '#64748b' },
-  badge: { display: 'inline-block', borderRadius: '999px', padding: '4px 9px', fontSize: '11px', fontWeight: '800' },
-  statusDot: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', marginRight: '4px', fontWeight: '900' },
   nameCell: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: '700' },
   rowIcon: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '7px', fontSize: '14px' },
-  actions: { display: 'flex', gap: '8px' },
-  actionButton: { border: 'none', background: 'transparent', padding: '3px', cursor: 'pointer', fontSize: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
   empty: { textAlign: 'center', padding: '32px', color: '#64748b' },
   overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 20 },
   modal: { width: 'min(680px, 100%)', backgroundColor: '#fff', borderRadius: '10px', padding: '24px', boxSizing: 'border-box' },

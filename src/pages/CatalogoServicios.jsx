@@ -1,5 +1,11 @@
 import React, { useContext, useState } from 'react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import {
+  EstadoToggle,
+  ESTADOS,
+  estadoSiguiente
+} from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
   <svg
@@ -46,54 +52,6 @@ const ClockIcon = ({ color = '#64748b' }) => (
   >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-
-const EyeIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const EditIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#ef4444"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 );
 
@@ -262,9 +220,6 @@ export function CatalogoServicios() {
   const [tab, setTab] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
   const [paginaActual, setPaginaActual] = useState(1);
-
-  const darkMode = temaGlobal === 'dark';
-
   const [modalOpen, setModalOpen] = useState(false);
   const [modoModal, setModoModal] = useState('crear');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -282,6 +237,8 @@ export function CatalogoServicios() {
     categoria: 'Instalación',
     estado: 'Activo'
   });
+
+  const darkMode = temaGlobal === 'dark';
 
   const theme = {
     bg: darkMode ? '#0b0f19' : '#eef2f6',
@@ -388,14 +345,17 @@ export function CatalogoServicios() {
   const handleEliminar = (id) => {
     if (window.confirm('¿Está seguro de eliminar este servicio?')) {
       setServicios((prev) =>
-        prev.filter((s) => s.id !== id)
+        prev.filter((servicio) => servicio.id !== id)
       );
 
       setPaginaActual((pagina) => {
         const cantidadRestante = servicios.length - 1;
+
         const paginasNecesarias = Math.max(
           1,
-          Math.ceil(cantidadRestante / SERVICIOS_POR_PAGINA)
+          Math.ceil(
+            cantidadRestante / SERVICIOS_POR_PAGINA
+          )
         );
 
         return Math.min(pagina, paginasNecesarias);
@@ -403,18 +363,20 @@ export function CatalogoServicios() {
     }
   };
 
+  // CAMBIO DE ESTADO
+  // Se utiliza únicamente EstadoToggle y ESTADOS.servicio.
   const handleToggleEstado = (id) => {
     setServicios((prev) =>
-      prev.map((s) =>
-        s.id === id
+      prev.map((servicio) =>
+        servicio.id === id
           ? {
-              ...s,
-              estado:
-                s.estado === 'Activo'
-                  ? 'inactivo'
-                  : 'Activo'
+              ...servicio,
+              estado: estadoSiguiente(
+                ESTADOS.servicio,
+                servicio.estado
+              )
             }
-          : s
+          : servicio
       )
     );
   };
@@ -481,21 +443,24 @@ export function CatalogoServicios() {
         codigo: generarCodigo()
       };
 
-      setServicios((prev) => [nuevoServicio, ...prev]);
+      setServicios((prev) => [
+        nuevoServicio,
+        ...prev
+      ]);
 
       setPaginaActual(1);
     }
 
     if (modoModal === 'editar') {
       setServicios((prev) =>
-        prev.map((s) =>
-          s.id === selectedItem.id
+        prev.map((servicio) =>
+          servicio.id === selectedItem.id
             ? {
                 ...servicioFinal,
                 id: selectedItem.id,
                 codigo: selectedItem.codigo
               }
-            : s
+            : servicio
         )
       );
     }
@@ -514,15 +479,9 @@ export function CatalogoServicios() {
       item.nombre.toLowerCase().includes(textoBusqueda) ||
       item.codigo.toLowerCase().includes(textoBusqueda) ||
       item.desc.toLowerCase().includes(textoBusqueda) ||
-      item.categoria
-        .toLowerCase()
-        .includes(textoBusqueda) ||
-      item.unidad
-        .toLowerCase()
-        .includes(textoBusqueda) ||
-      item.moneda
-        .toLowerCase()
-        .includes(textoBusqueda);
+      item.categoria.toLowerCase().includes(textoBusqueda) ||
+      item.unidad.toLowerCase().includes(textoBusqueda) ||
+      item.moneda.toLowerCase().includes(textoBusqueda);
 
     return matchTab && matchSearch;
   });
@@ -530,7 +489,8 @@ export function CatalogoServicios() {
   const totalPaginas = Math.max(
     1,
     Math.ceil(
-      serviciosFiltrados.length / SERVICIOS_POR_PAGINA
+      serviciosFiltrados.length /
+        SERVICIOS_POR_PAGINA
     )
   );
 
@@ -566,19 +526,19 @@ export function CatalogoServicios() {
   };
 
   const serviciosActivos = servicios.filter(
-    (s) => s.estado === 'Activo'
+    (servicio) => servicio.estado === 'Activo'
   ).length;
 
   const instalaciones = servicios.filter(
-    (s) => s.categoria === 'Instalación'
+    (servicio) => servicio.categoria === 'Instalación'
   ).length;
 
   const mantenimientos = servicios.filter(
-    (s) => s.categoria === 'Mantenimiento'
+    (servicio) => servicio.categoria === 'Mantenimiento'
   ).length;
 
   const protocolos = servicios.filter(
-    (s) => s.categoria === 'Protocolos'
+    (servicio) => servicio.categoria === 'Protocolos'
   ).length;
 
   return (
@@ -682,7 +642,6 @@ export function CatalogoServicios() {
             </button>
 
             <BellIcon color={theme.iconColor} />
-
             <HelpIcon color={theme.iconColor} />
 
             <img
@@ -760,8 +719,7 @@ export function CatalogoServicios() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns:
-                'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(4, 1fr)',
               gap: '12px',
               marginBottom: '16px'
             }}
@@ -1013,27 +971,21 @@ export function CatalogoServicios() {
                     <th style={{ padding: '8px' }}>
                       CÓDIGO
                     </th>
-
                     <th style={{ padding: '8px' }}>
                       NOMBRE DEL SERVICIO
                     </th>
-
                     <th style={{ padding: '8px' }}>
                       UNIDAD DE MEDIDA
                     </th>
-
                     <th style={{ padding: '8px' }}>
                       PRECIO BASE
                     </th>
-
                     <th style={{ padding: '8px' }}>
                       TIEMPO ESTIMADO
                     </th>
-
                     <th style={{ padding: '8px' }}>
                       ESTADO
                     </th>
-
                     <th
                       style={{
                         padding: '8px',
@@ -1109,8 +1061,7 @@ export function CatalogoServicios() {
                         >
                           <span
                             style={{
-                              backgroundColor:
-                                theme.inputBg,
+                              backgroundColor: theme.inputBg,
                               border: `1px solid ${theme.border}`,
                               color: theme.textSub,
                               padding: '2px 8px',
@@ -1166,42 +1117,19 @@ export function CatalogoServicios() {
                           </div>
                         </td>
 
+                        {/* ESTADO */}
                         <td
                           style={{
                             padding: '10px 8px'
                           }}
                         >
-                          <button
+                          <EstadoToggle
+                            estado={row.estado}
+                            estados={ESTADOS.servicio}
                             onClick={() =>
                               handleToggleEstado(row.id)
                             }
-                            style={{
-                              border: 'none',
-                              cursor: 'pointer',
-                              backgroundColor:
-                                row.estado === 'Activo'
-                                  ? darkMode
-                                    ? '#064e3b'
-                                    : '#dcfce7'
-                                  : darkMode
-                                  ? '#78350f'
-                                  : '#fef3c7',
-                              color:
-                                row.estado === 'Activo'
-                                  ? darkMode
-                                    ? '#6ee7b7'
-                                    : '#166534'
-                                  : darkMode
-                                  ? '#fde047'
-                                  : '#92400e',
-                              padding: '2px 8px',
-                              borderRadius: '8px',
-                              fontSize: '9px',
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            • {row.estado}
-                          </button>
+                          />
                         </td>
 
                         <td
@@ -1210,48 +1138,19 @@ export function CatalogoServicios() {
                             textAlign: 'right'
                           }}
                         >
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent:
-                                'flex-end',
-                              gap: '6px'
-                            }}
-                          >
-                            <button
-                              onClick={() =>
-                                handleOpenVer(row)
-                              }
-                              style={styles.btnIcon}
-                              title="Ver detalles"
-                            >
-                              <EyeIcon
-                                color={theme.iconColor}
-                              />
-                            </button>
-
-                            <button
-                              onClick={() =>
-                                handleOpenEditar(row)
-                              }
-                              style={styles.btnIcon}
-                              title="Editar servicio"
-                            >
-                              <EditIcon
-                                color={theme.iconColor}
-                              />
-                            </button>
-
-                            <button
-                              onClick={() =>
-                                handleEliminar(row.id)
-                              }
-                              style={styles.btnIcon}
-                              title="Eliminar servicio"
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
+                          <AccionesFila
+                            onVer={() =>
+                              handleOpenVer(row)
+                            }
+                            onEditar={() =>
+                              handleOpenEditar(row)
+                            }
+                            onEliminar={() =>
+                              handleEliminar(row.id)
+                            }
+                            color={theme.iconColor}
+                            alineacion="flex-end"
+                          />
                         </td>
                       </tr>
                     ))
@@ -1473,7 +1372,6 @@ export function CatalogoServicios() {
                   >
                     CÓDIGO
                   </span>
-
                   <strong>
                     {selectedItem?.codigo}
                   </strong>
@@ -1485,7 +1383,6 @@ export function CatalogoServicios() {
                   >
                     NOMBRE DEL SERVICIO
                   </span>
-
                   <strong>
                     {selectedItem?.nombre}
                   </strong>
@@ -1497,7 +1394,6 @@ export function CatalogoServicios() {
                   >
                     DESCRIPCIÓN
                   </span>
-
                   <span>
                     {selectedItem?.desc}
                   </span>
@@ -1506,38 +1402,27 @@ export function CatalogoServicios() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr',
                     gap: '8px'
                   }}
                 >
-                  <div
-                    style={styles.detailBox(theme)}
-                  >
+                  <div style={styles.detailBox(theme)}>
                     <span
-                      style={styles.detailLabel(
-                        theme
-                      )}
+                      style={styles.detailLabel(theme)}
                     >
                       CATEGORÍA
                     </span>
-
                     <span>
                       {selectedItem?.categoria}
                     </span>
                   </div>
 
-                  <div
-                    style={styles.detailBox(theme)}
-                  >
+                  <div style={styles.detailBox(theme)}>
                     <span
-                      style={styles.detailLabel(
-                        theme
-                      )}
+                      style={styles.detailLabel(theme)}
                     >
                       UNIDAD
                     </span>
-
                     <span>
                       {selectedItem?.unidad}
                     </span>
@@ -1547,18 +1432,13 @@ export function CatalogoServicios() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr',
                     gap: '8px'
                   }}
                 >
-                  <div
-                    style={styles.detailBox(theme)}
-                  >
+                  <div style={styles.detailBox(theme)}>
                     <span
-                      style={styles.detailLabel(
-                        theme
-                      )}
+                      style={styles.detailLabel(theme)}
                     >
                       PRECIO
                     </span>
@@ -1577,13 +1457,9 @@ export function CatalogoServicios() {
                     </span>
                   </div>
 
-                  <div
-                    style={styles.detailBox(theme)}
-                  >
+                  <div style={styles.detailBox(theme)}>
                     <span
-                      style={styles.detailLabel(
-                        theme
-                      )}
+                      style={styles.detailLabel(theme)}
                     >
                       TIEMPO ESTIMADO
                     </span>
@@ -1598,51 +1474,35 @@ export function CatalogoServicios() {
                       <ClockIcon
                         color={theme.textSub}
                       />
-
                       {selectedItem?.tiempo}
                     </span>
                   </div>
                 </div>
 
-                <div
-                  style={styles.detailBox(theme)}
-                >
+                <div style={styles.detailBox(theme)}>
                   <span
                     style={styles.detailLabel(theme)}
                   >
                     ESTADO
                   </span>
 
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 'fit-content',
-                      backgroundColor:
-                        selectedItem?.estado ===
-                        'Activo'
-                          ? darkMode
-                            ? '#064e3b'
-                            : '#dcfce7'
-                          : darkMode
-                          ? '#78350f'
-                          : '#fef3c7',
-                      color:
-                        selectedItem?.estado ===
-                        'Activo'
-                          ? darkMode
-                            ? '#6ee7b7'
-                            : '#166534'
-                          : darkMode
-                          ? '#fde047'
-                          : '#92400e',
-                      padding: '3px 9px',
-                      borderRadius: '10px',
-                      fontSize: '10px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    • {selectedItem?.estado}
-                  </span>
+                  <EstadoToggle
+                    estado={
+                      (
+                        servicios.find(
+                          (servicio) =>
+                            servicio.id ===
+                            selectedItem?.id
+                        ) || selectedItem
+                      )?.estado
+                    }
+                    estados={ESTADOS.servicio}
+                    onClick={() =>
+                      handleToggleEstado(
+                        selectedItem.id
+                      )
+                    }
+                  />
                 </div>
 
                 <div
@@ -1669,9 +1529,7 @@ export function CatalogoServicios() {
                 </div>
 
                 <button
-                  onClick={() =>
-                    setModalOpen(false)
-                  }
+                  onClick={() => setModalOpen(false)}
                   style={{
                     ...styles.btnPrimary,
                     marginTop: '6px'
@@ -1767,8 +1625,7 @@ export function CatalogoServicios() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr',
                     gap: '8px'
                   }}
                 >
@@ -1796,11 +1653,9 @@ export function CatalogoServicios() {
                       <option value="Instalación">
                         Instalación
                       </option>
-
                       <option value="Mantenimiento">
                         Mantenimiento
                       </option>
-
                       <option value="Protocolos">
                         Protocolos
                       </option>
@@ -1831,27 +1686,21 @@ export function CatalogoServicios() {
                       <option value="Proyecto">
                         Proyecto
                       </option>
-
                       <option value="Servicio">
                         Servicio
                       </option>
-
                       <option value="Hora">
                         Hora
                       </option>
-
                       <option value="Punto">
                         Punto
                       </option>
-
                       <option value="Unidad">
                         Unidad
                       </option>
-
                       <option value="Metro">
                         Metro
                       </option>
-
                       <option value="Día">
                         Día
                       </option>
@@ -1862,8 +1711,7 @@ export function CatalogoServicios() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr',
                     gap: '8px'
                   }}
                 >
@@ -1890,15 +1738,12 @@ export function CatalogoServicios() {
                       <option value="USD">
                         USD
                       </option>
-
                       <option value="USD / H">
                         USD / H
                       </option>
-
                       <option value="COP">
                         COP
                       </option>
-
                       <option value="COP / H">
                         COP / H
                       </option>
@@ -1920,9 +1765,7 @@ export function CatalogoServicios() {
                           : '0.01'
                       }
                       placeholder={
-                        formData.moneda.includes(
-                          'COP'
-                        )
+                        formData.moneda.includes('COP')
                           ? 'Ej: 850000'
                           : 'Ej: 850.00'
                       }
@@ -1977,8 +1820,7 @@ export function CatalogoServicios() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr',
                     gap: '8px'
                   }}
                 >
@@ -2031,7 +1873,6 @@ export function CatalogoServicios() {
                       <option value="Activo">
                         Activo
                       </option>
-
                       <option value="Pausado">
                         Pausado
                       </option>

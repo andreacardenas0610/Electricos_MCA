@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
 
 export function PanelControl() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
@@ -62,17 +63,10 @@ export function PanelControl() {
   const cambiarEstado = (id) => {
     setActividades(prev => prev.map(item => {
       if (item.id === id) {
-        const siguiente = item.estado === 'Completado' ? 'Pendiente' : item.estado === 'Pendiente' ? 'Finalizado' : 'Completado';
-        return { ...item, estado: siguiente };
+        return { ...item, estado: estadoSiguiente(ESTADOS.panel, item.estado) };
       }
       return item;
     }));
-  };
-
-  const estilosEstado = {
-    'Completado': { bg: '#e6f7ea', texto: '#1b5e20', posicionCirculo: '4px' },
-    'Pendiente': { bg: '#fef3d6', texto: '#8c4a00', posicionCirculo: '42px' },
-    'Finalizado': { bg: '#fde8e8', texto: '#991b1b', posicionCirculo: '80px' }
   };
 
   const esOscuro = temaGlobal === 'dark';
@@ -265,11 +259,8 @@ export function PanelControl() {
                 </tr>
               </thead>
               <tbody>
-                {actividades.map((item, idx) => {
-                  const infoEst = estilosEstado[item.estado] || estilosEstado['Completado'];
-
-                  return (
-                    <tr key={item.id} style={{ borderBottom: idx !== actividades.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
+                {actividades.map((item, idx) => (
+                  <tr key={item.id} style={{ borderBottom: idx !== actividades.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
                       <td style={{ padding: '12px 4px' }}>
                         <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>{item.icono} {item.evento}</div>
                         <div style={{ fontSize: '10px', color: tema.textoMuted }}>{item.subtexto}</div>
@@ -280,57 +271,14 @@ export function PanelControl() {
                         <span style={{ fontSize: '10px', color: tema.textoMuted }}>{item.fecha}</span>
                       </td>
                       <td style={{ padding: '12px 4px', textAlign: 'center' }}>
-                        
-                        <div
+                        <EstadoToggle
+                          estado={item.estado}
+                          estados={ESTADOS.panel}
                           onClick={() => cambiarEstado(item.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            position: 'relative',
-                            width: '110px',
-                            height: '32px',
-                            backgroundColor: infoEst.bg,
-                            borderRadius: '16px',
-                            padding: '3px 5px',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                            boxSizing: 'border-box',
-                            transition: 'background-color 0.25s ease'
-                          }}
-                        >
-                          <span
-                            style={{
-                              position: 'absolute',
-                              top: '3px',
-                              width: '26px',
-                              height: '26px',
-                              borderRadius: '50%',
-                              backgroundColor: '#ffffff',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-                              transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                              left: infoEst.posicionCirculo,
-                              zIndex: 2
-                            }}
-                          />
-
-                          <span
-                            style={{
-                              width: '100%',
-                              textAlign: 'center',
-                              color: infoEst.texto,
-                              fontWeight: '700',
-                              fontSize: '11px',
-                              zIndex: 1
-                            }}
-                          >
-                            {item.estado}
-                          </span>
-                        </div>
-
+                        />
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

@@ -103,6 +103,75 @@ const ShieldWatermark = ({ color = '#e2e8f0' }) => (
   </svg>
 );
 
+/* ESTADO */
+const EstadoToggle = ({ estado, onClick, darkMode }) => {
+  const activo = estado === 'Activo';
+
+  return (
+    <button
+      onClick={onClick}
+      title={activo ? 'Cambiar a Inactivo' : 'Cambiar a Activo'}
+      style={{
+        width: '76px',
+        height: '25px',
+        borderRadius: '20px',
+        border: 'none',
+        padding: '3px',
+        cursor: 'pointer',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: activo ? 'flex-start' : 'flex-end',
+        backgroundColor: activo
+          ? darkMode
+            ? '#064e3b'
+            : '#dcfce7'
+          : darkMode
+            ? '#3f1d1d'
+            : '#fce7e7',
+        transition: 'all 0.2s ease',
+        boxSizing: 'border-box'
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          left: activo ? '3px' : 'auto',
+          right: activo ? 'auto' : '3px',
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          backgroundColor: '#ffffff',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+          transition: 'all 0.2s ease'
+        }}
+      />
+
+      <span
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          width: '100%',
+          textAlign: activo ? 'right' : 'left',
+          padding: activo ? '0 7px 0 0' : '0 0 0 7px',
+          boxSizing: 'border-box',
+          color: activo
+            ? darkMode
+              ? '#86efac'
+              : '#166534'
+            : darkMode
+              ? '#fca5a5'
+              : '#991b1b',
+          fontSize: '8px',
+          fontWeight: '700'
+        }}
+      >
+        {estado}
+      </span>
+    </button>
+  );
+};
+
 const INITIAL_ROLES = [
   {
     id: 'rol-admin',
@@ -1117,39 +1186,15 @@ export function GestionRolesPermisos() {
                           </td>
 
                           <td style={styles.td}>
-                            <button
+                            <EstadoToggle
+                              estado={usuario.estado}
+                              darkMode={darkMode}
                               onClick={() =>
                                 handleToggleEstado(
                                   usuario.id
                                 )
                               }
-                              style={{
-                                border: 'none',
-                                cursor: 'pointer',
-                                backgroundColor:
-                                  usuario.estado ===
-                                  'Activo'
-                                    ? darkMode
-                                      ? '#064e3b'
-                                      : '#dcfce7'
-                                    : darkMode
-                                      ? '#334155'
-                                      : '#f1f5f9',
-                                color:
-                                  usuario.estado ===
-                                  'Activo'
-                                    ? darkMode
-                                      ? '#6ee7b7'
-                                      : '#166534'
-                                    : theme.textSub,
-                                padding: '3px 8px',
-                                borderRadius: '9px',
-                                fontSize: '9px',
-                                fontWeight: 'bold'
-                              }}
-                            >
-                              • {usuario.estado}
-                            </button>
+                            />
                           </td>
 
                           <td
@@ -1479,7 +1524,7 @@ export function GestionRolesPermisos() {
                                 rolActual.estado ===
                                 'Activo'
                                   ? darkMode
-                                    ? '#064e3b'
+                                    ? '#22c55e'
                                     : '#dcfce7'
                                   : darkMode
                                     ? '#334155'
@@ -1489,7 +1534,7 @@ export function GestionRolesPermisos() {
                                 'Activo'
                                   ? darkMode
                                     ? '#6ee7b7'
-                                    : '#166534'
+                                    : '#22c55e'
                                   : theme.textSub,
                               padding: '3px 7px',
                               borderRadius: '8px',
@@ -1569,7 +1614,7 @@ export function GestionRolesPermisos() {
                           backgroundColor:
                             rolActual.estado === 'Activo'
                               ? darkMode
-                                ? '#064e3b'
+                                ? '##22c55e'
                                 : '#dcfce7'
                               : darkMode
                                 ? '#334155'
@@ -1578,7 +1623,7 @@ export function GestionRolesPermisos() {
                             rolActual.estado === 'Activo'
                               ? darkMode
                                 ? '#6ee7b7'
-                                : '#166534'
+                                : '#22c55e'
                               : theme.textSub,
                           border: 'none',
                           borderRadius: '5px',
@@ -1744,7 +1789,7 @@ export function GestionRolesPermisos() {
                                           backgroundColor:
                                             activo
                                               ? darkMode
-                                                ? '#064e3b'
+                                                ? '#22c55e'
                                                 : '#dcfce7'
                                               : darkMode
                                                 ? '#1e293b'

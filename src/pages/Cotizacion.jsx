@@ -1,6 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
 import { CrearCotizacion } from './CrearCotizacion';
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 const CATALOGO_MATERIALES = [
   {
@@ -433,69 +435,18 @@ export function Cotizaciones() {
     setCotizaciones((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          let nuevoEstado = 'Aprobado';
-
-          if (
-            item.estadoCotizacion === 'Aprobado'
-          ) {
-            nuevoEstado = 'Pendiente';
-          } else if (
-            item.estadoCotizacion === 'Pendiente'
-          ) {
-            nuevoEstado = 'Rechazado';
-          } else {
-            nuevoEstado = 'Aprobado';
-          }
-
           return {
             ...item,
-            estadoCotizacion: nuevoEstado
+            estadoCotizacion: estadoSiguiente(
+              ESTADOS.cotizacion,
+              item.estadoCotizacion
+            )
           };
         }
 
         return item;
       })
     );
-  };
-
-  const getToggleConfig = (estado) => {
-    switch (estado) {
-      case 'Aprobado':
-        return {
-          bg: '#e8f8ed',
-          border: '#c2ebd0',
-          textColor: '#1e5e3a',
-          circlePos: 'left',
-          textPadding: '0 10px 0 28px'
-        };
-
-      case 'Pendiente':
-        return {
-          bg: '#fef6d8',
-          border: '#fbe2a0',
-          textColor: '#7a4b08',
-          circlePos: 'center',
-          textPadding: '0'
-        };
-
-      case 'Rechazado':
-        return {
-          bg: '#fce8e6',
-          border: '#f7c5c0',
-          textColor: '#8c1d18',
-          circlePos: 'right',
-          textPadding: '0 28px 0 10px'
-        };
-
-      default:
-        return {
-          bg: '#e8f8ed',
-          border: '#c2ebd0',
-          textColor: '#1e5e3a',
-          circlePos: 'left',
-          textPadding: '0 10px 0 28px'
-        };
-    }
   };
 
   const cotizacionesFiltradas =
@@ -1053,11 +1004,6 @@ export function Cotizaciones() {
           <tbody>
             {cotizacionesFiltradas.length > 0 ? (
               cotizacionesFiltradas.map((item) => {
-                const config =
-                  getToggleConfig(
-                    item.estadoCotizacion
-                  );
-
                 return (
                   <tr
                     key={item.id}
@@ -1141,59 +1087,13 @@ export function Cotizaciones() {
                         textAlign: 'center'
                       }}
                     >
-                      <button
+                      <EstadoToggle
+                        estado={item.estadoCotizacion}
+                        estados={ESTADOS.cotizacion}
                         onClick={() =>
-                          cambiarEstadoSiguiente(
-                            item.id
-                          )
+                          cambiarEstadoSiguiente(item.id)
                         }
-                        style={{
-                          width: '125px',
-                          height: '32px',
-                          borderRadius: '16px',
-                          backgroundColor: config.bg,
-                          border: `1px solid ${config.border}`,
-                          position: 'relative',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding:
-                            config.textPadding
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            backgroundColor:
-                              '#ffffff',
-                            position: 'absolute',
-                            top: '3px',
-                            left:
-                              config.circlePos ===
-                              'left'
-                                ? '4px'
-                                : config.circlePos ===
-                                  'center'
-                                ? '50.5px'
-                                : '95px'
-                          }}
-                        />
-
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            color:
-                              config.textColor,
-                            zIndex: 1
-                          }}
-                        >
-                          {item.estadoCotizacion}
-                        </span>
-                      </button>
+                      />
                     </td>
 
                     <td
@@ -1216,64 +1116,24 @@ export function Cotizaciones() {
                         textAlign: 'center'
                       }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <button
-                          onClick={() =>
-                            setCotizacionDetalle(
-                              normalizarCotizacion(
-                                item
-                              )
-                            )
-                          }
-                          title="Ver detalle"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '15px'
-                          }}
-                        >
-                          👁️
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            abrirEditar(item)
-                          }
-                          title="Editar cotización"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '15px'
-                          }}
-                        >
-                          ✏️
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            eliminarCotizacion(
-                              item.id
-                            )
-                          }
-                          title="Eliminar"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '15px'
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                      <AccionesFila
+                        onVer={() =>
+                          setCotizacionDetalle(
+                            normalizarCotizacion(item)
+                          )
+                        }
+                        onEditar={() =>
+                          abrirEditar(item)
+                        }
+                        onEliminar={() =>
+                          eliminarCotizacion(item.id)
+                        }
+                        color={
+                          esModoOscuro
+                            ? '#cbd5e1'
+                            : '#475569'
+                        }
+                      />
                     </td>
                   </tr>
                 );

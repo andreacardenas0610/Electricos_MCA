@@ -1,5 +1,8 @@
 import React, { useContext, useState } from 'react';
+
 import { ThemeContext } from '../context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS } from '../components/EstadoToggle.jsx';
+import { AccionesFila } from '../components/AccionesFila.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
   <svg
@@ -73,54 +76,6 @@ const MoonIcon = () => (
   </svg>
 );
 
-const EyeIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const EditIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 20h9" />
-    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
-  </svg>
-);
-
-const PowerIcon = ({ color = '#ef4444' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-    <line x1="12" y1="2" x2="12" y2="12" />
-  </svg>
-);
-
 const CloseIcon = ({ color = '#64748b' }) => (
   <svg
     width="14"
@@ -180,14 +135,15 @@ function ModalNuevoUsuario({
   isOpen,
   onClose,
   onGuardar,
-  esModoClaro
+  esModoClaro,
+  usuarioAEditar
 }) {
   const [formData, setFormData] = useState({
-    nombre: '',
-    email: '',
-    rol: 'Técnico',
-    zona: 'Norte',
-    estado: 'Activo'
+    nombre: usuarioAEditar?.nombre || '',
+    email: usuarioAEditar?.email || '',
+    rol: usuarioAEditar?.rol || 'Técnico',
+    zona: usuarioAEditar?.zona || 'Norte',
+    estado: usuarioAEditar?.estado || 'Activo'
   });
 
   if (!isOpen) {
@@ -197,11 +153,15 @@ function ModalNuevoUsuario({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    onGuardar({
-      ...formData,
-      id: Date.now(),
-      otAsignadas: 0
-    });
+    onGuardar(
+      usuarioAEditar
+        ? { ...usuarioAEditar, ...formData }
+        : {
+            ...formData,
+            id: Date.now(),
+            otAsignadas: 0
+          }
+    );
 
     setFormData({
       nombre: '',
@@ -262,7 +222,7 @@ function ModalNuevoUsuario({
                 fontWeight: '800'
               }}
             >
-              Nuevo Usuario
+              {usuarioAEditar ? 'Editar Usuario' : 'Nuevo Usuario'}
             </h3>
 
             <p
@@ -272,7 +232,9 @@ function ModalNuevoUsuario({
                 color: secundario
               }}
             >
-              Registra un nuevo usuario del sistema.
+              {usuarioAEditar
+                ? 'Modifica la información del usuario.'
+                : 'Registra un nuevo usuario del sistema.'}
             </p>
           </div>
 
@@ -295,9 +257,7 @@ function ModalNuevoUsuario({
           }}
         >
           <div>
-            <label style={styles.label}>
-              NOMBRE COMPLETO
-            </label>
+            <label style={styles.label}>NOMBRE COMPLETO</label>
 
             <input
               type="text"
@@ -319,9 +279,7 @@ function ModalNuevoUsuario({
           </div>
 
           <div>
-            <label style={styles.label}>
-              CORREO ELECTRÓNICO
-            </label>
+            <label style={styles.label}>CORREO ELECTRÓNICO</label>
 
             <input
               type="email"
@@ -368,12 +326,8 @@ function ModalNuevoUsuario({
                 }}
               >
                 <option value="Técnico">Técnico</option>
-                <option value="Supervisor">
-                  Supervisor
-                </option>
-                <option value="Administrador">
-                  Administrador
-                </option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Administrador">Administrador</option>
               </select>
             </div>
 
@@ -418,9 +372,7 @@ function ModalNuevoUsuario({
                 padding: '9px 14px',
                 borderRadius: '6px',
                 border: `1px solid ${borde}`,
-                backgroundColor: esModoClaro
-                  ? '#f8fafc'
-                  : '#1e293b',
+                backgroundColor: esModoClaro ? '#f8fafc' : '#1e293b',
                 color: texto,
                 cursor: 'pointer',
                 fontSize: '11px',
@@ -443,7 +395,7 @@ function ModalNuevoUsuario({
                 fontWeight: '800'
               }}
             >
-              Guardar Usuario
+              {usuarioAEditar ? 'Guardar Cambios' : 'Guardar Usuario'}
             </button>
           </div>
         </form>
@@ -456,12 +408,11 @@ export function GestionUsuarios() {
   const { theme: temaGlobal, toggleTheme } =
     useContext(ThemeContext);
 
-  const [usuarios, setUsuarios] =
-    useState(INITIAL_USUARIOS);
-
+  const [usuarios, setUsuarios] = useState(INITIAL_USUARIOS);
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('Todos');
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [usuarioAEditar, setUsuarioAEditar] = useState(null);
   const [usuarioSeleccionado, setUsuarioSeleccionado] =
     useState(null);
 
@@ -470,27 +421,12 @@ export function GestionUsuarios() {
   const colores = {
     fondo: esModoClaro ? '#f8fafc' : '#0b0f19',
     tarjeta: esModoClaro ? '#ffffff' : '#111c38',
-    tarjetaSecundaria: esModoClaro
-      ? '#f8fafc'
-      : '#0f1a33',
+    tarjetaSecundaria: esModoClaro ? '#f8fafc' : '#0f1a33',
     borde: esModoClaro ? '#e2e8f0' : '#263555',
     texto: esModoClaro ? '#0f172a' : '#f8fafc',
     secundario: esModoClaro ? '#64748b' : '#94a3b8',
     amarillo: '#facc15',
     iconColor: esModoClaro ? '#475569' : '#cbd5e1'
-  };
-
-  const handleCambiarRol = (id, nuevoRol) => {
-    setUsuarios((prev) =>
-      prev.map((usuario) =>
-        usuario.id === id
-          ? {
-              ...usuario,
-              rol: nuevoRol
-            }
-          : usuario
-      )
-    );
   };
 
   const handleCambiarEstado = (id) => {
@@ -509,8 +445,28 @@ export function GestionUsuarios() {
     );
   };
 
-  const handleAgregarUsuario = (nuevoUsuario) => {
-    setUsuarios((prev) => [...prev, nuevoUsuario]);
+  const handleGuardarUsuario = (usuario) => {
+    setUsuarios((prev) =>
+      prev.some((u) => u.id === usuario.id)
+        ? prev.map((u) =>
+            u.id === usuario.id ? usuario : u
+          )
+        : [...prev, usuario]
+    );
+
+    setUsuarioAEditar(null);
+  };
+
+  const abrirEditar = (usuario) => {
+    setUsuarioAEditar(usuario);
+    setModalAbierto(true);
+  };
+
+
+
+  const abrirNuevoUsuario = () => {
+    setUsuarioAEditar(null);
+    setModalAbierto(true);
   };
 
   const usuariosFiltrados = usuarios.filter((usuario) => {
@@ -602,6 +558,7 @@ export function GestionUsuarios() {
           margin: '0 auto'
         }}
       >
+        {/* ENCABEZADO */}
         <div
           style={{
             display: 'flex',
@@ -664,7 +621,7 @@ export function GestionUsuarios() {
             </button>
 
             <button
-              onClick={() => setModalAbierto(true)}
+              onClick={abrirNuevoUsuario}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -685,6 +642,7 @@ export function GestionUsuarios() {
           </div>
         </div>
 
+        {/* KPIs */}
         <div
           style={{
             display: 'grid',
@@ -779,6 +737,7 @@ export function GestionUsuarios() {
           </div>
         </div>
 
+        {/* BUSCADOR Y FILTROS */}
         <div
           style={{
             backgroundColor: colores.tarjeta,
@@ -809,9 +768,7 @@ export function GestionUsuarios() {
                 display: 'flex'
               }}
             >
-              <SearchIcon
-                color={colores.secundario}
-              />
+              <SearchIcon color={colores.secundario} />
             </span>
 
             <input
@@ -886,6 +843,7 @@ export function GestionUsuarios() {
           </div>
         </div>
 
+        {/* TABLA */}
         <div
           style={{
             backgroundColor: colores.tarjeta,
@@ -1009,6 +967,7 @@ export function GestionUsuarios() {
                           borderBottom: `1px solid ${colores.borde}`
                         }}
                       >
+                        {/* USUARIO */}
                         <td
                           style={{
                             padding: '13px 12px'
@@ -1069,6 +1028,7 @@ export function GestionUsuarios() {
                           </div>
                         </td>
 
+                        {/* ZONA */}
                         <td
                           style={{
                             padding: '13px 12px',
@@ -1085,46 +1045,29 @@ export function GestionUsuarios() {
                           </span>
                         </td>
 
+                        {/* ROL ASIGNADO - SOLO VISUAL */}
                         <td
                           style={{
                             padding: '13px 12px'
                           }}
                         >
-                          <select
-                            value={usuario.rol}
-                            onChange={(e) =>
-                              handleCambiarRol(
-                                usuario.id,
-                                e.target.value
-                              )
-                            }
+                          <span
                             style={{
+                              display: 'inline-block',
                               padding: '5px 8px',
                               borderRadius: '6px',
-                              border: 'none',
                               backgroundColor:
                                 rolStyle.backgroundColor,
                               color: rolStyle.color,
                               fontSize: '10px',
-                              fontWeight: '800',
-                              cursor: 'pointer',
-                              outline: 'none'
+                              fontWeight: '800'
                             }}
                           >
-                            <option value="Administrador">
-                              Administrador
-                            </option>
-
-                            <option value="Supervisor">
-                              Supervisor
-                            </option>
-
-                            <option value="Técnico">
-                              Técnico
-                            </option>
-                          </select>
+                            {usuario.rol}
+                          </span>
                         </td>
 
+                        {/* OTS */}
                         <td
                           style={{
                             padding: '13px 12px',
@@ -1135,125 +1078,38 @@ export function GestionUsuarios() {
                           {usuario.otAsignadas} OTs
                         </td>
 
+                        {/* ESTADO */}
                         <td
                           style={{
                             padding: '13px 12px'
                           }}
                         >
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              padding: '5px 8px',
-                              borderRadius: '6px',
-                              backgroundColor:
-                                usuario.estado ===
-                                'Activo'
-                                  ? esModoClaro
-                                    ? '#dcfce7'
-                                    : '#103521'
-                                  : esModoClaro
-                                  ? '#fee2e2'
-                                  : '#3b1d1d',
-                              color:
-                                usuario.estado ===
-                                'Activo'
-                                  ? esModoClaro
-                                    ? '#166534'
-                                    : '#4ade80'
-                                  : esModoClaro
-                                  ? '#991b1b'
-                                  : '#f87171',
-                              fontSize: '9px',
-                              fontWeight: '800'
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: '5px',
-                                height: '5px',
-                                borderRadius: '50%',
-                                backgroundColor:
-                                  usuario.estado ===
-                                  'Activo'
-                                    ? '#22c55e'
-                                    : '#ef4444'
-                              }}
-                            />
-
-                            {usuario.estado}
-                          </span>
+                          <EstadoToggle
+                            estado={usuario.estado}
+                            estados={ESTADOS.usuario}
+                            onClick={() =>
+                              handleCambiarEstado(
+                                usuario.id
+                              )
+                            }
+                          />
                         </td>
 
+                        {/* ACCIONES */}
                         <td
                           style={{
                             padding: '13px 12px'
                           }}
                         >
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'flex-end',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                abrirDetalle(usuario)
-                              }
-                              title="Ver detalle"
-                              style={styles.btnIcon}
-                            >
-                              <EyeIcon
-                                color={
-                                  colores.iconColor
-                                }
-                              />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                abrirDetalle(usuario)
-                              }
-                              title="Editar usuario"
-                              style={styles.btnIcon}
-                            >
-                              <EditIcon
-                                color={
-                                  colores.iconColor
-                                }
-                              />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCambiarEstado(
-                                  usuario.id
-                                )
-                              }
-                              title={
-                                usuario.estado ===
-                                'Activo'
-                                  ? 'Desactivar usuario'
-                                  : 'Activar usuario'
-                              }
-                              style={styles.btnIcon}
-                            >
-                              <PowerIcon
-                                color={
-                                  usuario.estado ===
-                                  'Activo'
-                                    ? '#ef4444'
-                                    : '#22c55e'
-                                }
-                              />
-                            </button>
-                          </div>
+                          <AccionesFila
+                            onVer={() =>
+                              abrirDetalle(usuario)
+                            }
+                            onEditar={() =>
+                              abrirEditar(usuario)
+                            }
+                            
+                          />
                         </td>
                       </tr>
                     );
@@ -1265,13 +1121,20 @@ export function GestionUsuarios() {
         </div>
       </div>
 
+      {/* MODAL NUEVO / EDITAR */}
       <ModalNuevoUsuario
+        key={usuarioAEditar?.id ?? 'nuevo'}
         isOpen={modalAbierto}
-        onClose={() => setModalAbierto(false)}
-        onGuardar={handleAgregarUsuario}
+        onClose={() => {
+          setModalAbierto(false);
+          setUsuarioAEditar(null);
+        }}
+        onGuardar={handleGuardarUsuario}
+        usuarioAEditar={usuarioAEditar}
         esModoClaro={esModoClaro}
       />
 
+      {/* MODAL DETALLE */}
       {usuarioSeleccionado && (
         <div
           style={{
@@ -1416,7 +1279,23 @@ export function GestionUsuarios() {
                 ],
                 [
                   'ESTADO',
-                  usuarioSeleccionado.estado
+                  <EstadoToggle
+                    estado={
+                      (
+                        usuarios.find(
+                          (u) =>
+                            u.id ===
+                            usuarioSeleccionado.id
+                        ) || usuarioSeleccionado
+                      )?.estado
+                    }
+                    estados={ESTADOS.usuario}
+                    onClick={() =>
+                      handleCambiarEstado(
+                        usuarioSeleccionado.id
+                      )
+                    }
+                  />
                 ]
               ].map(([titulo, valor]) => (
                 <div
@@ -1460,44 +1339,6 @@ export function GestionUsuarios() {
                 marginTop: '18px'
               }}
             >
-              <button
-                onClick={() =>
-                  handleCambiarEstado(
-                    usuarioSeleccionado.id
-                  )
-                }
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  color:
-                    usuarioSeleccionado.estado ===
-                    'Activo'
-                      ? '#ef4444'
-                      : '#22c55e',
-                  fontSize: '10px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-              >
-                <PowerIcon
-                  color={
-                    usuarioSeleccionado.estado ===
-                    'Activo'
-                      ? '#ef4444'
-                      : '#22c55e'
-                  }
-                />
-
-                {usuarioSeleccionado.estado ===
-                'Activo'
-                  ? 'Desactivar'
-                  : 'Activar'}
-              </button>
-
               <button
                 onClick={cerrarDetalle}
                 style={{

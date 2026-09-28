@@ -1,15 +1,30 @@
 import React, { useContext, useState } from 'react';
+
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
+import {
+  EstadoToggle,
+  ESTADOS,
+} from '../components/EstadoToggle.jsx';
+
+import { AccionesFila } from '../components/AccionesFila.jsx';
+
 export function AbonoVentas() {
-  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
+  const { theme: temaGlobal, toggleTheme } =
+    useContext(ThemeContext);
+
   const esOscuro = temaGlobal === 'dark';
 
-  const [vistaActual, setVistaActual] = useState('dashboard');
+  const [vistaActual, setVistaActual] =
+    useState('dashboard');
+
   const [filtro, setFiltro] = useState('Todas');
+
   const [busqueda, setBusqueda] = useState('');
 
-  const [itemSeleccionado, setItemSeleccionado] = useState(null);
+  const [itemSeleccionado, setItemSeleccionado] =
+    useState(null);
+
   const [modoModal, setModoModal] = useState(null);
 
   const [formEditar, setFormEditar] = useState({
@@ -57,32 +72,33 @@ export function AbonoVentas() {
     },
   ]);
 
-  const [registroPagos, setRegistroPagos] = useState([
-    {
-      id: '1',
-      metodo: 'Transferencia Bancaria',
-      abonoRef: 'Abono a #PAG-9482',
-      monto: 4500.0,
-      fecha: '24 Oct, 2023 - 14:20',
-      icon: '💳',
-    },
-    {
-      id: '2',
-      metodo: 'Tarjeta Débito (POS)',
-      abonoRef: 'Abono a #PAG-8100',
-      monto: 2100.5,
-      fecha: '23 Oct, 2023 - 09:15',
-      icon: '💳',
-    },
-    {
-      id: '3',
-      metodo: 'Efectivo Caja Central',
-      abonoRef: 'Abono a #PAG-9489',
-      monto: 850.0,
-      fecha: '22 Oct, 2023 - 17:45',
-      icon: '💵',
-    },
-  ]);
+  const [registroPagos, setRegistroPagos] =
+    useState([
+      {
+        id: '1',
+        metodo: 'Transferencia Bancaria',
+        abonoRef: 'Abono a #PAG-9482',
+        monto: 4500.0,
+        fecha: '24 Oct, 2023 - 14:20',
+        icon: '💳',
+      },
+      {
+        id: '2',
+        metodo: 'Tarjeta Débito (POS)',
+        abonoRef: 'Abono a #PAG-8100',
+        monto: 2100.5,
+        fecha: '23 Oct, 2023 - 09:15',
+        icon: '💳',
+      },
+      {
+        id: '3',
+        metodo: 'Efectivo Caja Central',
+        abonoRef: 'Abono a #PAG-9489',
+        monto: 850.0,
+        fecha: '22 Oct, 2023 - 17:45',
+        icon: '💵',
+      },
+    ]);
 
   const [formData, setFormData] = useState({
     idPago: 'PAY-2023-00451',
@@ -121,7 +137,8 @@ export function AbonoVentas() {
   );
 
   const docSeleccionado = transacciones.find(
-    (t) => t.idPago === formData.documentoSeleccionado
+    (t) =>
+      t.idPago === formData.documentoSeleccionado
   );
 
   const montoTotalDoc = docSeleccionado
@@ -137,8 +154,27 @@ export function AbonoVentas() {
 
   const saldoPendienteFinal = Math.max(
     0,
-    montoTotalDoc - (abonadoAnteriorDoc + abonoIngresado)
+    montoTotalDoc -
+      (abonadoAnteriorDoc + abonoIngresado)
   );
+
+  const obtenerEstadoPorMonto = (
+    montoTotal,
+    abonos
+  ) => {
+    if (montoTotal <= 0 || abonos <= 0) {
+      return 'PENDIENTE';
+    }
+
+    const porcentaje =
+      (abonos / montoTotal) * 100;
+
+    if (porcentaje >= 100) {
+      return 'LIQUIDADO';
+    }
+
+    return 'ABONO PARCIAL';
+  };
 
   const handleGuardarAbono = (e) => {
     e.preventDefault();
@@ -155,7 +191,10 @@ export function AbonoVentas() {
       return;
     }
 
-    if (abonoIngresado > docSeleccionado.saldoPendiente) {
+    if (
+      abonoIngresado >
+      docSeleccionado.saldoPendiente
+    ) {
       alert(
         `El abono no puede ser mayor al saldo pendiente de $${docSeleccionado.saldoPendiente.toFixed(
           2
@@ -164,33 +203,40 @@ export function AbonoVentas() {
       return;
     }
 
-    setTransacciones((transaccionesActuales) =>
-      transaccionesActuales.map((t) => {
-        if (t.idPago === formData.documentoSeleccionado) {
-          const nuevosAbonos =
-            t.abonosRealizados + abonoIngresado;
+    setTransacciones(
+      (transaccionesActuales) =>
+        transaccionesActuales.map((t) => {
+          if (
+            t.idPago ===
+            formData.documentoSeleccionado
+          ) {
+            const nuevosAbonos =
+              t.abonosRealizados +
+              abonoIngresado;
 
-          const nuevoSaldo = Math.max(
-            0,
-            t.montoTotal - nuevosAbonos
-          );
+            const nuevoSaldo = Math.max(
+              0,
+              t.montoTotal - nuevosAbonos
+            );
 
-          return {
-            ...t,
-            abonosRealizados: nuevosAbonos,
-            saldoPendiente: nuevoSaldo,
-            metodoPago: formData.metodoPago,
-            estado:
-              nuevoSaldo === 0
-                ? 'LIQUIDADO'
-                : nuevosAbonos > 0
-                ? 'ABONO PARCIAL'
-                : 'PENDIENTE',
-          };
-        }
+            const nuevoEstado =
+              obtenerEstadoPorMonto(
+                t.montoTotal,
+                nuevosAbonos
+              );
 
-        return t;
-      })
+            return {
+              ...t,
+              abonosRealizados: nuevosAbonos,
+              saldoPendiente: nuevoSaldo,
+              metodoPago:
+                formData.metodoPago,
+              estado: nuevoEstado,
+            };
+          }
+
+          return t;
+        })
     );
 
     setRegistroPagos((pagosActuales) => [
@@ -243,15 +289,21 @@ export function AbonoVentas() {
       parseFloat(formEditar.montoTotal) || 0;
 
     const abonosNum =
-      parseFloat(formEditar.abonosRealizados) || 0;
+      parseFloat(
+        formEditar.abonosRealizados
+      ) || 0;
 
     if (montoTotalNum <= 0) {
-      alert('El monto total debe ser mayor a cero.');
+      alert(
+        'El monto total debe ser mayor a cero.'
+      );
       return;
     }
 
     if (abonosNum < 0) {
-      alert('Los abonos no pueden ser negativos.');
+      alert(
+        'Los abonos no pueden ser negativos.'
+      );
       return;
     }
 
@@ -267,27 +319,28 @@ export function AbonoVentas() {
       montoTotalNum - abonosNum
     );
 
-    let nuevoEstado = 'PENDIENTE';
+    const nuevoEstado =
+      obtenerEstadoPorMonto(
+        montoTotalNum,
+        abonosNum
+      );
 
-    if (nuevoSaldo === 0) {
-      nuevoEstado = 'LIQUIDADO';
-    } else if (abonosNum > 0) {
-      nuevoEstado = 'ABONO PARCIAL';
-    }
-
-    setTransacciones((transaccionesActuales) =>
-      transaccionesActuales.map((t) =>
-        t.idPago === itemSeleccionado.idPago
-          ? {
-              ...t,
-              montoTotal: montoTotalNum,
-              abonosRealizados: abonosNum,
-              saldoPendiente: nuevoSaldo,
-              metodoPago: formEditar.metodoPago,
-              estado: nuevoEstado,
-            }
-          : t
-      )
+    setTransacciones(
+      (transaccionesActuales) =>
+        transaccionesActuales.map((t) =>
+          t.idPago ===
+          itemSeleccionado.idPago
+            ? {
+                ...t,
+                montoTotal: montoTotalNum,
+                abonosRealizados: abonosNum,
+                saldoPendiente: nuevoSaldo,
+                metodoPago:
+                  formEditar.metodoPago,
+                estado: nuevoEstado,
+              }
+            : t
+        )
     );
 
     setModoModal(null);
@@ -300,17 +353,94 @@ export function AbonoVentas() {
         `¿Estás seguro de que deseas eliminar la transacción ${idPago}?`
       )
     ) {
-      setTransacciones((transaccionesActuales) =>
-        transaccionesActuales.filter(
-          (t) => t.idPago !== idPago
-        )
+      setTransacciones(
+        (transaccionesActuales) =>
+          transaccionesActuales.filter(
+            (t) => t.idPago !== idPago
+          )
       );
     }
   };
 
+  /*
+   * CAMBIO DE ESTADO
+   *
+   * PENDIENTE
+   * 0% abonado
+   *
+   * ABONO PARCIAL
+   * 1% - 99% abonado
+   *
+   * LIQUIDADO
+   * 100% abonado
+   *
+   * Cada clic mueve el estado:
+   *
+   * PENDIENTE
+   *      ↓
+   * ABONO PARCIAL
+   *      ↓
+   * LIQUIDADO
+   *      ↓
+   * PENDIENTE
+   */
+  const cambiarEstadoPago = (idPago) => {
+    setTransacciones(
+      (transaccionesActuales) =>
+        transaccionesActuales.map((t) => {
+          if (t.idPago !== idPago) {
+            return t;
+          }
+
+          let nuevoEstado;
+          let nuevosAbonos;
+          let nuevoSaldo;
+
+          if (t.estado === 'PENDIENTE') {
+            nuevoEstado = 'ABONO PARCIAL';
+
+            nuevosAbonos =
+              Math.round(
+                (t.montoTotal * 0.5) * 100
+              ) / 100;
+
+            nuevoSaldo =
+              Math.round(
+                (t.montoTotal -
+                  nuevosAbonos) *
+                  100
+              ) / 100;
+          } else if (
+            t.estado === 'ABONO PARCIAL'
+          ) {
+            nuevoEstado = 'LIQUIDADO';
+
+            nuevosAbonos = t.montoTotal;
+
+            nuevoSaldo = 0;
+          } else {
+            nuevoEstado = 'PENDIENTE';
+
+            nuevosAbonos = 0;
+
+            nuevoSaldo = t.montoTotal;
+          }
+
+          return {
+            ...t,
+            abonosRealizados: nuevosAbonos,
+            saldoPendiente: nuevoSaldo,
+            estado: nuevoEstado,
+          };
+        })
+    );
+  };
+
   const handleExportarReporte = () => {
     if (transacciones.length === 0) {
-      alert('No hay transacciones para exportar.');
+      alert(
+        'No hay transacciones para exportar.'
+      );
       return;
     }
 
@@ -342,7 +472,10 @@ export function AbonoVentas() {
         fila
           .map(
             (dato) =>
-              `"${String(dato).replace(/"/g, '""')}"`
+              `"${String(dato).replace(
+                /"/g,
+                '""'
+              )}"`
           )
           .join(',')
       )
@@ -355,11 +488,14 @@ export function AbonoVentas() {
       }
     );
 
-    const url = URL.createObjectURL(blob);
+    const url =
+      URL.createObjectURL(blob);
 
-    const enlace = document.createElement('a');
+    const enlace =
+      document.createElement('a');
 
     enlace.href = url;
+
     enlace.download = `Reporte_Abonos_Ventas_${new Date()
       .toISOString()
       .slice(0, 10)}.csv`;
@@ -373,8 +509,8 @@ export function AbonoVentas() {
     URL.revokeObjectURL(url);
   };
 
-  const transaccionesFiltradas = transacciones.filter(
-    (t) => {
+  const transaccionesFiltradas =
+    transacciones.filter((t) => {
       const textoBusqueda =
         busqueda.toLowerCase();
 
@@ -387,16 +523,21 @@ export function AbonoVentas() {
           .includes(textoBusqueda);
 
       if (filtro === 'Pendientes') {
-        return coincide && t.saldoPendiente > 0;
+        return (
+          coincide &&
+          t.saldoPendiente > 0
+        );
       }
 
       if (filtro === 'Liquidadas') {
-        return coincide && t.saldoPendiente === 0;
+        return (
+          coincide &&
+          t.saldoPendiente === 0
+        );
       }
 
       return coincide;
-    }
-  );
+    });
 
   return (
     <div
@@ -418,9 +559,12 @@ export function AbonoVentas() {
               }
               style={{
                 ...styles.topSearchInput,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
-                color: theme.textMain,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
+                color:
+                  theme.textMain,
               }}
             />
 
@@ -435,9 +579,12 @@ export function AbonoVentas() {
                 onClick={toggleTheme}
                 style={{
                   ...styles.btnThemeToggle,
-                  backgroundColor: theme.bgCard,
-                  borderColor: theme.border,
-                  color: theme.textMain,
+                  backgroundColor:
+                    theme.bgCard,
+                  borderColor:
+                    theme.border,
+                  color:
+                    theme.textMain,
                 }}
                 title="Cambiar tema"
               >
@@ -446,18 +593,27 @@ export function AbonoVentas() {
                   : '🌙 Oscuro'}
               </button>
 
-              <span style={{ cursor: 'pointer' }}>
+              <span
+                style={{
+                  cursor: 'pointer',
+                }}
+              >
                 🔔
               </span>
 
-              <span style={{ cursor: 'pointer' }}>
+              <span
+                style={{
+                  cursor: 'pointer',
+                }}
+              >
                 ❓
               </span>
 
               <div
                 style={{
                   ...styles.userAvatar,
-                  backgroundColor: theme.border,
+                  backgroundColor:
+                    theme.border,
                 }}
               >
                 👤
@@ -465,7 +621,9 @@ export function AbonoVentas() {
             </div>
           </header>
 
-          <div style={styles.headerSection}>
+          <div
+            style={styles.headerSection}
+          >
             <div>
               <h1 style={styles.pageTitle}>
                 Abonos y Ventas Eléctricas
@@ -477,8 +635,8 @@ export function AbonoVentas() {
                   color: theme.textSub,
                 }}
               >
-                Administración de flujos de pago y
-                recuperación de cartera.
+                Administración de flujos de
+                pago y recuperación de cartera.
               </p>
             </div>
 
@@ -490,12 +648,17 @@ export function AbonoVentas() {
             >
               <button
                 type="button"
-                onClick={handleExportarReporte}
+                onClick={
+                  handleExportarReporte
+                }
                 style={{
                   ...styles.btnExportar,
-                  backgroundColor: theme.bgCard,
-                  borderColor: theme.border,
-                  color: theme.textMain,
+                  backgroundColor:
+                    theme.bgCard,
+                  borderColor:
+                    theme.border,
+                  color:
+                    theme.textMain,
                 }}
               >
                 📥 Exportar Reporte
@@ -503,7 +666,9 @@ export function AbonoVentas() {
 
               <button
                 type="button"
-                style={styles.btnRegistrarAbono}
+                style={
+                  styles.btnRegistrarAbono
+                }
                 onClick={() =>
                   setVistaActual('agregar')
                 }
@@ -517,19 +682,26 @@ export function AbonoVentas() {
             <div
               style={{
                 ...styles.metricCard,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
               }}
             >
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  justifyContent:
+                    'space-between',
                 }}
               >
                 <span>⚡</span>
 
-                <span style={styles.badgeGreen}>
+                <span
+                  style={
+                    styles.badgeGreen
+                  }
+                >
                   +12.5%
                 </span>
               </div>
@@ -537,13 +709,16 @@ export function AbonoVentas() {
               <div
                 style={{
                   ...styles.metricLabel,
-                  color: theme.textMuted,
+                  color:
+                    theme.textMuted,
                 }}
               >
                 Monto Total Facturado
               </div>
 
-              <div style={styles.metricValue}>
+              <div
+                style={styles.metricValue}
+              >
                 $
                 {totalFacturado.toLocaleString(
                   'en-US',
@@ -557,14 +732,17 @@ export function AbonoVentas() {
             <div
               style={{
                 ...styles.metricCard,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
               }}
             >
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  justifyContent:
+                    'space-between',
                 }}
               >
                 <span>🪙</span>
@@ -572,7 +750,8 @@ export function AbonoVentas() {
                 <span
                   style={{
                     ...styles.metaText,
-                    color: theme.textMuted,
+                    color:
+                      theme.textMuted,
                   }}
                 >
                   Meta: 90%
@@ -582,13 +761,16 @@ export function AbonoVentas() {
               <div
                 style={{
                   ...styles.metricLabel,
-                  color: theme.textMuted,
+                  color:
+                    theme.textMuted,
                 }}
               >
                 Monto Total Abonado
               </div>
 
-              <div style={styles.metricValue}>
+              <div
+                style={styles.metricValue}
+              >
                 $
                 {totalAbonado.toLocaleString(
                   'en-US',
@@ -602,19 +784,26 @@ export function AbonoVentas() {
             <div
               style={{
                 ...styles.metricCard,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
               }}
             >
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
+                  justifyContent:
+                    'space-between',
                 }}
               >
                 <span>📁</span>
 
-                <span style={styles.badgeWarning}>
+                <span
+                  style={
+                    styles.badgeWarning
+                  }
+                >
                   Requiere Atención
                 </span>
               </div>
@@ -622,7 +811,8 @@ export function AbonoVentas() {
               <div
                 style={{
                   ...styles.metricLabel,
-                  color: theme.textMuted,
+                  color:
+                    theme.textMuted,
                 }}
               >
                 Saldo Pendiente Total
@@ -648,26 +838,33 @@ export function AbonoVentas() {
           <div
             style={{
               ...styles.cardSection,
-              backgroundColor: theme.bgCard,
-              borderColor: theme.border,
+              backgroundColor:
+                theme.bgCard,
+              borderColor:
+                theme.border,
             }}
           >
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
+                justifyContent:
+                  'space-between',
                 alignItems: 'center',
                 marginBottom: '16px',
               }}
             >
-              <h3 style={styles.sectionTitle}>
-                Abonos y Ventas Eléctricas Recientes
+              <h3
+                style={styles.sectionTitle}
+              >
+                Abonos y Ventas Eléctricas
+                Recientes
               </h3>
 
               <div
                 style={{
                   ...styles.filterGroup,
-                  backgroundColor: theme.bgInner,
+                  backgroundColor:
+                    theme.bgInner,
                 }}
               >
                 {[
@@ -677,7 +874,9 @@ export function AbonoVentas() {
                 ].map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setFiltro(tab)}
+                    onClick={() =>
+                      setFiltro(tab)
+                    }
                     style={{
                       ...styles.filterBtn,
                       color:
@@ -688,7 +887,8 @@ export function AbonoVentas() {
                         ? {
                             backgroundColor:
                               theme.activeTab,
-                            fontWeight: 'bold',
+                            fontWeight:
+                              'bold',
                           }
                         : {}),
                     }}
@@ -699,7 +899,11 @@ export function AbonoVentas() {
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div
+              style={{
+                overflowX: 'auto',
+              }}
+            >
               <table style={styles.table}>
                 <thead>
                   <tr>
@@ -712,22 +916,26 @@ export function AbonoVentas() {
                       'MÉTODO DE PAGO',
                       'ESTADO DEL PAGO',
                       'ACCIONES',
-                    ].map((titulo, index) => (
-                      <th
-                        key={titulo}
-                        style={{
-                          ...styles.th,
-                          color: theme.textMuted,
-                          borderColor: theme.border,
-                          textAlign:
-                            index >= 6
-                              ? 'center'
-                              : 'left',
-                        }}
-                      >
-                        {titulo}
-                      </th>
-                    ))}
+                    ].map(
+                      (titulo, index) => (
+                        <th
+                          key={titulo}
+                          style={{
+                            ...styles.th,
+                            color:
+                              theme.textMuted,
+                            borderColor:
+                              theme.border,
+                            textAlign:
+                              index >= 6
+                                ? 'center'
+                                : 'left',
+                          }}
+                        >
+                          {titulo}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
 
@@ -740,7 +948,8 @@ export function AbonoVentas() {
                             ...styles.td,
                             borderColor:
                               theme.borderSoft,
-                            fontWeight: 'bold',
+                            fontWeight:
+                              'bold',
                           }}
                         >
                           {item.idPago}
@@ -751,7 +960,8 @@ export function AbonoVentas() {
                             ...styles.td,
                             borderColor:
                               theme.borderSoft,
-                            color: theme.textSub,
+                            color:
+                              theme.textSub,
                           }}
                         >
                           {item.codigo}
@@ -795,10 +1005,12 @@ export function AbonoVentas() {
                             borderColor:
                               theme.borderSoft,
                             color:
-                              item.saldoPendiente > 0
+                              item.saldoPendiente >
+                              0
                                 ? '#ef4444'
                                 : '#22c55e',
-                            fontWeight: 'bold',
+                            fontWeight:
+                              'bold',
                           }}
                         >
                           $
@@ -825,16 +1037,24 @@ export function AbonoVentas() {
                             ...styles.td,
                             borderColor:
                               theme.borderSoft,
-                            textAlign: 'center',
+                            textAlign:
+                              'center',
                           }}
                         >
-                          <span
-                            style={getBadgeStatusStyle(
+                          <EstadoToggle
+                            estado={
                               item.estado
-                            )}
-                          >
-                            {item.estado}
-                          </span>
+                            }
+                            estados={
+                              ESTADOS.pago
+                            }
+                            width={140}
+                            onClick={() =>
+                              cambiarEstadoPago(
+                                item.idPago
+                              )
+                            }
+                          />
                         </td>
 
                         <td
@@ -842,47 +1062,32 @@ export function AbonoVentas() {
                             ...styles.td,
                             borderColor:
                               theme.borderSoft,
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap',
+                            textAlign:
+                              'center',
+                            whiteSpace:
+                              'nowrap',
                           }}
                         >
-                          <button
-                            style={
-                              styles.actionIconBtn
-                            }
-                            onClick={() =>
+                          <AccionesFila
+                            onVer={() =>
                               handleVer(item)
                             }
-                            title="Ver"
-                          >
-                            👁️
-                          </button>
-
-                          <button
-                            style={
-                              styles.actionIconBtn
+                            onEditar={() =>
+                              handleAbrirEditar(
+                                item
+                              )
                             }
-                            onClick={() =>
-                              handleAbrirEditar(item)
-                            }
-                            title="Editar"
-                          >
-                            ✏️
-                          </button>
-
-                          <button
-                            style={
-                              styles.actionIconBtn
-                            }
-                            onClick={() =>
+                            onEliminar={() =>
                               handleEliminar(
                                 item.idPago
                               )
                             }
-                            title="Eliminar"
-                          >
-                            🗑️
-                          </button>
+                            color={
+                              esOscuro
+                                ? '#cbd5e1'
+                                : '#475569'
+                            }
+                          />
                         </td>
                       </tr>
                     )
@@ -902,9 +1107,12 @@ export function AbonoVentas() {
               placeholder="🔍 Buscar transacción..."
               style={{
                 ...styles.topSearchInput,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
-                color: theme.textMain,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
+                color:
+                  theme.textMain,
               }}
             />
 
@@ -919,9 +1127,12 @@ export function AbonoVentas() {
                 onClick={toggleTheme}
                 style={{
                   ...styles.btnThemeToggle,
-                  backgroundColor: theme.bgCard,
-                  borderColor: theme.border,
-                  color: theme.textMain,
+                  backgroundColor:
+                    theme.bgCard,
+                  borderColor:
+                    theme.border,
+                  color:
+                    theme.textMain,
                 }}
                 title="Cambiar tema"
               >
@@ -931,6 +1142,7 @@ export function AbonoVentas() {
               </button>
 
               <span>🔔</span>
+
               <span>❓</span>
 
               <div
@@ -956,7 +1168,8 @@ export function AbonoVentas() {
 
                   <div
                     style={{
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     Administrador
@@ -966,7 +1179,8 @@ export function AbonoVentas() {
                 <div
                   style={{
                     ...styles.userAvatar,
-                    backgroundColor: theme.border,
+                    backgroundColor:
+                      theme.border,
                   }}
                 >
                   👤
@@ -978,7 +1192,8 @@ export function AbonoVentas() {
           <div
             style={{
               display: 'flex',
-              justifyContent: 'space-between',
+              justifyContent:
+                'space-between',
               alignItems: 'center',
               marginTop: '10px',
             }}
@@ -994,8 +1209,9 @@ export function AbonoVentas() {
                   color: theme.textSub,
                 }}
               >
-                Ingrese los detalles del pago recibido
-                para actualizar el estado de cuenta.
+                Ingrese los detalles del pago
+                recibido para actualizar el
+                estado de cuenta.
               </p>
             </div>
 
@@ -1014,13 +1230,17 @@ export function AbonoVentas() {
 
           <form
             onSubmit={handleGuardarAbono}
-            style={styles.formGridLayout}
+            style={
+              styles.formGridLayout
+            }
           >
             <div
               style={{
                 ...styles.cardSection,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
               }}
             >
               <h3
@@ -1037,7 +1257,8 @@ export function AbonoVentas() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateColumns:
+                    '1fr 1fr',
                   gap: '16px',
                   marginBottom: '16px',
                 }}
@@ -1046,7 +1267,8 @@ export function AbonoVentas() {
                   <label
                     style={{
                       ...styles.fieldLabel,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     ID DE PAGO
@@ -1055,13 +1277,17 @@ export function AbonoVentas() {
                   <input
                     type="text"
                     readOnly
-                    value={formData.idPago}
+                    value={
+                      formData.idPago
+                    }
                     style={{
                       ...styles.readOnlyInput,
                       backgroundColor:
                         theme.bgInner,
-                      borderColor: theme.border,
-                      color: theme.textSub,
+                      borderColor:
+                        theme.border,
+                      color:
+                        theme.textSub,
                     }}
                   />
                 </div>
@@ -1070,7 +1296,8 @@ export function AbonoVentas() {
                   <label
                     style={{
                       ...styles.fieldLabel,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     FECHA DE REGISTRO
@@ -1079,13 +1306,17 @@ export function AbonoVentas() {
                   <input
                     type="text"
                     readOnly
-                    value={formData.fecha}
+                    value={
+                      formData.fecha
+                    }
                     style={{
                       ...styles.readOnlyInput,
                       backgroundColor:
                         theme.bgInner,
-                      borderColor: theme.border,
-                      color: theme.textSub,
+                      borderColor:
+                        theme.border,
+                      color:
+                        theme.textSub,
                     }}
                   />
                 </div>
@@ -1099,7 +1330,8 @@ export function AbonoVentas() {
                 <label
                   style={{
                     ...styles.fieldLabel,
-                    color: theme.textSub,
+                    color:
+                      theme.textSub,
                   }}
                 >
                   COTIZACIÓN ASOCIADA
@@ -1120,22 +1352,27 @@ export function AbonoVentas() {
                     ...styles.selectInput,
                     backgroundColor:
                       theme.inputBg,
-                    borderColor: theme.border,
-                    color: theme.textMain,
+                    borderColor:
+                      theme.border,
+                    color:
+                      theme.textMain,
                   }}
                 >
                   <option value="">
                     Seleccione un documento...
                   </option>
 
-                  {transacciones.map((t) => (
-                    <option
-                      key={t.idPago}
-                      value={t.idPago}
-                    >
-                      {t.idPago} - {t.codigo}
-                    </option>
-                  ))}
+                  {transacciones.map(
+                    (t) => (
+                      <option
+                        key={t.idPago}
+                        value={t.idPago}
+                      >
+                        {t.idPago} -{' '}
+                        {t.codigo}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
 
@@ -1147,7 +1384,8 @@ export function AbonoVentas() {
                 <label
                   style={{
                     ...styles.fieldLabel,
-                    color: theme.textSub,
+                    color:
+                      theme.textSub,
                   }}
                 >
                   MÉTODO DE PAGO
@@ -1171,7 +1409,8 @@ export function AbonoVentas() {
                       onClick={() =>
                         setFormData({
                           ...formData,
-                          metodoPago: metodo,
+                          metodoPago:
+                            metodo,
                         })
                       }
                       style={{
@@ -1202,7 +1441,8 @@ export function AbonoVentas() {
                 <label
                   style={{
                     ...styles.fieldLabel,
-                    color: theme.textSub,
+                    color:
+                      theme.textSub,
                   }}
                 >
                   MONTO DEL NUEVO ABONO
@@ -1213,14 +1453,17 @@ export function AbonoVentas() {
                     ...styles.montoInputContainer,
                     backgroundColor:
                       theme.inputBg,
-                    borderColor: theme.border,
+                    borderColor:
+                      theme.border,
                   }}
                 >
                   <span
                     style={{
                       fontSize: '18px',
-                      fontWeight: 'bold',
-                      color: theme.textMain,
+                      fontWeight:
+                        'bold',
+                      color:
+                        theme.textMain,
                     }}
                   >
                     $
@@ -1243,7 +1486,8 @@ export function AbonoVentas() {
                     }
                     style={{
                       ...styles.montoInput,
-                      color: theme.textMain,
+                      color:
+                        theme.textMain,
                     }}
                   />
                 </div>
@@ -1267,12 +1511,16 @@ export function AbonoVentas() {
                 <button
                   type="button"
                   onClick={() =>
-                    setVistaActual('dashboard')
+                    setVistaActual(
+                      'dashboard'
+                    )
                   }
                   style={{
                     ...styles.btnCancelarForm,
-                    borderColor: theme.border,
-                    color: theme.textMain,
+                    borderColor:
+                      theme.border,
+                    color:
+                      theme.textMain,
                   }}
                 >
                   Cancelar
@@ -1283,7 +1531,8 @@ export function AbonoVentas() {
             <div
               style={{
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection:
+                  'column',
                 gap: '16px',
               }}
             >
@@ -1299,29 +1548,37 @@ export function AbonoVentas() {
                 <div
                   style={{
                     ...styles.summaryItem,
-                    borderColor: theme.border,
+                    borderColor:
+                      theme.border,
                   }}
                 >
                   <span
                     style={{
                       ...styles.summaryLabel,
-                      color: theme.textMuted,
+                      color:
+                        theme.textMuted,
                     }}
                   >
                     MONTO TOTAL
                   </span>
 
                   <div
-                    style={styles.summaryValue}
+                    style={
+                      styles.summaryValue
+                    }
                   >
-                    ${montoTotalDoc.toFixed(2)}
+                    $
+                    {montoTotalDoc.toFixed(
+                      2
+                    )}
                   </div>
                 </div>
 
                 <div
                   style={{
                     ...styles.summaryItem,
-                    borderColor: theme.border,
+                    borderColor:
+                      theme.border,
                   }}
                 >
                   <div
@@ -1334,7 +1591,8 @@ export function AbonoVentas() {
                     <span
                       style={{
                         ...styles.summaryLabel,
-                        color: theme.textMuted,
+                        color:
+                          theme.textMuted,
                       }}
                     >
                       ABONADO ANTERIOR
@@ -1346,17 +1604,22 @@ export function AbonoVentas() {
                   <div
                     style={{
                       ...styles.summaryValue,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
-                    ${abonadoAnteriorDoc.toFixed(2)}
+                    $
+                    {abonadoAnteriorDoc.toFixed(
+                      2
+                    )}
                   </div>
                 </div>
 
                 <div
                   style={{
                     ...styles.summaryItem,
-                    borderColor: theme.border,
+                    borderColor:
+                      theme.border,
                   }}
                 >
                   <div
@@ -1369,7 +1632,8 @@ export function AbonoVentas() {
                     <span
                       style={{
                         ...styles.summaryLabel,
-                        color: theme.textMuted,
+                        color:
+                          theme.textMuted,
                       }}
                     >
                       ABONO ACTUAL
@@ -1377,7 +1641,8 @@ export function AbonoVentas() {
 
                     <span
                       style={{
-                        color: '#22c55e',
+                        color:
+                          '#22c55e',
                       }}
                     >
                       ➕
@@ -1387,10 +1652,14 @@ export function AbonoVentas() {
                   <div
                     style={{
                       ...styles.summaryValue,
-                      color: theme.textMain,
+                      color:
+                        theme.textMain,
                     }}
                   >
-                    ${abonoIngresado.toFixed(2)}
+                    $
+                    {abonoIngresado.toFixed(
+                      2
+                    )}
                   </div>
                 </div>
 
@@ -1406,8 +1675,10 @@ export function AbonoVentas() {
                   <span
                     style={{
                       fontSize: '10px',
-                      color: theme.textMuted,
-                      fontWeight: 'bold',
+                      color:
+                        theme.textMuted,
+                      fontWeight:
+                        'bold',
                     }}
                   >
                     SALDO PENDIENTE FINAL
@@ -1416,8 +1687,10 @@ export function AbonoVentas() {
                   <div
                     style={{
                       fontSize: '26px',
-                      fontWeight: 'bold',
-                      color: '#f87171',
+                      fontWeight:
+                        'bold',
+                      color:
+                        '#f87171',
                       marginTop: '4px',
                     }}
                   >
@@ -1449,9 +1722,12 @@ export function AbonoVentas() {
                   <div>
                     <div
                       style={{
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        color: theme.textMain,
+                        fontSize:
+                          '12px',
+                        fontWeight:
+                          'bold',
+                        color:
+                          theme.textMain,
                       }}
                     >
                       Política de Pagos
@@ -1459,18 +1735,24 @@ export function AbonoVentas() {
 
                     <div
                       style={{
-                        fontSize: '11px',
-                        color: theme.textSub,
-                        marginTop: '4px',
-                        lineHeight: '1.4',
+                        fontSize:
+                          '11px',
+                        color:
+                          theme.textSub,
+                        marginTop:
+                          '4px',
+                        lineHeight:
+                          '1.4',
                       }}
                     >
-                      Los abonos registrados se
-                      reflejan inmediatamente en el
-                      balance del cliente. Asegúrese
-                      de que el comprobante físico o
-                      digital coincida con el monto
-                      ingresado.
+                      Los abonos registrados
+                      se reflejan
+                      inmediatamente en el
+                      balance del cliente.
+                      Asegúrese de que el
+                      comprobante físico o
+                      digital coincida con el
+                      monto ingresado.
                     </div>
                   </div>
                 </div>
@@ -1482,34 +1764,46 @@ export function AbonoVentas() {
 
       {modoModal === 'ver' &&
         itemSeleccionado && (
-          <div style={styles.modalOverlay}>
+          <div
+            style={
+              styles.modalOverlay
+            }
+          >
             <div
               style={{
                 ...styles.modalContent,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
-                color: theme.textMain,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
+                color:
+                  theme.textMain,
               }}
             >
               <h3
                 style={{
                   ...styles.sectionTitle,
-                  marginBottom: '16px',
+                  marginBottom:
+                    '16px',
                 }}
               >
-                Detalles de la Transacción
+                Detalles de la
+                Transacción
               </h3>
 
               <div
                 style={{
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection:
+                    'column',
                   gap: '10px',
                   fontSize: '13px',
                 }}
               >
                 <div>
-                  <strong>ID Pago:</strong>{' '}
+                  <strong>
+                    ID Pago:
+                  </strong>{' '}
                   {itemSeleccionado.idPago}
                 </div>
 
@@ -1558,15 +1852,31 @@ export function AbonoVentas() {
                 </div>
 
                 <div>
-                  <strong>Estado:</strong>{' '}
+                  <strong>
+                    Estado:
+                  </strong>{' '}
 
-                  <span
-                    style={getBadgeStatusStyle(
-                      itemSeleccionado.estado
-                    )}
-                  >
-                    {itemSeleccionado.estado}
-                  </span>
+                  <EstadoToggle
+                    estado={
+                      (
+                        transacciones.find(
+                          (t) =>
+                            t.idPago ===
+                            itemSeleccionado?.idPago
+                        ) ||
+                        itemSeleccionado
+                      )?.estado
+                    }
+                    estados={
+                      ESTADOS.pago
+                    }
+                    width={140}
+                    onClick={() =>
+                      cambiarEstadoPago(
+                        itemSeleccionado.idPago
+                      )
+                    }
+                  />
                 </div>
               </div>
 
@@ -1581,8 +1891,10 @@ export function AbonoVentas() {
                     ...styles.btnExportar,
                     backgroundColor:
                       theme.bgInner,
-                    borderColor: theme.border,
-                    color: theme.textMain,
+                    borderColor:
+                      theme.border,
+                    color:
+                      theme.textMain,
                   }}
                   onClick={() =>
                     setModoModal(null)
@@ -1597,29 +1909,41 @@ export function AbonoVentas() {
 
       {modoModal === 'editar' &&
         itemSeleccionado && (
-          <div style={styles.modalOverlay}>
+          <div
+            style={
+              styles.modalOverlay
+            }
+          >
             <div
               style={{
                 ...styles.modalContent,
-                backgroundColor: theme.bgCard,
-                borderColor: theme.border,
-                color: theme.textMain,
+                backgroundColor:
+                  theme.bgCard,
+                borderColor:
+                  theme.border,
+                color:
+                  theme.textMain,
               }}
             >
               <h3
                 style={{
                   ...styles.sectionTitle,
-                  marginBottom: '16px',
+                  marginBottom:
+                    '16px',
                 }}
               >
-                Editar {itemSeleccionado.idPago}
+                Editar{' '}
+                {itemSeleccionado.idPago}
               </h3>
 
               <form
-                onSubmit={handleGuardarEdicion}
+                onSubmit={
+                  handleGuardarEdicion
+                }
                 style={{
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection:
+                    'column',
                   gap: '12px',
                 }}
               >
@@ -1627,7 +1951,8 @@ export function AbonoVentas() {
                   <label
                     style={{
                       ...styles.fieldLabel,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     MONTO TOTAL
@@ -1664,7 +1989,8 @@ export function AbonoVentas() {
                   <label
                     style={{
                       ...styles.fieldLabel,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     ABONOS REALIZADOS
@@ -1701,7 +2027,8 @@ export function AbonoVentas() {
                   <label
                     style={{
                       ...styles.fieldLabel,
-                      color: theme.textSub,
+                      color:
+                        theme.textSub,
                     }}
                   >
                     MÉTODO DE PAGO
@@ -1781,38 +2108,6 @@ export function AbonoVentas() {
     </div>
   );
 }
-
-const getBadgeStatusStyle = (estado) => {
-  const base = {
-    padding: '4px 10px',
-    borderRadius: '12px',
-    fontSize: '10px',
-    fontWeight: 'bold',
-    display: 'inline-block',
-  };
-
-  if (estado === 'LIQUIDADO') {
-    return {
-      ...base,
-      backgroundColor: '#dcfce7',
-      color: '#166534',
-    };
-  }
-
-  if (estado === 'ABONO PARCIAL') {
-    return {
-      ...base,
-      backgroundColor: '#fef3c7',
-      color: '#92400e',
-    };
-  }
-
-  return {
-    ...base,
-    backgroundColor: '#fee2e2',
-    color: '#b91c1c',
-  };
-};
 
 const styles = {
   appWrapper: {
@@ -1909,7 +2204,8 @@ const styles = {
 
   metricsGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
+    gridTemplateColumns:
+      '1fr 1fr 1fr',
     gap: '16px',
   },
 
@@ -1999,14 +2295,6 @@ const styles = {
     padding: '12px 8px',
     borderBottom: '1px solid',
     fontSize: '12px',
-  },
-
-  actionIconBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '12px',
-    margin: '0 2px',
   },
 
   formGridLayout: {

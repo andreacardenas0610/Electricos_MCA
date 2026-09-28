@@ -61,10 +61,10 @@ export function Dashboard() {
       titulo: 'OPERACIONES',
       items: [
         { id: 'materiales', label: 'Materiales', icon: '📦' },
-        { id: 'servicios', label: 'Catálogo Servicios', icon: '🛠️' },
+        { id: 'servicios', label: ' Servicios', icon: '🛠️' },
         { id: 'Cotizacion', label: 'Cotizaciones', icon: '📋' },
         { id: 'AbonosVentas', label: 'Abonos y Ventas', icon: '💵' },
-        { id: 'programacion', label: 'Programación', icon: '🗓️' },
+        { id: 'programacion', label: 'Agenda', icon: '🗓️' },
         { id: 'ordenes', label: 'Órdenes de Servicio', icon: '🧾' },
       ]
     },
@@ -224,29 +224,6 @@ export function Dashboard() {
         {/* Acciones Inferiores y Perfil */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px', borderTop: '1px solid var(--sidebar-border)' }}>
           
-          {/* Botón de Acción Principal */}
-          <button style={{ 
-            width: '100%', 
-            padding: '11px 14px', 
-            borderRadius: '8px', 
-            border: 'none', 
-            backgroundColor: '#facc15', 
-            color: '#0f172a', 
-            fontWeight: '700', 
-            cursor: 'pointer', 
-            fontSize: '13px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            gap: '8px',
-            boxShadow: '0 4px 14px rgba(250, 204, 21, 0.25)',
-            transition: 'transform 0.15s ease, background-color 0.15s ease'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fde047'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#facc15'}
-          >
-            <span>✨</span> Nueva Venta
-          </button>
 
           {/* Tarjeta de Usuario Conectado */}
           <div style={{ 
