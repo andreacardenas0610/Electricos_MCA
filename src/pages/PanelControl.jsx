@@ -1,5 +1,6 @@
 import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Bell } from 'lucide-react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
 import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
 
@@ -150,7 +151,7 @@ export function PanelControl() {
             {esOscuro ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
           </button>
 
-          <span style={{ cursor: 'pointer', color: tema.textoSecundario }}>🔔</span>
+          <span style={{ cursor: 'pointer', color: tema.textoSecundario }} title="Notificaciones"><Bell size={20} strokeWidth={1.8} /></span>
           <span style={{ cursor: 'pointer', color: tema.textoSecundario }}>❓</span>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: `1px solid ${tema.border}`, paddingLeft: '16px' }}>

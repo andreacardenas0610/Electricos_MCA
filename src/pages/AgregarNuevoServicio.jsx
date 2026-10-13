@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { Bell } from 'lucide-react';
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function AgregarNuevoServicio() {
@@ -73,7 +74,7 @@ export function AgregarNuevoServicio() {
             >
               {esOscuro ? '☀️ Claro' : '🌙 Oscuro'}
             </button>
-            <span style={{ cursor: 'pointer' }}>🔔</span>
+            <span style={{ cursor: 'pointer', color: theme.textSub }} title="Notificaciones"><Bell size={20} strokeWidth={1.8} /></span>
             <span style={{ cursor: 'pointer' }}>❓</span>
             <div style={{ textAlign: 'right', fontSize: '11px' }}>
               <div style={{ fontWeight: 'bold' }}>Admin Usuario</div>

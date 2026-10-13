@@ -1,4 +1,18 @@
 import { useEffect, useState } from 'react';
+import {
+  CalendarPlus,
+  ClipboardCheck,
+  Coins,
+  FileText,
+  Gauge,
+  Handshake,
+  LogOut,
+  PackageOpen,
+  Shield,
+  UserRoundPlus,
+  UsersRound,
+  Wrench,
+} from 'lucide-react';
 import { Login } from './Login';
 import { SplashScreen } from '../components/SplashScreen.jsx';
 
@@ -52,27 +66,27 @@ export function Dashboard() {
     {
       titulo: 'GENERAL',
       items: [
-        { id: 'panel', label: 'Panel de Control', icon: '🎛️' },
-        { id: 'clientes', label: 'Clientes', icon: '🏢' },
-        { id: 'terceros', label: 'Gestión de Terceros', icon: '🤝' },
+        { id: 'panel', label: 'Panel de Control', icon: Gauge },
+        { id: 'clientes', label: 'Clientes', icon: UsersRound },
+        { id: 'terceros', label: 'Terceros', icon: Handshake },
       ]
     },
     {
       titulo: 'OPERACIONES',
       items: [
-        { id: 'materiales', label: 'Materiales', icon: '📦' },
-        { id: 'servicios', label: ' Servicios', icon: '🛠️' },
-        { id: 'Cotizacion', label: 'Cotizaciones', icon: '📋' },
-        { id: 'AbonosVentas', label: 'Abonos y Ventas', icon: '💵' },
-        { id: 'programacion', label: 'Agenda', icon: '🗓️' },
-        { id: 'ordenes', label: 'Órdenes de Servicio', icon: '🧾' },
+        { id: 'materiales', label: 'Materiales', icon: PackageOpen },
+        { id: 'servicios', label: ' Servicios', icon: Wrench },
+        { id: 'Cotizacion', label: 'Cotizaciones', icon: FileText },
+        { id: 'AbonosVentas', label: 'Abonos y Ventas', icon: Coins },
+        { id: 'programacion', label: 'Agenda', icon: CalendarPlus },
+        { id: 'ordenes', label: 'Órdenes de Servicio', icon: ClipboardCheck },
       ]
     },
     {
       titulo: 'ADMINISTRACIÓN',
       items: [
-        { id: 'usuarios', label: 'Gestión Usuarios', icon: '👤' },
-        { id: 'roles', label: 'Roles', icon: '🛡️' },
+        { id: 'usuarios', label: 'Gestión Usuarios', icon: UserRoundPlus },
+        { id: 'roles', label: 'Roles', icon: Shield },
 
        
       ]
@@ -129,22 +143,6 @@ export function Dashboard() {
               </span>
             </div>
 
-            {/* Badge Status */}
-            <span style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '4px', 
-              padding: '4px 8px', 
-              borderRadius: '12px', 
-              backgroundColor: 'rgba(34, 197, 94, 0.15)', 
-              color: '#4ade80', 
-              fontSize: '10px', 
-              fontWeight: '600',
-              border: '1px solid rgba(34, 197, 94, 0.3)' 
-            }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }}></span>
-              v1.0
-            </span>
           </div>
 
           {/* Menú Organizado por Secciones */}
@@ -164,7 +162,7 @@ export function Dashboard() {
                 <span style={{ 
                   fontSize: '10px', 
                   fontWeight: '700', 
-                  color: 'var(--sidebar-muted)', 
+                  color: 'var(--sidebar-muted)',
                   letterSpacing: '1px', 
                   padding: '0 12px 8px 12px', 
                   display: 'block' 
@@ -175,6 +173,7 @@ export function Dashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {grupo.items.map((item) => {
                     const activo = seccionActual === item.id;
+                    const Icono = item.icon;
                     return (
                       <button
                         key={item.id}
@@ -210,7 +209,9 @@ export function Dashboard() {
                           }
                         }}
                       >
-                        <span style={{ fontSize: '16px', opacity: activo ? 1 : 0.8 }}>{item.icon}</span>
+                        <span style={{ width: '24px', display: 'flex', justifyContent: 'center', opacity: activo ? 1 : 0.8 }}>
+                          <Icono size={24} strokeWidth={1.7} />
+                        </span>
                         {item.label}
                       </button>
                     );
@@ -263,19 +264,25 @@ export function Dashboard() {
               style={{ 
                 background: 'none', 
                 border: 'none', 
-                color: '#ef4444', 
                 cursor: 'pointer', 
                 fontSize: '16px', 
                 padding: '4px',
                 borderRadius: '4px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                color: 'var(--sidebar-muted)'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)';
+                e.currentTarget.style.color = '#ef4444';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'var(--sidebar-muted)';
+              }}
             >
-              🚪
+              <LogOut size={20} strokeWidth={1.7} />
             </button>
           </div>
 

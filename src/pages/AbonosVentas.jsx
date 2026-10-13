@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { Bell } from 'lucide-react';
 
 import { ThemeContext } from '../context/ThemeContext.jsx';
 
@@ -596,9 +597,10 @@ export function AbonoVentas() {
               <span
                 style={{
                   cursor: 'pointer',
+                  color: esOscuro ? '#cbd5e1' : '#475569',
                 }}
               >
-                🔔
+                <Bell size={20} strokeWidth={1.8} />
               </span>
 
               <span
@@ -1141,7 +1143,7 @@ export function AbonoVentas() {
                   : '🌙 Oscuro'}
               </button>
 
-              <span>🔔</span>
+              <span style={{ color: esOscuro ? '#cbd5e1' : '#475569' }} title="Notificaciones"><Bell size={20} strokeWidth={1.8} /></span>
 
               <span>❓</span>
 

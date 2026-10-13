@@ -1,17 +1,8 @@
 import { useContext, useState } from 'react';
+import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { RecuperarContrasena, Registro } from './AuthForms';
 import { ThemeContext } from '../context/ThemeContext';
 import '../styles/auth.css';
-
-function IconoContrasena({ visible }) {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
-      <circle cx="12" cy="12" r="2.5" />
-      {visible && <path d="m4 4 16 16" />}
-    </svg>
-  );
-}
 
 export function Login({ onLogin }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
@@ -43,12 +34,12 @@ export function Login({ onLogin }) {
     <main className="auth-page">
       <div className="auth-backdrop" aria-hidden="true" />
       <button className="auth-theme-toggle" type="button" onClick={toggleTheme} aria-label={`Cambiar a modo ${theme === 'dark' ? 'claro' : 'oscuro'}`}>
-        <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+        {theme === 'dark' ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
         {theme === 'dark' ? 'Light' : 'Dark'}
       </button>
       <section className="auth-card" aria-labelledby="login-title">
         <header className="auth-brand">
-          <div className="auth-brand-mark" aria-hidden="true">⚡</div>
+          <div className="auth-brand-mark" aria-hidden="true"><Zap size={18} strokeWidth={2.2} /></div>
           <h1 id="login-title">ELÉCTRICOS MCA</h1>
           <span>GESTIÓN INDUSTRIAL</span>
         </header>
@@ -63,7 +54,7 @@ export function Login({ onLogin }) {
           <label className="auth-field">
             <span>USUARIO</span>
             <div className="auth-input-wrap">
-              <span className="auth-input-icon" aria-hidden="true">👤</span>
+              <UserRound className="auth-input-icon" size={15} aria-hidden="true" />
               <input
                 type="text"
                 value={usuario}
@@ -78,7 +69,7 @@ export function Login({ onLogin }) {
           <label className="auth-field">
             <span>CONTRASEÑA</span>
             <div className="auth-input-wrap">
-              <span className="auth-input-icon" aria-hidden="true">🔒</span>
+              <LockKeyhole className="auth-input-icon" size={15} aria-hidden="true" />
               <input
                 type={mostrarPassword ? 'text' : 'password'}
                 value={password}
@@ -93,7 +84,7 @@ export function Login({ onLogin }) {
                 onClick={() => setMostrarPassword((visible) => !visible)}
                 aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
-                <IconoContrasena visible={mostrarPassword} />
+                {mostrarPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
           </label>
