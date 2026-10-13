@@ -6,8 +6,11 @@ import {
   ClipboardList,
   FileText,
   Handshake,
+  Plus,
   Search,
   Settings,
+  Trash2,
+  TriangleAlert,
   UsersRound,
 } from 'lucide-react';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
@@ -359,7 +362,7 @@ export function ModuloGestion({ modulo }) {
           <h1 style={styles.title}>{config.titulo}</h1>
           <p style={{ ...styles.subtitle, color: tema.subtext }}>{config.subtitulo}</p>
         </div>
-        <button type="button" onClick={abrirNuevo} style={styles.primaryButton}>＋ Nuevo registro</button>
+        <button type="button" onClick={abrirNuevo} style={{ ...styles.primaryButton, display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} strokeWidth={2} /> Nuevo registro</button>
       </header>
 
       <div style={styles.summaryRow}>
@@ -399,7 +402,7 @@ export function ModuloGestion({ modulo }) {
 
       {mostrarFormulario && <div style={styles.overlay}>
         <form onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => setMostrarFormulario(false)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
+          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => setMostrarFormulario(false)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
           <div style={styles.formGrid}>
             {camposFormulario.map(([nombre, etiqueta, tipo, opciones]) => (
               <label
@@ -486,7 +489,7 @@ export function ModuloGestion({ modulo }) {
 
       {registroDetalle && <div style={styles.overlay}>
         <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207' }}>{config.icono} DETALLE</div><h2 style={{ margin: 0 }}>Información completa</h2></div><button type="button" onClick={() => setRegistroDetalle(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
+          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> DETALLE</div><h2 style={{ margin: 0 }}>Información completa</h2></div><button type="button" onClick={() => setRegistroDetalle(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
           <div style={styles.detailGrid}>{camposDetalle.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
           <div style={styles.modalActions}><button type="button" onClick={() => setRegistroDetalle(null)} style={styles.primaryButton}>Cerrar detalle</button></div>
         </div>
@@ -494,9 +497,9 @@ export function ModuloGestion({ modulo }) {
 
       {registroAEliminar && <div style={styles.overlay}>
         <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text, maxWidth: '430px' }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: '#b91c1c' }}>⚠️ CONFIRMAR ACCIÓN</div><h2 style={{ margin: 0 }}>Eliminar registro</h2></div><button type="button" onClick={() => setRegistroAEliminar(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
+          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '7px' }}><TriangleAlert size={15} strokeWidth={1.8} /> CONFIRMAR ACCIÓN</div><h2 style={{ margin: 0 }}>Eliminar registro</h2></div><button type="button" onClick={() => setRegistroAEliminar(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
           <p style={{ color: tema.subtext, fontSize: '14px', lineHeight: 1.5, margin: '0 0 20px' }}>¿Seguro que deseas eliminar <strong style={{ color: tema.text }}>{registroAEliminar.nombre || registroAEliminar.contacto || registroAEliminar.documento || registroAEliminar.codigo}</strong>? Esta acción quitará el registro de la lista.</p>
-          <div style={styles.modalActions}><button type="button" onClick={() => setRegistroAEliminar(null)} style={styles.secondaryButton}>Cancelar</button><button type="button" onClick={confirmarEliminacion} style={styles.deleteButton}>🗑️ Eliminar</button></div>
+          <div style={styles.modalActions}><button type="button" onClick={() => setRegistroAEliminar(null)} style={styles.secondaryButton}>Cancelar</button><button type="button" onClick={confirmarEliminacion} style={{ ...styles.deleteButton, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}><Trash2 size={15} strokeWidth={1.8} /> Eliminar</button></div>
         </div>
       </div>}
 

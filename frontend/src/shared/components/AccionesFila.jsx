@@ -1,52 +1,5 @@
 import React from 'react';
-
-const EyeIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const EditIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#ef4444"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </svg>
-);
+import { Eye, Pencil, Trash2 } from 'lucide-react';
 
 export function AccionesFila({
   onVer,
@@ -80,7 +33,7 @@ export function AccionesFila({
           title="Ver detalle"
           style={btnIcon}
         >
-          <EyeIcon color={color} />
+          <Eye size={15} strokeWidth={1.8} color={color} />
         </button>
       )}
 
@@ -91,7 +44,7 @@ export function AccionesFila({
           title="Editar"
           style={btnIcon}
         >
-          <EditIcon color={color} />
+          <Pencil size={15} strokeWidth={1.8} color={color} />
         </button>
       )}
 
@@ -102,7 +55,7 @@ export function AccionesFila({
           title="Eliminar"
           style={btnIcon}
         >
-          <TrashIcon />
+          <Trash2 size={15} strokeWidth={1.8} color="#ef4444" />
         </button>
       )}
     </div>
