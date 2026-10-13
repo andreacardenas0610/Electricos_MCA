@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -13,19 +13,19 @@ import {
   UsersRound,
   Wrench,
 } from 'lucide-react';
-import { Login } from './Login';
-import { SplashScreen } from '../components/SplashScreen.jsx';
+import { Login } from '../../features/auth/components/Login.jsx';
+import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
 
 // Importación de las vistas
-import { PanelControl } from './PanelControl';
-import { Materiales } from './Materiales';
-import Cotizacion from './Cotizacion';
-import AbonosVentas from './AbonosVentas';
-import { CatalogoServicios } from './CatalogoServicios';
-import { ProgramacionActividades } from './ProgramacionActividades';
-import { GestionUsuarios } from './GestionUsuarios';
-import { GestionRolesPermisos } from './GestionRolesPermisos';
-import { Clientes, GestionTerceros, OrdenesServicio } from './ModulosGestion';
+import { PanelControl } from '../../features/dashboard/components/PanelControl.jsx';
+import { Materiales } from '../../features/inventory/components/Materiales.jsx';
+import Cotizacion from '../../features/quotes/components/Cotizacion.jsx';
+import AbonosVentas from '../../features/payments/components/AbonosVentas.jsx';
+import { CatalogoServicios } from '../../features/services/components/CatalogoServicios.jsx';
+import { ProgramacionActividades } from '../../features/activities/components/ProgramacionActividades.jsx';
+import { GestionUsuarios } from '../../features/users/components/GestionUsuarios.jsx';
+import { GestionRolesPermisos } from '../../features/users/components/GestionRolesPermisos.jsx';
+import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/management/components/ModulosGestion.jsx';
 
 export function Dashboard() {
   const [autenticado, setAutenticado] = useState(() => {

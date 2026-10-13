@@ -1,11 +1,11 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import {
   EstadoToggle,
   ESTADOS,
   estadoSiguiente
-} from '../components/EstadoToggle.jsx';
-import { AccionesFila } from '../components/AccionesFila.jsx';
+} from '../../../shared/components/EstadoToggle.jsx';
+import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
 
 const SearchIcon = ({ color = '#94a3b8' }) => (
   <svg

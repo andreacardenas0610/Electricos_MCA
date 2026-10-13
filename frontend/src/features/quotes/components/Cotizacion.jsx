@@ -1,8 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
 import { CrearCotizacion } from './CrearCotizacion';
-import { ThemeContext } from '../context/ThemeContext.jsx';
-import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
-import { AccionesFila } from '../components/AccionesFila.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
+import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
 
 const CATALOGO_MATERIALES = [
   {

@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { ArrowLeft, LockKeyhole, Mail, Moon, Sun, UserRound, Zap } from 'lucide-react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import '../styles/auth.css';
 
 const leerUsuarios = () => {

@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 
 export function AgregarNuevoServicio() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);

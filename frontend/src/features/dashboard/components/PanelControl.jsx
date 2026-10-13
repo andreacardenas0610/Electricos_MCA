@@ -1,8 +1,8 @@
 import { useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell } from 'lucide-react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
-import { EstadoToggle, ESTADOS, estadoSiguiente } from '../components/EstadoToggle.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
 
 export function PanelControl() {
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);

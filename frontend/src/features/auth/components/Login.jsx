@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { RecuperarContrasena, Registro } from './AuthForms';
-import { ThemeContext } from '../context/ThemeContext';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import '../styles/auth.css';
 
 export function Login({ onLogin }) {

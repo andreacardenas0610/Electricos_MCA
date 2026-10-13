@@ -1,12 +1,47 @@
-# React + Vite
+# Eléctricos MCA
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web de gestión construida con React y Vite. El frontend está en la carpeta `frontend`.
 
-Currently, two official plugins are available:
+## Estructura
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```text
+frontend/
+├── src/
+│   ├── app/
+│   │   └── components/       # Composición principal y navegación
+│   ├── features/
+│   │   ├── activities/components/
+│   │   ├── auth/
+│   │   │   ├── components/
+│   │   │   └── styles/
+│   │   ├── dashboard/components/
+│   │   ├── inventory/components/
+│   │   ├── management/components/ # Clientes, terceros y órdenes de servicio
+│   │   ├── payments/components/
+│   │   ├── quotes/components/
+│   │   ├── services/components/
+│   │   └── users/components/
+│   ├── shared/
+│   │   ├── components/       # Componentes reutilizados entre funcionalidades
+│   │   ├── context/          # Estado visual compartido, como el tema
+│   │   └── styles/           # Estilos globales compartidos
+│   ├── App.jsx
+│   └── main.jsx
+├── index.html
+├── package.json
+└── vite.config.js
+```
 
-## Expanding the ESLint configuration
+Cada funcionalidad mantiene sus pantallas y estilos dentro de su carpeta; los elementos reutilizados están en `shared`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Desarrollo
+
+Desde la raíz del repositorio, entra a `frontend` y ejecuta:
+
+```bash
+cd frontend
+npm install
+npm run dev
+npm run build
+npm run lint
+```

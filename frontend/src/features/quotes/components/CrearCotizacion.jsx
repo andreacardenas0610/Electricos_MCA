@@ -1,7 +1,7 @@
 
 import { useState, useContext } from 'react';
 
-import { ThemeContext } from '../context/ThemeContext.jsx';
+import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 
 // --- CATÁLOGO BASE DE DATOS: CLIENTES (REPRESENTACIÓN DE FK) ---
 
