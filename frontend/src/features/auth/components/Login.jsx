@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { RecuperarContrasena, Registro } from './AuthForms';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
-import { apiRequest } from '../../../shared/api.js';
+import { localRequest } from '../../../shared/localStore.js';
 import '../styles/auth.css';
 
 export function Login({ onLogin }) {
@@ -20,10 +20,9 @@ export function Login({ onLogin }) {
     setEnviando(true);
 
     try {
-      const sesion = await apiRequest('/auth/login', {
+      const sesion = await localRequest('/auth/login', {
         method: 'POST',
         body: { usuario, password, plataforma: 'web' },
-        authenticated: false,
       });
       onLogin(sesion);
     } catch (error) {
@@ -96,17 +95,17 @@ export function Login({ onLogin }) {
           </label>
 
           <button className="auth-submit" type="submit" disabled={enviando}>
-            {enviando ? 'Conectando...' : 'Iniciar sesión'} <span aria-hidden="true">&#8594;</span>
+            {enviando ? 'Ingresando...' : 'Iniciar sesión'} <span aria-hidden="true">&#8594;</span>
           </button>
 
           <div className="auth-links">
             <button type="button" onClick={() => { setError(''); setVista('recuperar'); }}>
               ¿Olvidaste tu contraseña?
             </button>
-            
           </div>
         </form>
 
+        <p className="auth-footer">Acceso inicial local: admin / 1033490682</p>
         <footer className="auth-footer">
           © 2024 Eléctricos MCA S.A.S. - Sistema de control interno
         </footer>

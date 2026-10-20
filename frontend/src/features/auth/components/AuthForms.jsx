@@ -1,12 +1,8 @@
 import { useContext, useState } from 'react';
 import { ArrowLeft, LockKeyhole, Mail, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
+import { getLocalUsers, saveLocalUsers } from '../../../shared/localStore.js';
 import '../styles/auth.css';
-
-const leerUsuarios = () => {
-  const usuarios = localStorage.getItem('mca_usuarios');
-  return usuarios ? JSON.parse(usuarios) : [{ usuario: 'admin', correo: 'admin@electricosmca.com', password: '1033490682' }];
-};
 
 const iconosCampo = {
   usuario: UserRound,
@@ -74,7 +70,7 @@ export function Registro({ onBack }) {
 
   const registrar = (evento) => {
     evento.preventDefault();
-    const usuarios = leerUsuarios();
+    const usuarios = getLocalUsers();
     if (usuarios.some((usuario) => usuario.usuario === datos.usuario || usuario.correo === datos.correo)) {
       setMensaje('El usuario o correo ya está registrado.');
       return;
@@ -87,7 +83,7 @@ export function Registro({ onBack }) {
       setMensaje('Las contraseñas no coinciden.');
       return;
     }
-    localStorage.setItem('mca_usuarios', JSON.stringify([...usuarios, { usuario: datos.usuario, correo: datos.correo, password: datos.password }]));
+    saveLocalUsers([...usuarios, { usuario: datos.usuario, correo: datos.correo, password: datos.password }]);
     setMensaje('Registro exitoso. Ya puedes iniciar sesión.');
     setDatos({ usuario: '', correo: '', password: '', confirmar: '' });
   };
@@ -113,7 +109,7 @@ export function RecuperarContrasena({ onBack }) {
 
   const recuperar = (evento) => {
     evento.preventDefault();
-    const usuarios = leerUsuarios();
+    const usuarios = getLocalUsers();
     const indice = usuarios.findIndex((usuario) => usuario.correo === correo);
     if (indice < 0) {
       setMensaje('No encontramos una cuenta con ese correo.');
@@ -124,7 +120,7 @@ export function RecuperarContrasena({ onBack }) {
       return;
     }
     usuarios[indice] = { ...usuarios[indice], password: nueva };
-    localStorage.setItem('mca_usuarios', JSON.stringify(usuarios));
+    saveLocalUsers(usuarios);
     setMensaje('Contraseña actualizada. Ya puedes iniciar sesión.');
     setNueva('');
   };

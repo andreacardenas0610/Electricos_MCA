@@ -16,7 +16,7 @@ import {
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
-import { apiRequest } from '../../../shared/api.js';
+import { localRequest } from '../../../shared/localStore.js';
 
 const iconosModulo = {
   clientes: {
@@ -204,19 +204,19 @@ export function ModuloGestion({ modulo, usuario }) {
         let nuevosCatalogos = {};
         if (modulo === 'clientes') {
           const [clientes, tiposPropiedad] = await Promise.all([
-            apiRequest(config.apiPath),
-            apiRequest('/clientes/catalogos/tipos-propiedad'),
+            localRequest(config.apiPath),
+            localRequest('/clientes/catalogos/tipos-propiedad'),
           ]);
           lista = clientes;
           nuevosCatalogos = { tiposPropiedad };
         } else if (modulo === 'terceros') {
-          lista = await apiRequest(config.apiPath);
+          lista = await localRequest(config.apiPath);
         } else {
           const [ordenes, catalogoOrdenes, clientes, terceros] = await Promise.all([
-            apiRequest(config.apiPath),
-            apiRequest('/ordenes-servicio/catalogos'),
-            apiRequest('/clientes'),
-            apiRequest('/terceros'),
+            localRequest(config.apiPath),
+            localRequest('/ordenes-servicio/catalogos'),
+            localRequest('/clientes'),
+            localRequest('/terceros'),
           ]);
           lista = ordenes;
           nuevosCatalogos = {
@@ -300,7 +300,7 @@ export function ModuloGestion({ modulo, usuario }) {
         (tipo) => tipo.nombre.toLowerCase() === registro.tipoPropiedad?.toLowerCase(),
       );
       if (!tipoPropiedad) {
-        throw new Error('El tipo de propiedad seleccionado no existe en los catálogos de la base de datos.');
+        throw new Error('El tipo de propiedad seleccionado no existe en los catálogos locales.');
       }
       return {
         nombre_razon_social: registro.nombre,
@@ -375,7 +375,7 @@ export function ModuloGestion({ modulo, usuario }) {
       return;
     }
     try {
-      const respuesta = await apiRequest(
+      const respuesta = await localRequest(
         esNuevoRegistro ? config.apiPath : `${config.apiPath}/${registroEditado.id}`,
         {
           method: esNuevoRegistro ? 'POST' : 'PUT',
@@ -389,7 +389,7 @@ export function ModuloGestion({ modulo, usuario }) {
       setMostrarFormulario(false);
       setRegistroEditado(null);
       setErroresFormulario({});
-      setNotificacion({ tipo: 'success', titulo: 'Registro guardado', mensaje: 'La información se guardó correctamente en la base de datos.' });
+      setNotificacion({ tipo: 'success', titulo: 'Registro guardado', mensaje: 'La información se guardó en este navegador.' });
     } catch (error) {
       setNotificacion({ tipo: 'error', titulo: 'No se pudo guardar', mensaje: error.message });
     }
@@ -405,10 +405,10 @@ export function ModuloGestion({ modulo, usuario }) {
       return;
     }
     try {
-      await apiRequest(`${config.apiPath}/${registroAEliminar.id}`, { method: 'DELETE' });
+      await localRequest(`${config.apiPath}/${registroAEliminar.id}`, { method: 'DELETE' });
       setRegistros((actuales) => actuales.filter((registro) => registro.id !== registroAEliminar.id));
       setRegistroAEliminar(null);
-      setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó de la base de datos.' });
+      setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó del almacenamiento local.' });
     } catch (error) {
       setNotificacion({ tipo: 'error', titulo: 'No se pudo eliminar', mensaje: error.message });
     }
@@ -458,12 +458,12 @@ export function ModuloGestion({ modulo, usuario }) {
     try {
       let respuesta;
       if (modulo === 'ordenes') {
-        respuesta = await apiRequest(`${config.apiPath}/${id}/estado`, {
+        respuesta = await localRequest(`${config.apiPath}/${id}/estado`, {
           method: 'PATCH',
           body: { estado_id: siguiente.id },
         });
       } else {
-        respuesta = await apiRequest(`${config.apiPath}/${id}`, {
+        respuesta = await localRequest(`${config.apiPath}/${id}`, {
           method: 'PUT',
           body: crearPayload({ ...registro, estado: siguiente.nombre }),
         });
@@ -559,7 +559,7 @@ export function ModuloGestion({ modulo, usuario }) {
           <table style={styles.table}>
             <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
             <tbody>
-              {cargando && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>Cargando desde la base de datos...</td></tr>}
+              {cargando && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>Cargando datos locales...</td></tr>}
               {registrosFiltrados.map((registro) => <tr key={registro.id}>
                 {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <EstadoToggle estado={registro[campo]} estados={estadosModulo} onClick={() => cambiarEstado(registro.id)} /> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9', color: tema.subtext }}><IconoFila size={16} strokeWidth={1.8} /></span>{registro[campo]}</span> : registro[campo]}</td>)}
                 <td style={{ ...styles.td, borderColor: tema.rowBorder }}>

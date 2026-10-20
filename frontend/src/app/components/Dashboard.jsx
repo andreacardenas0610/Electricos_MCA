@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
-import { clearApiSession, getApiSession, setApiSession } from '../../shared/api.js';
+import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
 
 // Importación de las vistas
 import { PanelControl } from '../../features/dashboard/components/PanelControl.jsx';
@@ -29,8 +29,8 @@ import { GestionRolesPermisos } from '../../features/users/components/GestionRol
 import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/management/components/ModulosGestion.jsx';
 
 export function Dashboard() {
-  const [sesion, setSesion] = useState(getApiSession);
-  const autenticado = Boolean(sesion?.token);
+  const [sesion, setSesion] = useState(getLocalSession);
+  const autenticado = Boolean(sesion?.usuario);
 
   const [seccionActual, setSeccionActual] = useState('panel');
   const [mostrandoSplash, setMostrandoSplash] = useState(false);
@@ -42,23 +42,14 @@ export function Dashboard() {
     return () => window.clearTimeout(temporizador);
   }, [mostrandoSplash]);
 
-  useEffect(() => {
-    const cerrarSesion = () => {
-      clearApiSession();
-      setSesion(null);
-    };
-    window.addEventListener('mca:unauthorized', cerrarSesion);
-    return () => window.removeEventListener('mca:unauthorized', cerrarSesion);
-  }, []);
-
   const handleLogin = (nuevaSesion) => {
-    setApiSession(nuevaSesion);
+    setLocalSession(nuevaSesion);
     setSesion(nuevaSesion);
     setMostrandoSplash(true);
   };
 
   const handleLogout = () => {
-    clearApiSession();
+    clearLocalSession();
     setSesion(null);
   };
 
