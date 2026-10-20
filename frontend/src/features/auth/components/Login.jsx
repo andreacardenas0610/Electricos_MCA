@@ -2,6 +2,7 @@ import { useContext, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { RecuperarContrasena, Registro } from './AuthForms';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
+import { apiRequest } from '../../../shared/api.js';
 import '../styles/auth.css';
 
 export function Login({ onLogin }) {
@@ -11,19 +12,24 @@ export function Login({ onLogin }) {
   const [error, setError] = useState('');
   const [vista, setVista] = useState('login');
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setEnviando(true);
 
-    const usuariosGuardados = localStorage.getItem('mca_usuarios');
-    const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [{ usuario: 'admin', correo: 'admin@electricosmca.com', password: '1033490682' }];
-    const usuarioValido = usuarios.find((cuenta) => cuenta.usuario === usuario && cuenta.password === password);
-
-    if (usuarioValido) {
-      setError('');
-      onLogin(); // Autoriza el acceso
-    } else {
-      setError('Usuario o contraseña incorrectos');
+    try {
+      const sesion = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: { usuario, password, plataforma: 'web' },
+        authenticated: false,
+      });
+      onLogin(sesion);
+    } catch (error) {
+      setError(error.message || 'No fue posible iniciar sesión.');
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -89,8 +95,8 @@ export function Login({ onLogin }) {
             </div>
           </label>
 
-          <button className="auth-submit" type="submit">
-            Iniciar sesión <span aria-hidden="true">&#8594;</span>
+          <button className="auth-submit" type="submit" disabled={enviando}>
+            {enviando ? 'Conectando...' : 'Iniciar sesión'} <span aria-hidden="true">&#8594;</span>
           </button>
 
           <div className="auth-links">

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
+import { clearApiSession, getApiSession, setApiSession } from '../../shared/api.js';
 
 // Importación de las vistas
 import { PanelControl } from '../../features/dashboard/components/PanelControl.jsx';
@@ -28,9 +29,8 @@ import { GestionRolesPermisos } from '../../features/users/components/GestionRol
 import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/management/components/ModulosGestion.jsx';
 
 export function Dashboard() {
-  const [autenticado, setAutenticado] = useState(() => {
-    return false;
-  });
+  const [sesion, setSesion] = useState(getApiSession);
+  const autenticado = Boolean(sesion?.token);
 
   const [seccionActual, setSeccionActual] = useState('panel');
   const [mostrandoSplash, setMostrandoSplash] = useState(false);
@@ -42,15 +42,24 @@ export function Dashboard() {
     return () => window.clearTimeout(temporizador);
   }, [mostrandoSplash]);
 
-  const handleLogin = () => {
-    localStorage.setItem('isLoggedIn', 'true');
-    setAutenticado(true);
+  useEffect(() => {
+    const cerrarSesion = () => {
+      clearApiSession();
+      setSesion(null);
+    };
+    window.addEventListener('mca:unauthorized', cerrarSesion);
+    return () => window.removeEventListener('mca:unauthorized', cerrarSesion);
+  }, []);
+
+  const handleLogin = (nuevaSesion) => {
+    setApiSession(nuevaSesion);
+    setSesion(nuevaSesion);
     setMostrandoSplash(true);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn');
-    setAutenticado(false);
+    clearApiSession();
+    setSesion(null);
   };
 
   if (!autenticado) {
@@ -249,11 +258,11 @@ export function Dashboard() {
                 fontWeight: 'bold', 
                 fontSize: '12px' 
               }}>
-                AD
+                {(sesion?.usuario?.nombre || 'Administrador').slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>Admin MCA</span>
-                <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>Administrador</span>
+                <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>{sesion?.usuario?.nombre || sesion?.usuario?.usuario}</span>
+                <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>{sesion?.usuario?.rol || 'Administrador'}</span>
               </div>
             </div>
 
@@ -292,14 +301,14 @@ export function Dashboard() {
       {/* ÁREA DE CONTENIDO DINÁMICO */}
       <main style={{ flex: 1, backgroundColor: '#0f172a', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
         {seccionActual === 'panel' && <PanelControl />}
-        {seccionActual === 'clientes' && <Clientes />}
-        {seccionActual === 'terceros' && <GestionTerceros />}
+        {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
+        {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}
         {seccionActual === 'materiales' && <Materiales />}
         {seccionActual === 'servicios' && <CatalogoServicios />}
         {seccionActual === 'Cotizacion' && <Cotizacion />}
         {seccionActual === 'AbonosVentas' && <AbonosVentas />}
         {seccionActual === 'programacion' && <ProgramacionActividades />}
-        {seccionActual === 'ordenes' && <OrdenesServicio />}
+        {seccionActual === 'ordenes' && <OrdenesServicio usuario={sesion?.usuario} />}
         {seccionActual === 'usuarios' && <GestionUsuarios />}
         {seccionActual === 'roles' && <GestionRolesPermisos />}
        

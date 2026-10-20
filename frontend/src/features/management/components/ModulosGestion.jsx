@@ -16,6 +16,7 @@ import {
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
 
 const iconosModulo = {
   clientes: {
@@ -40,7 +41,7 @@ const configuraciones = {
     titulo: 'Clientes',
     subtitulo: 'Empresas y personas que solicitan servicios eléctricos.',
     icono: '🏢',
-    almacenamiento: 'mca_clientes',
+    apiPath: '/clientes',
     columnas: [
       ['nombre', 'Cliente / Razón social'],
       ['tipoPropiedad', 'Tipo de propiedad'],
@@ -57,17 +58,15 @@ const configuraciones = {
       ['telefono', 'Teléfono', 'tel'],
       ['correo', 'Correo electrónico', 'email'],
       ['direccion', 'Dirección', 'text'],
-    ],
-    iniciales: [
-      { id: 1, nombre: 'Constructora Horizonte S.A.', tipoPropiedad: 'Comercial', documento: '900.458.221-1', contacto: 'Laura Villamizar', telefono: '300 458 2211', correo: 'contacto@horizonte.com', direccion: 'Av. Central 450', estado: 'Activo' },
-      { id: 2, nombre: 'Corporativo Andes S.A.', tipoPropiedad: 'Industrial', documento: '901.220.874-6', correo: 'compras@andes.com', contacto: 'Carlos Ruiz', telefono: '310 854 9021', direccion: 'Zona Industrial Sur', estado: 'Activo' },
+      ['municipio', 'Municipio', 'text'],
+      ['departamento', 'Departamento', 'text'],
     ],
   },
   terceros: {
     titulo: 'Terceros',
-    subtitulo: 'Aliados de operación de servicios eléctricos.',
+    subtitulo: 'Técnicos externos asignados a los servicios eléctricos.',
     icono: '🤝',
-    almacenamiento: 'mca_terceros',
+    apiPath: '/terceros',
     columnas: [
       ['documento', 'Documento'],
       ['contacto', 'Nombre del tercero'],
@@ -81,16 +80,12 @@ const configuraciones = {
       ['telefono', 'Teléfono', 'tel'],
       ['correo', 'Correo electrónico', 'email'],
     ],
-    iniciales: [
-      { id: 1, nombre: 'Suministros Eléctricos del Norte', tipo: 'Proveedor', documento: '800.113.442-8', contacto: 'Miguel Torres', telefono: '320 111 2345', correo: 'ventas@suministros.com', estado: 'Activo' },
-      { id: 2, nombre: 'Montajes Industriales MCA', tipo: 'Contratista', documento: '901.765.009-2', contacto: 'Ana Gómez', telefono: '315 776 0088', correo: 'operaciones@montajes.com', estado: 'Activo' },
-    ],
   },
   ordenes: {
     titulo: 'Órdenes de Servicio',
     subtitulo: 'Crea, consulta y actualiza el seguimiento de los trabajos contratados.',
     icono: '🧾',
-    almacenamiento: 'mca_ordenes',
+    apiPath: '/ordenes-servicio',
     columnas: [
       ['codigo', 'Código'],
       ['cliente', 'Cliente'],
@@ -103,63 +98,71 @@ const configuraciones = {
       ['codigo', 'Código de orden', 'text'],
       ['clienteId', 'Cliente', 'fk', 'clientes'],
       ['servicioId', 'Servicio solicitado', 'fk', 'servicios'],
+      ['prioridadId', 'Prioridad', 'fk', 'prioridades'],
       ['fecha', 'Fecha programada', 'date'],
       ['responsableId', 'Técnico responsable', 'fk', 'tecnicos'],
-      ['estado', 'Estado', 'select', ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']],
-    ],
-    iniciales: [
-      { id: 1, codigo: 'OS-9842', clienteId: '2', cliente: 'Corporativo Andes S.A.', servicioId: 'ELEC-002', servicio: 'Mantenimiento Preventivo', fecha: '2026-09-12', responsableId: '1', responsable: 'Carlos Mendoza', estado: 'Programada' },
-      { id: 2, codigo: 'OS-9845', clienteId: '1', cliente: 'Constructora Horizonte S.A.', servicioId: 'ELEC-001', servicio: 'Instalación Eléctrica Residencial', fecha: '2026-09-15', responsableId: '1', responsable: 'Carlos Mendoza', estado: 'Pendiente' },
+      ['estado', 'Estado', 'select', []],
     ],
   },
 };
 
-const catalogosFKIniciales = {
-  clientes: configuraciones.clientes.iniciales,
-  servicios: [
-    { id: 'ELEC-001', codigo: 'ELEC-001', nombre: 'Instalación de redes eléctricas' },
-    { id: 'ELEC-002', codigo: 'ELEC-002', nombre: 'Mantenimiento preventivo y correctivo' },
-    { id: 'ELEC-003', codigo: 'ELEC-003', nombre: 'Diagnóstico y reparación de fallas eléctricas' },
-    { id: 'ELEC-004', codigo: 'ELEC-004', nombre: 'Adecuaciones eléctricas' },
-    { id: 'ELEC-005', codigo: 'ELEC-005', nombre: 'Asesoría técnica especializada' },
-  ],
-  tecnicos: [
-    { id: 1, nombre: 'Carlos Mendoza' },
-    { id: 3, nombre: 'Andrés López' },
-  ],
-};
-
-const obtenerOpcionesFK = (catalogo) => {
-  const almacenamientos = {
-    clientes: 'mca_clientes',
-    servicios: 'mca_catalogo_servicios',
-    tecnicos: 'mca_tecnicos',
-  };
-  const guardados = localStorage.getItem(almacenamientos[catalogo]);
-  const registros = catalogo === 'servicios'
-    ? catalogosFKIniciales.servicios
-    : guardados
-      ? JSON.parse(guardados)
-      : catalogosFKIniciales[catalogo];
-
-  return registros.map((registro) => {
-    const id = catalogo === 'servicios' ? registro.codigo || registro.id : registro.id;
-    const nombre = registro.nombre || registro.nombreServicio || registro.contacto;
-
+function obtenerOpcionesFK(catalogo, catalogos) {
+  return (catalogos[catalogo] || []).map((registro) => {
+    const nombre = registro.nombre || registro.nombre_razon_social || registro.nombre_completo || registro.contacto;
     return {
-      id: String(id),
+      id: String(registro.id),
       nombre,
-      etiqueta: catalogo === 'servicios' ? `${id} - ${nombre}` : nombre,
+      etiqueta: catalogo === 'servicios' ? `${registro.id} - ${nombre}` : nombre,
     };
   });
-};
+}
 
-const siguienteEstado = (modulo, estado) => {
-  const estados = modulo === 'ordenes'
-    ? ['Pendiente', 'Programada', 'En ejecución', 'Finalizada', 'Cancelada']
-    : ['Activo', 'Inactivo'];
-  return estados[(estados.indexOf(estado) + 1) % estados.length];
-};
+function normalizarRegistro(modulo, registro) {
+  if (modulo === 'clientes') {
+    return {
+      id: registro.id,
+      nombre: registro.nombre_razon_social,
+      documento: registro.documento_nit,
+      tipoCliente: registro.tipo_cliente,
+      tipoPropiedad: registro.tipo_propiedad,
+      tipoPropiedadId: registro.tipo_propiedad_id,
+      contacto: registro.contacto || '',
+      telefono: registro.telefono || '',
+      correo: registro.correo_electronico || '',
+      direccion: registro.direccion || '',
+      municipio: registro.municipio || '',
+      departamento: registro.departamento || '',
+      estado: registro.estado,
+    };
+  }
+  if (modulo === 'terceros') {
+    return {
+      id: registro.id,
+      contacto: registro.nombre_completo,
+      documento: registro.documento,
+      empresa: registro.empresa || '',
+      telefono: registro.telefono || '',
+      correo: registro.correo_electronico || '',
+      estado: registro.estado,
+    };
+  }
+  return {
+    id: registro.id,
+    codigo: registro.codigo,
+    clienteId: String(registro.cliente_id),
+    cliente: registro.cliente,
+    servicioId: registro.servicio_id == null ? '' : String(registro.servicio_id),
+    servicio: registro.servicio,
+    prioridadId: String(registro.prioridad_id),
+    prioridad: registro.prioridad,
+    fecha: registro.fecha_programada || '',
+    responsableId: String(registro.tercero_id),
+    responsable: registro.tecnico,
+    estadoId: String(registro.estado_id),
+    estado: registro.estado,
+    descripcion: registro.descripcion || '',
+  };
+}
 
 const fechaLocalISO = () => {
   const hoy = new Date();
@@ -173,7 +176,7 @@ const etiquetaCampoCliente = (nombre, etiqueta, tipoPropiedad) => {
   return etiqueta;
 };
 
-export function ModuloGestion({ modulo }) {
+export function ModuloGestion({ modulo, usuario }) {
   const config = configuraciones[modulo];
   const iconos = iconosModulo[modulo];
   const [IconoTotal, IconoBusqueda, IconoEstado] = iconos.metricas;
@@ -181,20 +184,62 @@ export function ModuloGestion({ modulo }) {
   const IconoEncabezado = iconos.encabezado;
   const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
   const esOscuro = temaGlobal === 'dark';
-  const [registros, setRegistros] = useState(() => {
-    const guardados = localStorage.getItem(config.almacenamiento);
-    return guardados ? JSON.parse(guardados) : config.iniciales;
-  });
+  const [registros, setRegistros] = useState([]);
+  const [catalogos, setCatalogos] = useState({});
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [registroEditado, setRegistroEditado] = useState(null);
   const [registroDetalle, setRegistroDetalle] = useState(null);
   const [registroAEliminar, setRegistroAEliminar] = useState(null);
   const [notificacion, setNotificacion] = useState(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [erroresFormulario, setErroresFormulario] = useState({});
 
   useEffect(() => {
-    localStorage.setItem(config.almacenamiento, JSON.stringify(registros));
-  }, [config.almacenamiento, registros]);
+    let vigente = true;
+    const cargarDatos = async () => {
+      setCargando(true);
+      try {
+        let lista;
+        let nuevosCatalogos = {};
+        if (modulo === 'clientes') {
+          const [clientes, tiposPropiedad] = await Promise.all([
+            apiRequest(config.apiPath),
+            apiRequest('/clientes/catalogos/tipos-propiedad'),
+          ]);
+          lista = clientes;
+          nuevosCatalogos = { tiposPropiedad };
+        } else if (modulo === 'terceros') {
+          lista = await apiRequest(config.apiPath);
+        } else {
+          const [ordenes, catalogoOrdenes, clientes, terceros] = await Promise.all([
+            apiRequest(config.apiPath),
+            apiRequest('/ordenes-servicio/catalogos'),
+            apiRequest('/clientes'),
+            apiRequest('/terceros'),
+          ]);
+          lista = ordenes;
+          nuevosCatalogos = {
+            ...catalogoOrdenes,
+            clientes,
+            tecnicos: terceros,
+          };
+        }
+        if (vigente) {
+          setRegistros(lista.map((registro) => normalizarRegistro(modulo, registro)));
+          setCatalogos(nuevosCatalogos);
+        }
+      } catch (error) {
+        if (vigente) {
+          setNotificacion({ tipo: 'error', titulo: 'No se pudieron cargar los datos', mensaje: error.message });
+        }
+      } finally {
+        if (vigente) setCargando(false);
+      }
+    };
+    cargarDatos();
+    return () => { vigente = false; };
+  }, [config.apiPath, modulo]);
 
   useEffect(() => {
     if (!notificacion) return undefined;
@@ -217,69 +262,164 @@ export function ModuloGestion({ modulo }) {
   };
 
   const abrirNuevo = () => {
-    const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [nombre, ['select', 'segmented'].includes(tipo) ? opciones[0] : '']));
+    const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [
+      nombre,
+      ['select', 'segmented'].includes(tipo)
+        ? opciones?.[0] || ''
+        : '',
+    ]));
+    if (modulo === 'clientes') {
+      valoresIniciales.tipoPropiedad = 'Residencial';
+    }
+    if (modulo === 'ordenes') {
+      const pendiente = catalogos.estados?.find((estado) => estado.nombre.toLowerCase() === 'pendiente');
+      valoresIniciales.estado = pendiente?.nombre || catalogos.estados?.[0]?.nombre || '';
+      valoresIniciales.prioridadId = String(catalogos.prioridades?.[0]?.id || '');
+      valoresIniciales.prioridad = catalogos.prioridades?.[0]?.nombre || '';
+    }
     if (modulo === 'ordenes') valoresIniciales.codigo = generarCodigoOrden();
     setRegistroEditado({ id: Date.now(), ...valoresIniciales });
+    setErroresFormulario({});
     setMostrarFormulario(true);
   };
 
   const seleccionarFK = (nombre, catalogo, id) => {
-    const opcion = obtenerOpcionesFK(catalogo).find((item) => item.id === id);
+    const opcion = obtenerOpcionesFK(catalogo, catalogos).find((item) => item.id === id);
     const campoNombre = nombre.replace(/Id$/, '');
     setRegistroEditado((actual) => ({
       ...actual,
       [nombre]: id,
       [campoNombre]: opcion?.nombre || '',
     }));
+    setErroresFormulario((actuales) => ({ ...actuales, [nombre]: '' }));
   };
 
-  const guardarRegistro = (evento) => {
+  const crearPayload = (registro) => {
+    if (modulo === 'clientes') {
+      const tipoPropiedad = catalogos.tiposPropiedad?.find(
+        (tipo) => tipo.nombre.toLowerCase() === registro.tipoPropiedad?.toLowerCase(),
+      );
+      if (!tipoPropiedad) {
+        throw new Error('El tipo de propiedad seleccionado no existe en los catálogos de la base de datos.');
+      }
+      return {
+        nombre_razon_social: registro.nombre,
+        documento_nit: registro.documento,
+        tipo_cliente: registro.tipoPropiedad === 'Residencial' ? 'Natural' : 'Jurídico',
+        tipo_propiedad_id: tipoPropiedad.id,
+        contacto: registro.contacto || '',
+        telefono: registro.telefono || '',
+        correo_electronico: registro.correo || '',
+        direccion: registro.direccion || '',
+        municipio: registro.municipio || '',
+        departamento: registro.departamento || '',
+        estado: registro.estado || 'Activo',
+      };
+    }
+    if (modulo === 'terceros') {
+      return {
+        nombre_completo: registro.contacto,
+        documento: registro.documento,
+        telefono: registro.telefono || '',
+        correo_electronico: registro.correo || '',
+        estado: registro.estado || 'Activo',
+      };
+    }
+    return {
+      codigo: registro.codigo,
+      cliente_id: Number(registro.clienteId),
+      servicio_id: Number(registro.servicioId),
+      fecha_programada: registro.fecha || null,
+      tercero_id: Number(registro.responsableId),
+      prioridad_id: Number(registro.prioridadId),
+      estado_id: Number(catalogos.estados?.find((estado) => estado.nombre === registro.estado)?.id || registro.estadoId),
+      descripcion: registro.descripcion || '',
+    };
+  };
+
+  const guardarRegistro = async (evento) => {
     evento.preventDefault();
     if (!registroEditado) {
       setNotificacion({ tipo: 'error', titulo: 'No se pudo guardar', mensaje: 'No hay información válida para guardar.' });
       return;
     }
     const esNuevoRegistro = !registros.some((registro) => registro.id === registroEditado.id);
-    if (modulo === 'ordenes' && registroEditado.estado === 'Programada' && !registroEditado.fecha) {
-      setNotificacion({ tipo: 'error', titulo: 'Fecha requerida', mensaje: 'Debes seleccionar una fecha para programar la orden.' });
+    const errores = {};
+    camposFormulario.forEach(([nombre, etiqueta]) => {
+      const esFechaOpcional = modulo === 'ordenes'
+        && nombre === 'fecha'
+        && registroEditado.estado?.toLowerCase() !== 'programada';
+      const valor = registroEditado[nombre];
+      if (!esFechaOpcional && !String(valor ?? '').trim()) {
+        errores[nombre] = `El campo ${etiqueta.toLowerCase()} es obligatorio.`;
+      }
+    });
+    if (
+      (modulo === 'clientes' || modulo === 'terceros')
+      && registroEditado.correo
+      && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registroEditado.correo.trim())
+    ) {
+      errores.correo = 'Ingresa un correo electrónico válido.';
+    }
+    if (Object.keys(errores).length) {
+      setErroresFormulario(errores);
       return;
     }
     if (
       modulo === 'ordenes'
-      && registroEditado.estado === 'Programada'
+      && registroEditado.estado?.toLowerCase() === 'programada'
       && registroEditado.fecha
       && registroEditado.fecha < fechaLocalISO()
     ) {
-      setNotificacion({ tipo: 'error', titulo: 'Fecha no válida', mensaje: 'La fecha programada no puede ser anterior al día de hoy.' });
+      setErroresFormulario({ fecha: 'La fecha programada no puede ser anterior al día de hoy.' });
       return;
     }
-    const registroAGuardar = modulo === 'ordenes' && esNuevoRegistro
-      ? { ...registroEditado, estado: registroEditado.fecha ? 'Programada' : 'Pendiente' }
-      : registroEditado;
-    setRegistros((actuales) => {
-      const existe = actuales.some((registro) => registro.id === registroAGuardar.id);
-      return existe ? actuales.map((registro) => registro.id === registroAGuardar.id ? registroAGuardar : registro) : [registroAGuardar, ...actuales];
-    });
-    setMostrarFormulario(false);
-    setRegistroEditado(null);
-    setNotificacion({ tipo: 'success', titulo: 'Registro guardado', mensaje: 'La información se guardó correctamente.' });
+    try {
+      const respuesta = await apiRequest(
+        esNuevoRegistro ? config.apiPath : `${config.apiPath}/${registroEditado.id}`,
+        {
+          method: esNuevoRegistro ? 'POST' : 'PUT',
+          body: crearPayload(registroEditado),
+        },
+      );
+      const registroGuardado = normalizarRegistro(modulo, respuesta);
+      setRegistros((actuales) => esNuevoRegistro
+        ? [registroGuardado, ...actuales]
+        : actuales.map((registro) => registro.id === registroGuardado.id ? registroGuardado : registro));
+      setMostrarFormulario(false);
+      setRegistroEditado(null);
+      setErroresFormulario({});
+      setNotificacion({ tipo: 'success', titulo: 'Registro guardado', mensaje: 'La información se guardó correctamente en la base de datos.' });
+    } catch (error) {
+      setNotificacion({ tipo: 'error', titulo: 'No se pudo guardar', mensaje: error.message });
+    }
   };
 
   const eliminarRegistro = (id) => {
     setRegistroAEliminar(registros.find((registro) => registro.id === id));
   };
 
-  const confirmarEliminacion = () => {
+  const confirmarEliminacion = async () => {
     if (!registroAEliminar) {
       setNotificacion({ tipo: 'error', titulo: 'No se pudo eliminar', mensaje: 'No se encontró el registro seleccionado.' });
       return;
     }
-    setRegistros((actuales) => actuales.filter((registro) => registro.id !== registroAEliminar.id));
-    setRegistroAEliminar(null);
-    setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó correctamente.' });
+    try {
+      await apiRequest(`${config.apiPath}/${registroAEliminar.id}`, { method: 'DELETE' });
+      setRegistros((actuales) => actuales.filter((registro) => registro.id !== registroAEliminar.id));
+      setRegistroAEliminar(null);
+      setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó de la base de datos.' });
+    } catch (error) {
+      setNotificacion({ tipo: 'error', titulo: 'No se pudo eliminar', mensaje: error.message });
+    }
   };
 
-  const estadosModulo = modulo === 'ordenes' ? ESTADOS.orden : ESTADOS.usuario;
+  const estadosModulo = modulo === 'ordenes'
+    ? (catalogos.estados || []).map((estado) => ({
+      ...ESTADOS.orden.find((item) => item.nombre.toLowerCase() === estado.nombre.toLowerCase()) || ESTADOS.orden[0],
+      nombre: estado.nombre,
+    }))
+    : ESTADOS.usuario;
   const camposFormulario = modulo === 'clientes'
     ? config.campos
       .filter(([nombre]) => registroEditado?.tipoPropiedad !== 'Residencial' || nombre !== 'contacto')
@@ -290,6 +430,11 @@ export function ModuloGestion({ modulo }) {
         opciones,
       ])
     : config.campos;
+  const camposFormularioConCatalogos = camposFormulario.map(([nombre, etiqueta, tipo, opciones]) => (
+    modulo === 'ordenes' && nombre === 'estado'
+      ? [nombre, etiqueta, tipo, catalogos.estados?.map((estado) => estado.nombre) || []]
+      : [nombre, etiqueta, tipo, opciones]
+  ));
   const camposDetalle = modulo === 'clientes'
     ? config.campos
       .filter(([nombre]) => registroDetalle?.tipoPropiedad !== 'Residencial' || nombre !== 'contacto')
@@ -302,31 +447,62 @@ export function ModuloGestion({ modulo }) {
     && registroEditado
     && !registros.some((registro) => registro.id === registroEditado.id);
 
-  const cambiarEstado = (id) => {
-    setRegistros((actuales) => actuales.map((registro) => registro.id === id ? { ...registro, estado: estadoSiguiente(estadosModulo, registro.estado) } : registro));
+  const cambiarEstado = async (id) => {
+    const registro = registros.find((item) => item.id === id);
+    if (!registro) return;
+    const siguiente = modulo === 'ordenes'
+      ? catalogos.estados?.[(catalogos.estados.findIndex((item) => item.nombre === registro.estado) + 1) % catalogos.estados.length]
+      : { nombre: estadoSiguiente(estadosModulo, registro.estado) };
+    if (!siguiente) return;
+
+    try {
+      let respuesta;
+      if (modulo === 'ordenes') {
+        respuesta = await apiRequest(`${config.apiPath}/${id}/estado`, {
+          method: 'PATCH',
+          body: { estado_id: siguiente.id },
+        });
+      } else {
+        respuesta = await apiRequest(`${config.apiPath}/${id}`, {
+          method: 'PUT',
+          body: crearPayload({ ...registro, estado: siguiente.nombre }),
+        });
+      }
+      const actualizado = normalizarRegistro(modulo, respuesta);
+      setRegistros((actuales) => actuales.map((item) => item.id === id ? actualizado : item));
+    } catch (error) {
+      setNotificacion({ tipo: 'error', titulo: 'No se pudo cambiar el estado', mensaje: error.message });
+    }
   };
 
   const cambiarCampoFormulario = (nombre, valor) => {
     setRegistroEditado((actual) => {
       const actualizacion = { ...actual, [nombre]: valor };
-      if (nombre === 'tipoPropiedad' && valor === 'Residencial') actualizacion.contacto = '';
-      if (modulo === 'ordenes' && nombre === 'estado' && valor === 'Pendiente') {
+      if (modulo === 'ordenes' && nombre === 'estado' && valor.toLowerCase() === 'pendiente') {
         actualizacion.fecha = '';
       }
       if (
         modulo === 'ordenes'
         && nombre === 'estado'
-        && valor === 'Programada'
+        && valor.toLowerCase() === 'programada'
         && actualizacion.fecha
         && actualizacion.fecha < fechaLocalISO()
       ) {
         actualizacion.fecha = '';
       }
       if (modulo === 'ordenes' && nombre === 'fecha' && !registros.some((registro) => registro.id === actual.id)) {
-        actualizacion.estado = valor ? 'Programada' : 'Pendiente';
+        const estadoDestino = valor ? 'programada' : 'pendiente';
+        actualizacion.estado = catalogos.estados?.find(
+          (estado) => estado.nombre.toLowerCase() === estadoDestino,
+        )?.nombre || '';
       }
       return actualizacion;
     });
+    setErroresFormulario((errores) => ({
+      ...errores,
+      [nombre]: '',
+      ...(nombre === 'tipoPropiedad' && valor === 'Residencial' ? { contacto: '' } : {}),
+    }));
   };
 
   const tema = esOscuro ? {
@@ -349,8 +525,8 @@ export function ModuloGestion({ modulo }) {
           </button>
           <div style={{ ...styles.userTools, borderLeft: `1px solid ${tema.border}`, paddingLeft: '12px' }}>
             <div style={styles.userInfo}>
-              <strong style={{ color: tema.text }}>Admin Documentos</strong>
-              <span style={{ color: tema.subtext }}>DEPARTAMENTO TÉCNICO</span>
+              <strong style={{ color: tema.text }}>{usuario?.nombre || usuario?.usuario || 'Usuario'}</strong>
+              <span style={{ color: tema.subtext }}>{usuario?.rol || 'Administrador'}</span>
             </div>
             <div style={{ ...styles.userAvatar, backgroundColor: esOscuro ? '#2d3655' : '#e2e8f0' }}>👤</div>
           </div>
@@ -362,7 +538,7 @@ export function ModuloGestion({ modulo }) {
           <h1 style={styles.title}>{config.titulo}</h1>
           <p style={{ ...styles.subtitle, color: tema.subtext }}>{config.subtitulo}</p>
         </div>
-        <button type="button" onClick={abrirNuevo} style={{ ...styles.primaryButton, display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} strokeWidth={2} /> Nuevo registro</button>
+        <button type="button" onClick={abrirNuevo} disabled={cargando} style={{ ...styles.primaryButton, display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: cargando ? 0.6 : 1 }}><Plus size={16} strokeWidth={2} /> Nuevo registro</button>
       </header>
 
       <div style={styles.summaryRow}>
@@ -383,28 +559,33 @@ export function ModuloGestion({ modulo }) {
           <table style={styles.table}>
             <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
             <tbody>
+              {cargando && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>Cargando desde la base de datos...</td></tr>}
               {registrosFiltrados.map((registro) => <tr key={registro.id}>
                 {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <EstadoToggle estado={registro[campo]} estados={estadosModulo} onClick={() => cambiarEstado(registro.id)} /> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9', color: tema.subtext }}><IconoFila size={16} strokeWidth={1.8} /></span>{registro[campo]}</span> : registro[campo]}</td>)}
                 <td style={{ ...styles.td, borderColor: tema.rowBorder }}>
                   <AccionesFila
                     onVer={() => setRegistroDetalle(registro)}
-                    onEditar={() => { setRegistroEditado(registro); setMostrarFormulario(true); }}
+                    onEditar={() => {
+                      setRegistroEditado(registro);
+                      setErroresFormulario({});
+                      setMostrarFormulario(true);
+                    }}
                     onEliminar={() => eliminarRegistro(registro.id)}
                     color={esOscuro ? '#cbd5e1' : '#475569'}
                   />
                 </td>
               </tr>)}
-              {registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
+              {!cargando && registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
       {mostrarFormulario && <div style={styles.overlay}>
-        <form onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => setMostrarFormulario(false)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
+        <form noValidate onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
+          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => { setMostrarFormulario(false); setErroresFormulario({}); }} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
           <div style={styles.formGrid}>
-            {camposFormulario.map(([nombre, etiqueta, tipo, opciones]) => (
+            {camposFormularioConCatalogos.map(([nombre, etiqueta, tipo, opciones]) => (
               <label
                 key={nombre}
                 style={{
@@ -416,13 +597,13 @@ export function ModuloGestion({ modulo }) {
                 {etiqueta}
                 {tipo === 'fk' ? (
                   <select
-                    required
                     value={String(registroEditado?.[nombre] || '')}
                     onChange={(evento) => seleccionarFK(nombre, opciones, evento.target.value)}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}
+                    aria-invalid={Boolean(erroresFormulario[nombre])}
+                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
                   >
                     <option value="">Selecciona {etiqueta.toLowerCase()}...</option>
-                    {obtenerOpcionesFK(opciones).map((opcion) => (
+                    {obtenerOpcionesFK(opciones, catalogos).map((opcion) => (
                       <option key={opcion.id} value={opcion.id}>{opcion.etiqueta}</option>
                     ))}
                   </select>
@@ -431,22 +612,22 @@ export function ModuloGestion({ modulo }) {
                     type="text"
                     value={registroEditado?.[nombre] || ''}
                     readOnly
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}
+                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
                   />
                 ) : tipo === 'select' ? (
                   <select
-                    required
                     value={registroEditado?.[nombre] || ''}
                     onChange={(evento) => cambiarCampoFormulario(nombre, evento.target.value)}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}
+                    aria-invalid={Boolean(erroresFormulario[nombre])}
+                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
                   >
                     {(modulo === 'ordenes' && nombre === 'estado'
-                      ? opciones.filter((opcion) => ['Pendiente', 'Programada', 'Cancelada'].includes(opcion))
+                      ? opciones.filter((opcion) => ['pendiente', 'programada', 'cancelada'].includes(opcion.toLowerCase()))
                       : opciones
                     ).map((opcion) => <option key={opcion}>{opcion}</option>)}
                   </select>
                 ) : tipo === 'segmented' ? (
-                  <div role="radiogroup" aria-label={etiqueta} style={styles.segmentedControl}>
+                  <div role="radiogroup" aria-label={etiqueta} aria-invalid={Boolean(erroresFormulario[nombre])} style={styles.segmentedControl}>
                     {opciones.map((opcion) => (
                       <button
                         key={opcion}
@@ -467,23 +648,23 @@ export function ModuloGestion({ modulo }) {
                   </div>
                 ) : (
                   <input
-                    required={
-                      !(modulo === 'ordenes' && nombre === 'fecha')
-                      || (modulo === 'ordenes' && nombre === 'fecha' && registroEditado?.estado === 'Programada')
-                    }
                     type={tipo}
                     min={modulo === 'ordenes' && nombre === 'fecha' ? fechaLocalISO() : undefined}
                     disabled={modulo === 'ordenes' && nombre === 'fecha' && !esNuevaOrden && registroEditado?.estado === 'Pendiente'}
                     readOnly={modulo === 'ordenes' && nombre === 'codigo'}
                     value={registroEditado?.[nombre] || ''}
                     onChange={(evento) => cambiarCampoFormulario(nombre, evento.target.value)}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }}
+                    aria-invalid={Boolean(erroresFormulario[nombre])}
+                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
                   />
+                )}
+                {erroresFormulario[nombre] && (
+                  <span role="alert" style={styles.fieldError}>{erroresFormulario[nombre]}</span>
                 )}
               </label>
             ))}
           </div>
-          <div style={styles.modalActions}><button type="button" onClick={() => setMostrarFormulario(false)} style={styles.secondaryButton}>Cancelar</button><button type="submit" style={styles.primaryButton}>Guardar registro</button></div>
+          <div style={styles.modalActions}><button type="button" onClick={() => { setMostrarFormulario(false); setErroresFormulario({}); }} style={styles.secondaryButton}>Cancelar</button><button type="submit" style={styles.primaryButton}>Guardar registro</button></div>
         </form>
       </div>}
 
@@ -514,9 +695,9 @@ export function ModuloGestion({ modulo }) {
   );
 }
 
-export function Clientes() { return <ModuloGestion modulo="clientes" />; }
-export function GestionTerceros() { return <ModuloGestion modulo="terceros" />; }
-export function OrdenesServicio() { return <ModuloGestion modulo="ordenes" />; }
+export function Clientes({ usuario }) { return <ModuloGestion modulo="clientes" usuario={usuario} />; }
+export function GestionTerceros({ usuario }) { return <ModuloGestion modulo="terceros" usuario={usuario} />; }
+export function OrdenesServicio({ usuario }) { return <ModuloGestion modulo="ordenes" usuario={usuario} />; }
 
 const styles = {
   page: { minHeight: '100vh', padding: '32px', backgroundColor: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' },
@@ -560,6 +741,7 @@ const styles = {
   detailItem: { display: 'flex', flexDirection: 'column', gap: '5px', borderBottom: '1px solid', padding: '9px 0', fontSize: '13px' },
   label: { display: 'flex', flexDirection: 'column', gap: '6px', color: '#475569', fontSize: '12px', fontWeight: '700' },
   input: { width: '100%', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px', color: '#0f172a', backgroundColor: '#fff', fontSize: '13px' },
+  fieldError: { display: 'block', marginTop: '5px', color: '#dc2626', fontSize: '12px', lineHeight: 1.4, fontWeight: '500' },
   segmentedControl: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' },
   segmentedButton: { border: '1px solid', borderRadius: '6px', padding: '10px 8px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' },
   modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' },
