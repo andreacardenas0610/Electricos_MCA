@@ -1,8 +1,7 @@
 import { useContext, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
-import { RecuperarContrasena, Registro } from './AuthForms';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
-import { localRequest } from '../../../shared/localStore.js';
+import { apiRequest } from '../../../shared/api.js';
 import '../styles/auth.css';
 
 export function Login({ onLogin }) {
@@ -10,7 +9,6 @@ export function Login({ onLogin }) {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [vista, setVista] = useState('login');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
@@ -20,7 +18,7 @@ export function Login({ onLogin }) {
     setEnviando(true);
 
     try {
-      const sesion = await localRequest('/auth/login', {
+      const sesion = await apiRequest('/auth/login', {
         method: 'POST',
         body: { usuario, password, plataforma: 'web' },
       });
@@ -31,9 +29,6 @@ export function Login({ onLogin }) {
       setEnviando(false);
     }
   };
-
-  if (vista === 'registro') return <Registro onBack={() => setVista('login')} />;
-  if (vista === 'recuperar') return <RecuperarContrasena onBack={() => setVista('login')} />;
 
   return (
     <main className="auth-page">
@@ -98,14 +93,8 @@ export function Login({ onLogin }) {
             {enviando ? 'Ingresando...' : 'Iniciar sesión'} <span aria-hidden="true">&#8594;</span>
           </button>
 
-          <div className="auth-links">
-            <button type="button" onClick={() => { setError(''); setVista('recuperar'); }}>
-              ¿Olvidaste tu contraseña?
-            </button>
-          </div>
         </form>
 
-        <p className="auth-footer">Acceso inicial local: admin / 1033490682</p>
         <footer className="auth-footer">
           © 2024 Eléctricos MCA S.A.S. - Sistema de control interno
         </footer>

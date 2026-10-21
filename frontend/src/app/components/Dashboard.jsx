@@ -19,6 +19,7 @@ import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
 import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
 import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
+import { API_SESSION_EXPIRED } from '../../shared/api.js';
 
 // Importación de las vistas
 import { PanelControl } from '../../features/dashboard/components/PanelControl.jsx';
@@ -45,6 +46,15 @@ export function Dashboard() {
     const temporizador = window.setTimeout(() => setMostrandoSplash(false), 1800);
     return () => window.clearTimeout(temporizador);
   }, [mostrandoSplash]);
+
+  useEffect(() => {
+    const cerrarSesionExpirada = () => {
+      clearLocalSession();
+      setSesion(null);
+    };
+    window.addEventListener(API_SESSION_EXPIRED, cerrarSesionExpirada);
+    return () => window.removeEventListener(API_SESSION_EXPIRED, cerrarSesionExpirada);
+  }, []);
 
   const handleLogin = (nuevaSesion) => {
     setLocalSession(nuevaSesion);

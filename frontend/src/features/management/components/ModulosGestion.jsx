@@ -18,6 +18,9 @@ import {
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import { CampoDepartamento, CampoMunicipio } from '../../../shared/components/UbicacionColombia.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import {
   Badge,
   Button,
@@ -36,42 +39,22 @@ import {
   Toast,
   useToast,
 } from '../../../shared/components/ui.jsx';
-import { formatearFecha, useData } from '../../../shared/services/base.js';
+import { formatearFecha } from '../../../shared/services/base.js';
 import {
-  CLIENTES_KEY,
   TIPOS_PROPIEDAD,
-  cambiarEstadoCliente,
-  eliminarCliente,
-  guardarCliente,
-  obtenerClientes,
+  normalizarCliente,
 } from '../../../shared/services/clientesService.js';
 import {
-  AGENDA_KEY,
-  obtenerActividades,
-} from '../../../shared/services/agendaService.js';
-import {
-  ESTADOS_ORDEN,
-  ORDENES_KEY,
-  PRIORIDADES_ORDEN,
   buscarOrdenes,
-  cambiarEstadoOrden,
-  eliminarOrden,
   generarCodigoOrden,
-  guardarOrden,
-  obtenerOrdenes,
   resumenOrdenes,
 } from '../../../shared/services/ordenesService.js';
-import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
 import {
-  TERCEROS_KEY,
-  cambiarEstadoTecnico,
-  eliminarTecnico,
-  guardarTecnico,
-  obtenerTecnicos,
+  normalizarTecnico,
 } from '../../../shared/services/tercerosService.js';
 
-const ESTADOS_ACTIVOS_AGENDA = ['Programada', 'En proceso'];
-const ESTADOS_CON_FECHA = ['Programada', 'En ejecución'];
+const ESTADOS_ACTIVOS_AGENDA = ['Programada', 'En proceso', 'En Ejecución', 'En ejecución'];
+const ESTADOS_CON_FECHA = ['Programada', 'En Ejecución', 'En ejecución'];
 const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const TONO_PROPIEDAD = {
@@ -111,6 +94,7 @@ const FORMULARIO_TECNICO = (tecnico = null) => ({
   telefono: tecnico?.telefono || '',
   correo: tecnico?.correo || '',
   especialidad: tecnico?.especialidad || '',
+  estado: tecnico?.estado || 'Activo',
 });
 
 const FORMULARIO_ORDEN = (orden = null, codigo = '') => ({
@@ -124,8 +108,53 @@ const FORMULARIO_ORDEN = (orden = null, codigo = '') => ({
   descripcion: orden?.descripcion || '',
 });
 
+function estadoApi({ loading, error }) {
+  if (loading) return <p role="status">Cargando datos desde la API...</p>;
+  if (error) return <p role="alert" style={{ color: '#b91c1c' }}>No se pudo conectar con la API: {error}</p>;
+  return null;
+}
+
+function mapearOrdenApi(orden, clientes, servicios) {
+  const cliente = clientes.find((item) => String(item.id) === String(orden.cliente_id));
+  const servicio = servicios.find((item) => String(item.id) === String(orden.servicio_id));
+
+  return {
+    id: orden.id,
+    codigo: orden.codigo,
+    clienteId: String(orden.cliente_id ?? ''),
+    cliente: orden.cliente || cliente?.nombre || 'Cliente sin nombre',
+    clienteDocumento: cliente?.documento || '',
+    clienteTelefono: cliente?.telefono || '',
+    clienteDireccion: cliente?.direccion || '',
+    servicioId: String(orden.servicio_id ?? ''),
+    servicio: orden.servicio || servicio?.nombre || 'Servicio',
+    servicioHoras: servicio?.horas || 0,
+    responsableId: String(orden.tercero_id ?? ''),
+    responsable: orden.tecnico || 'Sin asignar',
+    prioridadId: String(orden.prioridad_id ?? ''),
+    prioridad: orden.prioridad || 'Media',
+    estadoId: String(orden.estado_id ?? ''),
+    estado: orden.estado || 'Pendiente',
+    fecha: orden.fecha_programada || '',
+    descripcion: orden.descripcion || '',
+  };
+}
+
+function idCatalogoPorNombre(catalogo, nombre) {
+  const normalizar = (valor) => String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return catalogo.find((item) => normalizar(item.nombre) === normalizar(nombre))?.id;
+}
+
 export function Clientes() {
-  const clientes = useData([CLIENTES_KEY], obtenerClientes);
+  const {
+    data: clientes,
+    error: errorClientes,
+    loading: cargandoClientes,
+    reload: cargarClientes,
+  } = useApiData(async () => (await apiRequest('/clientes')).map(normalizarCliente), []);
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -178,7 +207,7 @@ export function Clientes() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
-  const guardar = (evento) => {
+  const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) {
@@ -199,7 +228,28 @@ export function Clientes() {
     }
 
     try {
-      const guardado = guardarCliente(formulario, formulario.id || null);
+      const tipoPropiedad = TIPOS_PROPIEDAD.find(
+        (tipo) => tipo.nombre === formulario.tipoPropiedad,
+      ) || TIPOS_PROPIEDAD[0];
+      const payload = {
+        nombre_razon_social: formulario.nombre.trim(),
+        documento_nit: formulario.documento.trim(),
+        tipo_cliente: tipoPropiedad.nombre === 'Residencial' ? 'Natural' : 'Jurídico',
+        tipo_propiedad_id: tipoPropiedad.id,
+        estado: formulario.estado,
+        contacto: formulario.contacto.trim(),
+        telefono: formulario.telefono.trim(),
+        correo_electronico: formulario.correo.trim(),
+        direccion: formulario.direccion.trim(),
+        municipio: formulario.municipio.trim(),
+        departamento: formulario.departamento.trim(),
+      };
+      const resultado = await apiRequest(
+        formulario.id ? `/clientes/${formulario.id}` : '/clientes',
+        { method: formulario.id ? 'PUT' : 'POST', body: payload },
+      );
+      const guardado = normalizarCliente(resultado);
+      await cargarClientes();
       notify(
         'success',
         formulario.id ? 'Cliente actualizado' : 'Cliente creado',
@@ -211,18 +261,36 @@ export function Clientes() {
     }
   };
 
-  const cambiarEstado = (cliente) => {
+  const cambiarEstado = async (cliente) => {
     try {
-      const actualizado = cambiarEstadoCliente(cliente.id);
-      notify('success', 'Estado actualizado', `${actualizado.nombre} · ${actualizado.estado}.`);
+      const actualizado = await apiRequest(`/clientes/${cliente.id}`, {
+        method: 'PUT',
+        body: {
+          nombre_razon_social: cliente.nombre,
+          documento_nit: cliente.documento,
+          tipo_cliente: cliente.tipoCliente,
+          tipo_propiedad_id: TIPOS_PROPIEDAD.find((tipo) => tipo.nombre === cliente.tipoPropiedad)?.id,
+          estado: cliente.estado === 'Activo' ? 'Inactivo' : 'Activo',
+          contacto: cliente.contacto,
+          telefono: cliente.telefono,
+          correo_electronico: cliente.correo,
+          direccion: cliente.direccion,
+          municipio: cliente.municipio,
+          departamento: cliente.departamento,
+        },
+      });
+      await cargarClientes();
+      const actualizadoNormalizado = normalizarCliente(actualizado);
+      notify('success', 'Estado actualizado', `${actualizadoNormalizado.nombre} · ${actualizadoNormalizado.estado}.`);
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
     }
   };
 
-  const confirmarEliminacion = () => {
+  const confirmarEliminacion = async () => {
     try {
-      eliminarCliente(porEliminar.id);
+      await apiRequest(`/clientes/${porEliminar.id}`, { method: 'DELETE' });
+      await cargarClientes();
       notify('success', 'Cliente eliminado', porEliminar.nombre);
       if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
       setPorEliminar(null);
@@ -244,6 +312,7 @@ export function Clientes() {
           </Button>
         }
       />
+      {estadoApi({ loading: cargandoClientes, error: errorClientes })}
 
       <div className="mca-kpis">
         <KpiCard
@@ -499,20 +568,21 @@ export function Clientes() {
             </Field>
 
             <Field label="Municipio">
-              <input
+              <CampoMunicipio
                 className="mca-input"
+                departamento={formulario.departamento}
                 value={formulario.municipio}
                 onChange={(evento) => setCampo('municipio', evento.target.value)}
-                placeholder="Bogotá"
+                placeholder="Escribe o selecciona un municipio"
               />
             </Field>
 
             <Field label="Departamento">
-              <input
+              <CampoDepartamento
                 className="mca-input"
                 value={formulario.departamento}
                 onChange={(evento) => setCampo('departamento', evento.target.value)}
-                placeholder="Cundinamarca"
+                placeholder="Escribe o selecciona un departamento"
               />
             </Field>
 
@@ -593,13 +663,34 @@ export function Clientes() {
 }
 
 export function GestionTerceros() {
-  const datos = useData(
-    [TERCEROS_KEY, AGENDA_KEY],
-    () => ({
-      tecnicos: obtenerTecnicos(),
-      actividades: obtenerActividades(),
-    }),
-  );
+  const {
+    data: datos,
+    error: errorTecnicos,
+    loading: cargandoTecnicos,
+    reload: cargarTecnicos,
+  } = useApiData(async () => {
+    const [tecnicosApi, ordenesApi] = await Promise.all([
+      apiRequest('/terceros'),
+      apiRequest('/ordenes-servicio'),
+    ]);
+    return {
+      tecnicos: tecnicosApi.map((tercero) => normalizarTecnico({
+        ...tercero,
+        especialidad: tercero.empresa,
+      })),
+      actividades: ordenesApi.map((orden) => ({
+        id: orden.id,
+        tecnicoId: orden.tercero_id,
+        estado: orden.estado,
+        fecha: orden.fecha_programada || '',
+        horaInicio: '',
+        horaFin: '',
+        servicio: orden.servicio || '',
+        codigo: orden.codigo,
+        cliente: orden.cliente || '',
+      })),
+    };
+  }, { tecnicos: [], actividades: [] });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -679,7 +770,7 @@ export function GestionTerceros() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
-  const guardar = (evento) => {
+  const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del tercero.';
@@ -694,7 +785,23 @@ export function GestionTerceros() {
     }
 
     try {
-      const guardado = guardarTecnico(formulario, formulario.id || null);
+      const payload = {
+        nombre_completo: formulario.nombre.trim(),
+        documento: formulario.documento.trim(),
+        empresa: formulario.especialidad.trim(),
+        telefono: formulario.telefono.trim(),
+        correo_electronico: formulario.correo.trim(),
+        estado: formulario.estado || 'Activo',
+      };
+      const resultado = await apiRequest(
+        formulario.id ? `/terceros/${formulario.id}` : '/terceros',
+        { method: formulario.id ? 'PUT' : 'POST', body: payload },
+      );
+      const guardado = normalizarTecnico({
+        ...resultado,
+        especialidad: resultado.empresa,
+      });
+      await cargarTecnicos();
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
@@ -706,10 +813,25 @@ export function GestionTerceros() {
     }
   };
 
-  const cambiarEstado = (tecnico) => {
+  const cambiarEstado = async (tecnico) => {
     try {
-      const actualizado = cambiarEstadoTecnico(tecnico.id);
-      notify('success', 'Estado actualizado', `${actualizado.nombre} · ${actualizado.estado}.`);
+      const actualizado = await apiRequest(`/terceros/${tecnico.id}`, {
+        method: 'PUT',
+        body: {
+          nombre_completo: tecnico.nombre,
+          documento: tecnico.documento,
+          empresa: tecnico.especialidad,
+          telefono: tecnico.telefono,
+          correo_electronico: tecnico.correo,
+          estado: tecnico.estado === 'Activo' ? 'Inactivo' : 'Activo',
+        },
+      });
+      await cargarTecnicos();
+      const tecnicoActualizado = normalizarTecnico({
+        ...actualizado,
+        especialidad: actualizado.empresa,
+      });
+      notify('success', 'Estado actualizado', `${tecnicoActualizado.nombre} · ${tecnicoActualizado.estado}.`);
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
     }
@@ -720,16 +842,17 @@ export function GestionTerceros() {
       notify(
         'warning',
         'Tercero con servicios activos',
-        'Reasigna sus servicios en la agenda antes de eliminarlo.',
+        'Reasigna sus órdenes activas antes de eliminarlo.',
       );
       return;
     }
     setPorEliminar(tecnico);
   };
 
-  const confirmarEliminacion = () => {
+  const confirmarEliminacion = async () => {
     try {
-      eliminarTecnico(porEliminar.id);
+      await apiRequest(`/terceros/${porEliminar.id}`, { method: 'DELETE' });
+      await cargarTecnicos();
       notify('success', 'Tercero eliminado', porEliminar.nombre);
       if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
       setPorEliminar(null);
@@ -751,6 +874,7 @@ export function GestionTerceros() {
           </Button>
         }
       />
+      {estadoApi({ loading: cargandoTecnicos, error: errorTecnicos })}
 
       <div className="mca-kpis">
         <KpiCard
@@ -777,7 +901,7 @@ export function GestionTerceros() {
         <KpiCard
           label="Servicios asignados"
           value={resumen.asignados}
-          hint="Agenda activa del equipo"
+          hint="Órdenes activas del equipo"
           icon={CalendarDays}
           tone="indigo"
         />
@@ -1040,7 +1164,9 @@ export function GestionTerceros() {
                           {formatearFecha(actividad.fecha)}
                         </div>
                         <div className="mca-list__hint">
-                          {actividad.horaInicio} – {actividad.horaFin}
+                          {actividad.horaInicio && actividad.horaFin
+                            ? `${actividad.horaInicio} – ${actividad.horaFin}`
+                            : 'Orden de servicio'}
                         </div>
                       </div>
                     </div>
@@ -1071,15 +1197,48 @@ export function GestionTerceros() {
 }
 
 export function OrdenesServicio() {
-  const datos = useData(
-    [ORDENES_KEY, CLIENTES_KEY, SERVICIOS_KEY, TERCEROS_KEY],
-    () => ({
-      ordenes: obtenerOrdenes(),
-      clientes: obtenerClientes(),
-      servicios: obtenerServicios(),
-      tecnicos: obtenerTecnicos(),
-    }),
-  );
+  const {
+    data: datos,
+    error: errorOrdenes,
+    loading: cargandoOrdenes,
+    reload: cargarOrdenes,
+  } = useApiData(async () => {
+    const [ordenesApi, clientesApi, tecnicosApi, catalogos] = await Promise.all([
+      apiRequest('/ordenes-servicio'),
+      apiRequest('/clientes'),
+      apiRequest('/terceros'),
+      apiRequest('/ordenes-servicio/catalogos'),
+    ]);
+    const clientes = clientesApi.map(normalizarCliente);
+    const tecnicos = tecnicosApi.map((tercero) => normalizarTecnico({
+      ...tercero,
+      especialidad: tercero.empresa,
+    }));
+    const servicios = catalogos.servicios.map((servicio) => ({
+      ...servicio,
+      estado: 'Activo',
+      horas: 0,
+      tiempo: '',
+      categoria: '',
+      desc: '',
+    }));
+    return {
+      ordenes: ordenesApi.map((orden) => mapearOrdenApi(orden, clientes, servicios)),
+      clientes,
+      tecnicos,
+      servicios,
+      catalogos: {
+        prioridades: catalogos.prioridades,
+        estados: catalogos.estados,
+      },
+    };
+  }, {
+    ordenes: [],
+    clientes: [],
+    tecnicos: [],
+    servicios: [],
+    catalogos: { prioridades: [], estados: [] },
+  });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -1115,7 +1274,7 @@ export function OrdenesServicio() {
       .map((servicio) => ({
         value: String(servicio.id),
         label: servicio.nombre,
-        meta: `${servicio.tiempo} · ${servicio.categoria}`,
+        meta: [servicio.tiempo, servicio.categoria].filter(Boolean).join(' · '),
         search: servicio.desc,
       })),
     [datos.servicios],
@@ -1167,7 +1326,7 @@ export function OrdenesServicio() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
-  const guardar = (evento) => {
+  const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.clienteId) nuevosErrores.clienteId = 'Selecciona el cliente.';
@@ -1182,7 +1341,22 @@ export function OrdenesServicio() {
     }
 
     try {
-      const guardada = guardarOrden(formulario, formulario.id || null);
+      const payload = {
+        codigo: formulario.codigo,
+        cliente_id: Number(formulario.clienteId),
+        servicio_id: Number(formulario.servicioId),
+        fecha_programada: formulario.fecha || null,
+        tercero_id: Number(formulario.responsableId),
+        prioridad_id: idCatalogoPorNombre(datos.catalogos.prioridades, formulario.prioridad),
+        estado_id: idCatalogoPorNombre(datos.catalogos.estados, formulario.estado),
+        descripcion: formulario.descripcion,
+      };
+      const resultado = await apiRequest(
+        formulario.id ? `/ordenes-servicio/${formulario.id}` : '/ordenes-servicio',
+        { method: formulario.id ? 'PUT' : 'POST', body: payload },
+      );
+      const guardada = mapearOrdenApi(resultado, datos.clientes, datos.servicios);
+      await cargarOrdenes();
       notify(
         'success',
         formulario.id ? 'Orden actualizada' : 'Orden creada',
@@ -1194,9 +1368,18 @@ export function OrdenesServicio() {
     }
   };
 
-  const cambiarEstado = (orden) => {
+  const cambiarEstado = async (orden) => {
     try {
-      const actualizada = cambiarEstadoOrden(orden.id);
+      const estados = [...datos.catalogos.estados].sort((a, b) => Number(a.id) - Number(b.id));
+      const indiceActual = estados.findIndex((estado) => String(estado.id) === String(orden.estadoId));
+      const siguienteEstado = estados[(indiceActual + 1) % estados.length];
+      if (!siguienteEstado) throw new Error('No hay estados de órdenes configurados en la API.');
+      const resultado = await apiRequest(`/ordenes-servicio/${orden.id}/estado`, {
+        method: 'PATCH',
+        body: { estado_id: siguienteEstado.id },
+      });
+      const actualizada = mapearOrdenApi(resultado, datos.clientes, datos.servicios);
+      await cargarOrdenes();
       notify(
         'success',
         'Estado actualizado',
@@ -1207,9 +1390,10 @@ export function OrdenesServicio() {
     }
   };
 
-  const confirmarEliminacion = () => {
+  const confirmarEliminacion = async () => {
     try {
-      eliminarOrden(porEliminar.id);
+      await apiRequest(`/ordenes-servicio/${porEliminar.id}`, { method: 'DELETE' });
+      await cargarOrdenes();
       notify('success', 'Orden eliminada', porEliminar.codigo);
       if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
       setPorEliminar(null);
@@ -1231,6 +1415,7 @@ export function OrdenesServicio() {
           </Button>
         }
       />
+      {estadoApi({ loading: cargandoOrdenes, error: errorOrdenes })}
 
       <div className="mca-kpis">
         <KpiCard
@@ -1281,7 +1466,7 @@ export function OrdenesServicio() {
               aria-label="Filtrar órdenes por estado"
             >
               <option value="Todos">Todos los estados</option>
-              {ESTADOS_ORDEN.map((estado) => (
+              {datos.catalogos.estados.map((estado) => (
                 <option key={estado.id} value={estado.nombre}>
                   {estado.nombre}
                 </option>
@@ -1406,7 +1591,7 @@ export function OrdenesServicio() {
                 value={formulario.prioridad}
                 onChange={(evento) => setCampo('prioridad', evento.target.value)}
               >
-                {PRIORIDADES_ORDEN.map((prioridad) => (
+                {datos.catalogos.prioridades.map((prioridad) => (
                   <option key={prioridad.id} value={prioridad.nombre}>
                     {prioridad.nombre}
                   </option>
@@ -1455,7 +1640,7 @@ export function OrdenesServicio() {
             <Field label="Duración estimada" hint="Calculada desde el servicio seleccionado.">
               <input
                 className="mca-input"
-                value={servicioFormulario ? `${servicioFormulario.horas} h · ${servicioFormulario.tiempo}` : ''}
+                value={servicioFormulario ? 'Duración no definida en el catálogo' : ''}
                 placeholder="Selecciona un servicio"
                 disabled
               />
@@ -1494,7 +1679,7 @@ export function OrdenesServicio() {
                 value={formulario.estado}
                 onChange={(evento) => setCampo('estado', evento.target.value)}
               >
-                {ESTADOS_ORDEN.map((estado) => (
+                {datos.catalogos.estados.map((estado) => (
                   <option key={estado.id} value={estado.nombre}>
                     {estado.nombre}
                   </option>

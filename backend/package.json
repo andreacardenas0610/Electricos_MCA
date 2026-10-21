@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js && node --check src/middleware/auth.js && node --check src/middleware/errores.js && node --check src/routes/auth.js && node --check src/routes/clientes.js && node --check src/routes/terceros.js && node --check src/routes/ordenes.js && node --check src/utils/validacion.js && node --check scripts/configurar-usuario.js && node --check scripts/configurar-tecnico.js",
+    "build": "npm run check",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js && node --check src/middleware/auth.js && node --check src/middleware/errores.js && node --check src/routes/auth.js && node --check src/routes/clientes.js && node --check src/routes/terceros.js && node --check src/routes/ordenes.js && node --check src/routes/materiales.js && node --check src/routes/servicios.js && node --check src/routes/cotizaciones.js && node --check src/routes/pagos.js && node --check src/routes/agenda.js && node --check src/routes/usuarios.js && node --check src/routes/roles.js && node --check src/utils/validacion.js && node --check scripts/configurar-usuario.js && node --check scripts/configurar-tecnico.js",
     "configurar-usuario": "node scripts/configurar-usuario.js",
     "configurar-tecnico": "node scripts/configurar-tecnico.js"
   },
