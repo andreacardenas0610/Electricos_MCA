@@ -1,61 +1,48 @@
 import React from 'react';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Eye, FileText, Pencil, Trash2 } from 'lucide-react';
 
 export function AccionesFila({
   onVer,
   onEditar,
+  onPdf,
   onEliminar,
-  color = '#475569',
-  alineacion = 'center'
+  color,
+  alineacion = 'center',
 }) {
-  const btnIcon = {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '3px',
-    display: 'flex',
-    alignItems: 'center'
+  const iconProps = {
+    size: 15,
+    strokeWidth: 1.9,
+    ...(color ? { color } : {}),
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '8px',
-        justifyContent: alineacion,
-        alignItems: 'center'
-      }}
-    >
+    <div className="mca-row" style={{ justifyContent: alineacion, flexWrap: 'nowrap', gap: 6 }}>
       {onVer && (
-        <button
-          type="button"
-          onClick={onVer}
-          title="Ver detalle"
-          style={btnIcon}
-        >
-          <Eye size={15} strokeWidth={1.8} color={color} />
+        <button type="button" className="mca-icon-btn" onClick={onVer} title="Ver detalle">
+          <Eye {...iconProps} />
         </button>
       )}
 
       {onEditar && (
-        <button
-          type="button"
-          onClick={onEditar}
-          title="Editar"
-          style={btnIcon}
-        >
-          <Pencil size={15} strokeWidth={1.8} color={color} />
+        <button type="button" className="mca-icon-btn" onClick={onEditar} title="Editar">
+          <Pencil {...iconProps} />
+        </button>
+      )}
+
+      {onPdf && (
+        <button type="button" className="mca-icon-btn" onClick={onPdf} title="Generar PDF">
+          <FileText {...iconProps} />
         </button>
       )}
 
       {onEliminar && (
         <button
           type="button"
+          className="mca-icon-btn mca-icon-btn--danger"
           onClick={onEliminar}
           title="Eliminar"
-          style={btnIcon}
         >
-          <Trash2 size={15} strokeWidth={1.8} color="#ef4444" />
+          <Trash2 size={15} strokeWidth={1.9} />
         </button>
       )}
     </div>

@@ -1,2340 +1,959 @@
-import React, { useContext, useMemo, useState } from 'react';
-import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
+import { useMemo, useState } from 'react';
 import {
-  EstadoToggle,
-  ESTADOS,
-  estadoSiguiente
-} from '../../../shared/components/EstadoToggle.jsx';
+  AlertTriangle,
+  CalendarCheck2,
+  CalendarClock,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  Clock3,
+  ShieldCheck,
+  Users,
+  Wrench,
+} from 'lucide-react';
+
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import {
+  Badge,
+  Button,
+  Combobox,
+  ConfirmDialog,
+  DetailGrid,
+  DetailItem,
+  EmptyState,
+  Field,
+  KpiCard,
+  Modal,
+  PageHeader,
+  PageShell,
+  Panel,
+  SearchInput,
+  Toast,
+  useToast,
+} from '../../../shared/components/ui.jsx';
+import {
+  fechaISO,
+  formatearFecha,
+  sumarDias,
+  useData,
+} from '../../../shared/services/base.js';
+import {
+  BUFFER_ENTRE_SERVICIOS_MINUTOS,
+  DIAS_MAXIMOS_AGENDA,
+  MARGEN_MINIMO_AGENDA_MINUTOS,
+  formatearHora12,
+  horaAMinutos,
+  horarioDelDia,
+  horasServicio,
+  minutosAHora,
+  nombreDia,
+  sumarMinutosAHora,
+} from '../../../shared/services/catalogos.js';
+import { CLIENTES_KEY, obtenerClientes } from '../../../shared/services/clientesService.js';
+import {
+  AGENDA_KEY,
+  ESTADOS_AGENDA,
+  PRIORIDADES_AGENDA,
+  buscarActividades,
+  cambiarEstadoActividad,
+  eliminarActividad,
+  guardarActividad,
+  obtenerActividades,
+  resumenAgenda,
+  validarAgendaCompleta,
+  validarCita,
+} from '../../../shared/services/agendaService.js';
+import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
+import { TERCEROS_KEY, obtenerTecnicosActivos } from '../../../shared/services/tercerosService.js';
 
-const SearchIcon = ({ color = '#94a3b8' }) => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
+const FORMULARIO_VACIO = () => ({
+  clienteId: '',
+  cliente: '',
+  telefono: '',
+  direccion: '',
+  servicioId: '',
+  servicio: '',
+  tecnicoId: '',
+  fecha: fechaISO(),
+  horaInicio: '',
+  estado: 'Programada',
+  prioridad: 'Media',
+  descripcion: '',
+});
 
-const PlusIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
+function horaSugerida(fecha) {
+  const horario = horarioDelDia(fecha);
+  if (!horario) return '';
 
-const EditIcon = ({ color = '#475569' }) => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
+  const apertura = horaAMinutos(horario.apertura);
+  const cierre = horaAMinutos(horario.cierre);
 
-const ChevronLeftIcon = ({ color = '#64748b' }) => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
+  if (fecha !== fechaISO()) return horario.apertura;
 
-const ChevronRightIcon = ({ color = '#64748b' }) => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
+  const ahora = new Date();
+  const minimo = ahora.getHours() * 60 + ahora.getMinutes() + MARGEN_MINIMO_AGENDA_MINUTOS;
+  const redondeado = Math.ceil(minimo / 30) * 30;
 
-const CalendarIcon = ({ color = '#ca8a04' }) => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="4" width="18" height="17" rx="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
+  if (redondeado >= cierre) return '';
+  return minutosAHora(Math.max(apertura, redondeado));
+}
 
-const SunIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#facc15"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="5" />
-    <line x1="12" y1="1" x2="12" y2="3" />
-    <line x1="12" y1="21" x2="12" y2="23" />
-    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-    <line x1="1" y1="12" x2="3" y2="12" />
-    <line x1="21" y1="12" x2="23" y2="12" />
-  </svg>
-);
-
-const MoonIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.8 6.8 0 0 0 21 12.8Z" />
-  </svg>
-);
-
-const INITIAL_ACTIVIDADES = [
-  {
-    id: 1,
-    codigo: 'OT-1092',
-    cliente: 'Residencial Las Palmas',
-    actividad: 'Instalación tablero eléctrico',
-    tecnico: 'Carlos Pérez',
-    fecha: '2026-09-08',
-    horaInicio: '08:00',
-    horaFin: '12:00',
-    estado: 'Programada',
-    prioridad: 'Alta',
-    descripcion:
-      'Instalación y configuración de tablero de distribución trifásico.'
-  },
-  {
-    id: 2,
-    codigo: 'OT-1093',
-    cliente: 'Edificio Horizonte',
-    actividad: 'Mantenimiento preventivo',
-    tecnico: 'Juan Rodríguez',
-    fecha: '2026-09-10',
-    horaInicio: '09:00',
-    horaFin: '11:00',
-    estado: 'En proceso',
-    prioridad: 'Media',
-    descripcion:
-      'Revisión general de instalaciones eléctricas y puntos de conexión.'
-  },
-  {
-    id: 3,
-    codigo: 'OT-1094',
-    cliente: 'Industrial Norte',
-    actividad: 'Diagnóstico de falla',
-    tecnico: 'Miguel Torres',
-    fecha: '2026-09-15',
-    horaInicio: '14:00',
-    horaFin: '17:00',
-    estado: 'Programada',
-    prioridad: 'Alta',
-    descripcion:
-      'Diagnóstico de falla en circuito de alimentación principal.'
-  },
-  {
-    id: 4,
-    codigo: 'OT-1095',
-    cliente: 'Centro Comercial Bello',
-    actividad: 'Reparación instalación',
-    tecnico: 'Carlos Pérez',
-    fecha: '2026-09-18',
-    horaInicio: '08:30',
-    horaFin: '13:00',
-    estado: 'Completada',
-    prioridad: 'Media',
-    descripcion:
-      'Reparación de circuito y reemplazo de componentes eléctricos.'
-  },
-  {
-    id: 5,
-    codigo: 'OT-1096',
-    cliente: 'Conjunto Los Pinos',
-    actividad: 'Inspección eléctrica',
-    tecnico: 'Juan Rodríguez',
-    fecha: '2026-09-22',
-    horaInicio: '10:00',
-    horaFin: '12:00',
-    estado: 'Programada',
-    prioridad: 'Baja',
-    descripcion:
-      'Inspección de instalaciones y verificación de condiciones de seguridad.'
-  },
-  {
-    id: 6,
-    codigo: 'OT-1097',
-    cliente: 'Casa Familiar Gómez',
-    actividad: 'Cambio de cableado',
-    tecnico: 'Miguel Torres',
-    fecha: '2026-09-24',
-    horaInicio: '13:00',
-    horaFin: '16:00',
-    estado: 'En proceso',
-    prioridad: 'Alta',
-    descripcion:
-      'Cambio de cableado deteriorado en diferentes puntos de la vivienda.'
+function fechaSugerida() {
+  for (let indice = 0; indice <= DIAS_MAXIMOS_AGENDA; indice += 1) {
+    const fecha = sumarDias(indice);
+    if (horaSugerida(fecha)) return fecha;
   }
-];
-
-const TECNICOS = [
-  'Carlos Pérez',
-  'Juan Rodríguez',
-  'Miguel Torres'
-];
-
-const MESES = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre'
-];
-
-const DIAS_SEMANA = [
-  'LUN',
-  'MAR',
-  'MIÉ',
-  'JUE',
-  'VIE',
-  'SÁB',
-  'DOM'
-];
-
-const obtenerFechaLocal = (fecha) => {
-  const partes = fecha.split('-');
-
-  return new Date(
-    Number(partes[0]),
-    Number(partes[1]) - 1,
-    Number(partes[2])
-  );
-};
-
-const formatearFecha = (fecha) => {
-  const date = obtenerFechaLocal(fecha);
-
-  return date.toLocaleDateString('es-CO', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-};
-
-const obtenerClasePrioridad = (prioridad) => {
-  if (prioridad === 'Alta') return '#ef4444';
-  if (prioridad === 'Media') return '#f59e0b';
-  return '#94a3b8';
-};
+  return fechaISO();
+}
 
 export function ProgramacionActividades() {
-  const { theme: temaGlobal, toggleTheme } =
-    useContext(ThemeContext);
+  const actividades = useData([AGENDA_KEY], obtenerActividades);
+  const clientes = useData([CLIENTES_KEY], obtenerClientes);
+  const servicios = useData([SERVICIOS_KEY], obtenerServicios);
+  const tecnicos = useData([TERCEROS_KEY], obtenerTecnicosActivos);
 
-  const esOscuro = temaGlobal === 'dark';
-
-  const [actividades, setActividades] =
-    useState(INITIAL_ACTIVIDADES);
-
-  const [filtro, setFiltro] = useState('Todas');
   const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todas');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('Todas');
 
-  const [mesActual, setMesActual] = useState(8);
-  const [anioActual, setAnioActual] = useState(2026);
+  const [modalFormulario, setModalFormulario] = useState(false);
+  const [actividadEditando, setActividadEditando] = useState(null);
+  const [formulario, setFormulario] = useState(FORMULARIO_VACIO);
+  const [errores, setErrores] = useState({});
 
-  const [modalNueva, setModalNueva] = useState(false);
-  const [modalEditar, setModalEditar] = useState(false);
-  const [modalDetalle, setModalDetalle] = useState(false);
+  const [actividadDetalle, setActividadDetalle] = useState(null);
+  const [actividadEliminar, setActividadEliminar] = useState(null);
+  const [modalValidacion, setModalValidacion] = useState(false);
 
-  const [actividadSeleccionada, setActividadSeleccionada] =
-    useState(null);
+  const { toast, notify, close } = useToast();
 
-  const [formData, setFormData] = useState({
-    codigo: '',
-    cliente: '',
-    actividad: '',
-    tecnico: '',
-    fecha: '',
-    horaInicio: '',
-    horaFin: '',
-    estado: 'Programada',
-    prioridad: 'Media',
-    descripcion: ''
-  });
+  const hoy = fechaISO();
+  const limiteSemana = sumarDias(7);
 
-  const colores = {
-    fondo: esOscuro ? '#0b0f19' : '#f8fafc',
-    fondoSecundario: esOscuro ? '#111827' : '#eef2f6',
-    tarjeta: esOscuro ? '#111c38' : '#ffffff',
-    tarjetaSecundaria: esOscuro ? '#0f1a33' : '#f8fafc',
-    borde: esOscuro ? '#263555' : '#e2e8f0',
-    texto: esOscuro ? '#f8fafc' : '#0f172a',
-    secundario: esOscuro ? '#94a3b8' : '#64748b',
-    amarillo: '#facc15',
-    iconColor: esOscuro ? '#cbd5e1' : '#475569'
-  };
-
-  const actividadesFiltradas = useMemo(() => {
-    const texto = busqueda.toLowerCase().trim();
-
-    return actividades.filter((item) => {
-      const coincideFiltro =
-        filtro === 'Todas' || item.estado === filtro;
-
-      if (!coincideFiltro) return false;
-
-      if (!texto) return true;
-
-      return (
-        item.codigo.toLowerCase().includes(texto) ||
-        item.cliente.toLowerCase().includes(texto) ||
-        item.actividad.toLowerCase().includes(texto) ||
-        item.tecnico.toLowerCase().includes(texto)
-      );
-    });
-  }, [actividades, filtro, busqueda]);
-
-  const actividadesDelMes = useMemo(() => {
-    return actividadesFiltradas.filter((item) => {
-      const date = obtenerFechaLocal(item.fecha);
-
-      return (
-        date.getMonth() === mesActual &&
-        date.getFullYear() === anioActual
-      );
-    });
-  }, [
-    actividadesFiltradas,
-    mesActual,
-    anioActual
-  ]);
-
-  const estadisticas = useMemo(
-    () => ({
-      total: actividades.length,
-      programadas: actividades.filter(
-        (item) => item.estado === 'Programada'
-      ).length,
-      proceso: actividades.filter(
-        (item) => item.estado === 'En proceso'
-      ).length,
-      completadas: actividades.filter(
-        (item) => item.estado === 'Completada'
-      ).length
-    }),
-    [actividades]
+  const opcionesClientes = useMemo(
+    () => clientes.map((cliente) => ({
+      value: String(cliente.id),
+      label: cliente.nombre,
+      meta: cliente.documento,
+      search: `${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.municipio} ${cliente.departamento}`,
+    })),
+    [clientes],
   );
 
-  const generarDiasCalendario = () => {
-    const primerDia = new Date(
-      anioActual,
-      mesActual,
-      1
-    );
+  const opcionesServicios = useMemo(
+    () => servicios.map((servicio) => ({
+      value: String(servicio.id),
+      label: servicio.nombre,
+      meta: `${servicio.categoria} · ${servicio.tiempo} · ${servicio.estado}`,
+      search: `${servicio.codigo} ${servicio.categoria} ${servicio.unidad}`,
+    })),
+    [servicios],
+  );
 
-    const ultimoDia = new Date(
-      anioActual,
-      mesActual + 1,
-      0
-    );
+  const filtradas = useMemo(() => {
+    let base = buscarActividades(busqueda, actividades);
 
-    const diasMes = ultimoDia.getDate();
-
-    let inicio = primerDia.getDay();
-
-    inicio = inicio === 0 ? 6 : inicio - 1;
-
-    const dias = [];
-
-    for (let i = 0; i < inicio; i++) {
-      dias.push(null);
+    if (filtroEstado !== 'Todas') {
+      base = base.filter((actividad) => actividad.estado === filtroEstado);
     }
 
-    for (let dia = 1; dia <= diasMes; dia++) {
-      dias.push(
-        new Date(
-          anioActual,
-          mesActual,
-          dia
-        )
+    if (filtroPeriodo === 'Hoy') {
+      base = base.filter((actividad) => actividad.fecha === hoy);
+    } else if (filtroPeriodo === 'Semana') {
+      base = base.filter(
+        (actividad) => actividad.fecha >= hoy && actividad.fecha <= limiteSemana,
+      );
+    } else if (filtroPeriodo === 'Mes') {
+      base = base.filter(
+        (actividad) => String(actividad.fecha).slice(0, 7) === hoy.slice(0, 7),
       );
     }
 
-    while (dias.length % 7 !== 0) {
-      dias.push(null);
+    return base;
+  }, [actividades, busqueda, filtroEstado, filtroPeriodo, hoy, limiteSemana]);
+
+  const resumen = useMemo(() => resumenAgenda(actividades), [actividades]);
+  const incidencias = useMemo(() => validarAgendaCompleta(), [actividades]);
+
+  const erroresAgenda = incidencias.filter((incidencia) => incidencia.severidad === 'error').length;
+  const advertenciasAgenda = incidencias.length - erroresAgenda;
+
+  const servicioFormulario = useMemo(
+    () => servicios.find((servicio) => String(servicio.id) === String(formulario.servicioId)) || null,
+    [servicios, formulario.servicioId],
+  );
+
+  const horasFormulario = servicioFormulario ? horasServicio(servicioFormulario) : 0;
+
+  const horaFinFormulario = formulario.horaInicio && horasFormulario > 0
+    ? sumarMinutosAHora(formulario.horaInicio, horasFormulario * 60)
+    : '';
+
+  const horarioFormulario = horarioDelDia(formulario.fecha);
+
+  const validacionViva = useMemo(() => {
+    if (
+      !formulario.clienteId
+      || !formulario.servicioId
+      || !formulario.tecnicoId
+      || !formulario.fecha
+      || !formulario.horaInicio
+    ) {
+      return null;
     }
 
-    return dias;
-  };
+    return validarCita(
+      { ...formulario, horas: horasFormulario, estado: formulario.estado },
+      actividadEditando?.id,
+    );
+  }, [formulario, horasFormulario, actividadEditando]);
 
-  const cambiarMes = (direccion) => {
-    if (direccion > 0) {
-      if (mesActual === 11) {
-        setMesActual(0);
-        setAnioActual((prev) => prev + 1);
-      } else {
-        setMesActual((prev) => prev + 1);
-      }
-    } else {
-      if (mesActual === 0) {
-        setMesActual(11);
-        setAnioActual((prev) => prev - 1);
-      } else {
-        setMesActual((prev) => prev - 1);
-      }
-    }
-  };
-
-  const volverHoy = () => {
-    const hoy = new Date();
-
-    setMesActual(hoy.getMonth());
-    setAnioActual(hoy.getFullYear());
-  };
-
-  const abrirNuevaActividad = () => {
-    setFormData({
-      codigo: `OT-${1100 + actividades.length + 1}`,
-      cliente: '',
-      actividad: '',
-      tecnico: '',
-      fecha: '',
-      horaInicio: '',
-      horaFin: '',
-      estado: 'Programada',
-      prioridad: 'Media',
-      descripcion: ''
+  const abrirNuevo = () => {
+    const fecha = fechaSugerida();
+    setActividadEditando(null);
+    setErrores({});
+    setFormulario({
+      ...FORMULARIO_VACIO(),
+      fecha,
+      horaInicio: horaSugerida(fecha),
     });
-
-    setModalNueva(true);
+    setModalFormulario(true);
   };
 
   const abrirEditar = (actividad) => {
-    setActividadSeleccionada(actividad);
-    setFormData({ ...actividad });
-    setModalEditar(true);
+    setActividadEditando(actividad);
+    setErrores({});
+    setFormulario({
+      clienteId: String(actividad.clienteId || ''),
+      cliente: actividad.cliente || '',
+      telefono: actividad.telefono || '',
+      direccion: actividad.direccion || '',
+      servicioId: String(actividad.servicioId || ''),
+      servicio: actividad.servicio || '',
+      tecnicoId: String(actividad.tecnicoId || ''),
+      fecha: actividad.fecha || fechaISO(),
+      horaInicio: actividad.horaInicio || '',
+      estado: actividad.estado || 'Programada',
+      prioridad: actividad.prioridad || 'Media',
+      descripcion: actividad.descripcion || '',
+    });
+    setActividadDetalle(null);
+    setModalFormulario(true);
   };
 
-  const abrirDetalle = (actividad) => {
-    setActividadSeleccionada(actividad);
-    setModalDetalle(true);
+  const cerrarFormulario = () => {
+    setModalFormulario(false);
+    setActividadEditando(null);
+    setErrores({});
   };
 
-  const cerrarModales = () => {
-    setModalNueva(false);
-    setModalEditar(false);
-    setModalDetalle(false);
-    setActividadSeleccionada(null);
-  };
+  const seleccionarCliente = (valor) => {
+    const cliente = clientes.find((item) => String(item.id) === String(valor));
+    if (!cliente) {
+      setFormulario((prev) => ({ ...prev, clienteId: '', cliente: '', telefono: '', direccion: '' }));
+      return;
+    }
 
-  const manejarCambio = (e) => {
-    const { name, value } = e.target;
-
-    setFormData((prev) => ({
+    setFormulario((prev) => ({
       ...prev,
-      [name]: value
+      clienteId: String(cliente.id),
+      cliente: cliente.nombre,
+      telefono: cliente.telefono || '',
+      direccion: cliente.direccion || '',
     }));
+    setErrores((prev) => ({ ...prev, clienteId: undefined }));
   };
 
-  const guardarActividad = (e) => {
-    e.preventDefault();
+  const seleccionarServicio = (valor) => {
+    const servicio = servicios.find((item) => String(item.id) === String(valor));
+    setFormulario((prev) => ({
+      ...prev,
+      servicioId: valor ? String(valor) : '',
+      servicio: servicio?.nombre || '',
+    }));
+    setErrores((prev) => ({ ...prev, servicioId: undefined }));
+  };
 
-    if (!formData.cliente.trim()) {
-      alert('Ingrese el cliente.');
+  const cambiarFecha = (valor) => {
+    setFormulario((prev) => ({
+      ...prev,
+      fecha: valor,
+      horaInicio: horaSugerida(valor) || '',
+    }));
+    setErrores((prev) => ({ ...prev, fecha: undefined, horaInicio: undefined }));
+  };
+
+  const handleGuardar = (event) => {
+    event.preventDefault();
+
+    const nuevosErrores = {};
+    if (!formulario.clienteId) nuevosErrores.clienteId = ['Selecciona el cliente.'];
+    if (!formulario.servicioId) nuevosErrores.servicioId = ['Selecciona el servicio a agendar.'];
+    if (!formulario.tecnicoId) nuevosErrores.tecnicoId = ['Selecciona el técnico responsable.'];
+    if (!formulario.fecha) nuevosErrores.fecha = ['Selecciona la fecha del servicio.'];
+    if (!formulario.horaInicio) nuevosErrores.horaInicio = ['Selecciona la hora de inicio.'];
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErrores(nuevosErrores);
       return;
     }
 
-    if (!formData.actividad.trim()) {
-      alert('Ingrese la actividad.');
-      return;
-    }
+    try {
+      const guardada = guardarActividad({
+        ...formulario,
+        clienteId: formulario.clienteId,
+        servicioId: formulario.servicioId,
+        tecnicoId: formulario.tecnicoId,
+        prioridad: formulario.prioridad,
+        estado: formulario.estado,
+      }, actividadEditando?.id);
 
-    if (!formData.tecnico) {
-      alert('Seleccione un técnico.');
-      return;
-    }
-
-    if (!formData.fecha) {
-      alert('Seleccione la fecha.');
-      return;
-    }
-
-    if (!formData.horaInicio) {
-      alert('Seleccione la hora de inicio.');
-      return;
-    }
-
-    if (modalEditar && actividadSeleccionada) {
-      setActividades((prev) =>
-        prev.map((item) =>
-          item.id === actividadSeleccionada.id
-            ? {
-                ...formData,
-                id: actividadSeleccionada.id
-              }
-            : item
-        )
+      notify(
+        'success',
+        actividadEditando ? 'Servicio actualizado' : 'Servicio agendado',
+        `${guardada.codigo} · ${guardada.cliente} · ${formatearFecha(guardada.fecha)} de ${guardada.horaInicio} a ${guardada.horaFin}.`,
       );
-    } else {
-      setActividades((prev) => [
-        ...prev,
-        {
-          ...formData,
-          id: Date.now()
-        }
-      ]);
+      cerrarFormulario();
+    } catch (error) {
+      if (error.errores) setErrores(error.errores);
+      notify('error', 'No se pudo agendar el servicio', error.message);
     }
-
-    cerrarModales();
   };
 
-  const eliminarActividad = (id) => {
-    const actividad = actividades.find(
-      (item) => item.id === id
-    );
-
-    if (!actividad) return;
-
-    if (
-      window.confirm(
-        `¿Está seguro de eliminar la actividad ${actividad.codigo}?`
-      )
-    ) {
-      setActividades((prev) =>
-        prev.filter((item) => item.id !== id)
+  const handleCambiarEstado = (actividad) => {
+    try {
+      const actualizada = cambiarEstadoActividad(actividad.id);
+      notify(
+        'info',
+        'Estado actualizado',
+        `${actualizada.codigo} pasó a ${actualizada.estado}.`,
       );
-
-      if (actividadSeleccionada?.id === id) {
-        cerrarModales();
-      }
+    } catch (error) {
+      notify('error', 'No se pudo cambiar el estado', error.message);
     }
   };
 
-  const cambiarEstadoActividad = (id) => {
-    setActividades((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              estado: estadoSiguiente(
-                ESTADOS.actividad,
-                item.estado
-              )
-            }
-          : item
-      )
-    );
-  };
-
-  const irAEditarDesdeDetalle = () => {
-    if (!actividadSeleccionada) return;
-
-    setModalDetalle(false);
-    abrirEditar(actividadSeleccionada);
-  };
-
-  const actividadesPorFecha = (fecha) => {
-    if (!fecha) return [];
-
-    const fechaTexto = `${fecha.getFullYear()}-${String(
-      fecha.getMonth() + 1
-    ).padStart(2, '0')}-${String(
-      fecha.getDate()
-    ).padStart(2, '0')}`;
-
-    return actividadesFiltradas.filter(
-      (item) => item.fecha === fechaTexto
-    );
-  };
-
-  const esHoy = (fecha) => {
-    if (!fecha) return false;
-
-    const hoy = new Date();
-
-    return (
-      fecha.getFullYear() === hoy.getFullYear() &&
-      fecha.getMonth() === hoy.getMonth() &&
-      fecha.getDate() === hoy.getDate()
-    );
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: '7px',
-    border: `1px solid ${colores.borde}`,
-    backgroundColor: esOscuro
-      ? '#0b1329'
-      : '#ffffff',
-    color: colores.texto,
-    fontSize: '13px',
-    boxSizing: 'border-box',
-    outline: 'none'
-  };
-
-  const styles = {
-    card: {
-      padding: '12px',
-      borderRadius: '6px',
-      border: `1px solid ${colores.borde}`,
-      backgroundColor: colores.tarjeta
-    },
-
-    cardTag: {
-      fontSize: '8px',
-      fontWeight: 'bold',
-      letterSpacing: '0.3px',
-      color: colores.secundario
-    },
-
-    cardNum: {
-      fontSize: '18px',
-      fontWeight: 'bold',
-      margin: '2px 0',
-      color: colores.texto
+  const confirmarEliminar = () => {
+    if (!actividadEliminar) return;
+    try {
+      eliminarActividad(actividadEliminar.id);
+      notify(
+        'success',
+        'Servicio eliminado',
+        `${actividadEliminar.codigo} fue retirado de la agenda.`,
+      );
+    } catch (error) {
+      notify('error', 'No se pudo eliminar el servicio', error.message);
+    } finally {
+      setActividadEliminar(null);
     }
   };
 
-  const diasCalendario = generarDiasCalendario();
+  const errorCampo = (campo) => errores[campo]?.[0] || '';
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: colores.fondo,
-        color: colores.texto,
-        padding: '22px',
-        boxSizing: 'border-box',
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1500px',
-          margin: '0 auto'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '15px',
-            marginBottom: '20px',
-            flexWrap: 'wrap'
-          }}
-        >
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              maxWidth: '430px'
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <SearchIcon color={colores.secundario} />
-            </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Agenda"
+        title="Agenda de Servicios"
+        subtitle={`Atención de lunes a viernes de 07:00 a 18:00 y sábados de 08:00 a 13:00 · agenda con ${MARGEN_MINIMO_AGENDA_MINUTOS} min de anticipación.`}
+        icon={CalendarDays}
+        actions={
+          <>
+            <Button icon={ShieldCheck} onClick={() => setModalValidacion(true)}>
+              Validar agenda
+            </Button>
+            <Button variant="primary" icon={CalendarPlus} onClick={abrirNuevo}>
+              Agendar servicio
+            </Button>
+          </>
+        }
+      />
 
-            <input
-              type="text"
-              placeholder="Buscar actividad, cliente, técnico..."
-              value={busqueda}
-              onChange={(e) =>
-                setBusqueda(e.target.value)
-              }
-              style={{
-                ...inputStyle,
-                paddingLeft: '34px'
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}
-          >
-            <button
-              onClick={toggleTheme}
-              style={{
-                border: `1px solid ${colores.borde}`,
-                backgroundColor: colores.tarjeta,
-                color: colores.texto,
-                borderRadius: '7px',
-                padding: '9px 13px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '7px'
-              }}
-            >
-              {esOscuro ? (
-                <>
-                  <SunIcon />
-                  Claro
-                </>
-              ) : (
-                <>
-                  <MoonIcon />
-                  Oscuro
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={abrirNuevaActividad}
-              style={{
-                border: 'none',
-                backgroundColor: '#ca8a04',
-                color: '#ffffff',
-                borderRadius: '7px',
-                padding: '10px 14px',
-                fontSize: '11px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '7px'
-              }}
-            >
-              <PlusIcon />
-              AGENDAR NUEVA OT
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '18px' }}>
-          <h1
-            style={{
-              fontSize: '25px',
-              margin: 0,
-              fontWeight: '700',
-              color: colores.texto
-            }}
-          >
-            Agendamiento
-          </h1>
-
-          <p
-            style={{
-              margin: '5px 0 0',
-              fontSize: '13px',
-              color: colores.secundario
-            }}
-          >
-            Agenda y seguimiento de órdenes de trabajo
-          </p>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(4, minmax(0, 1fr))',
-            gap: '12px',
-            marginBottom: '16px'
-          }}
-        >
-          <div style={styles.card}>
-            <div style={styles.cardTag}>
-              TOTAL ACTIVIDADES
-            </div>
-            <div style={styles.cardNum}>
-              {estadisticas.total}
-            </div>
-            <div
-              style={{
-                fontSize: '10px',
-                color: colores.secundario
-              }}
-            >
-              Registradas
-            </div>
-          </div>
-
-          <div style={styles.card}>
-            <div style={styles.cardTag}>
-              PROGRAMADAS
-            </div>
-            <div
-              style={{
-                ...styles.cardNum,
-                color: '#facc15'
-              }}
-            >
-              {estadisticas.programadas}
-            </div>
-            <div
-              style={{
-                fontSize: '10px',
-                color: colores.secundario
-              }}
-            >
-              Pendientes
-            </div>
-          </div>
-
-          <div style={styles.card}>
-            <div style={styles.cardTag}>
-              EN PROCESO
-            </div>
-            <div
-              style={{
-                ...styles.cardNum,
-                color: '#60a5fa'
-              }}
-            >
-              {estadisticas.proceso}
-            </div>
-            <div
-              style={{
-                fontSize: '10px',
-                color: colores.secundario
-              }}
-            >
-              En ejecución
-            </div>
-          </div>
-
-          <div style={styles.card}>
-            <div style={styles.cardTag}>
-              COMPLETADAS
-            </div>
-            <div
-              style={{
-                ...styles.cardNum,
-                color: '#4ade80'
-              }}
-            >
-              {estadisticas.completadas}
-            </div>
-            <div
-              style={{
-                fontSize: '10px',
-                color: colores.secundario
-              }}
-            >
-              Finalizadas
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            ...styles.card,
-            padding: '14px',
-            marginBottom: '16px'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px',
-              flexWrap: 'wrap',
-              marginBottom: '12px'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <CalendarIcon />
-
-              <span
-                style={{
-                  fontSize: '14px',
-                  fontWeight: '700'
-                }}
-              >
-                {MESES[mesActual]} {anioActual}
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => cambiarMes(-1)}
-                title="Mes anterior"
-                aria-label="Mes anterior"
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  border: `1px solid ${colores.borde}`,
-                  backgroundColor: colores.tarjetaSecundaria,
-                  color: colores.iconColor,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 0
-                }}
-              >
-                <ChevronLeftIcon
-                  color={colores.iconColor}
-                />
-              </button>
-
-              <button
-                type="button"
-                onClick={volverHoy}
-                style={{
-                  height: '30px',
-                  border: `1px solid ${colores.borde}`,
-                  backgroundColor: colores.tarjetaSecundaria,
-                  color: colores.texto,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  padding: '0 10px',
-                  fontSize: '10px',
-                  fontWeight: '600'
-                }}
-              >
-                Hoy
-              </button>
-
-              <button
-                type="button"
-                onClick={() => cambiarMes(1)}
-                title="Mes siguiente"
-                aria-label="Mes siguiente"
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  border: `1px solid ${colores.borde}`,
-                  backgroundColor: colores.tarjetaSecundaria,
-                  color: colores.iconColor,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 0
-                }}
-              >
-                <ChevronRightIcon
-                  color={colores.iconColor}
-                />
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '10px',
-              marginBottom: '12px',
-              flexWrap: 'wrap'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario,
-                  fontWeight: '700'
-                }}
-              >
-                PRIORIDAD
-              </span>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    backgroundColor: '#ef4444',
-                    marginRight: '4px'
-                  }}
-                />
-                Alta
-              </span>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    backgroundColor: '#f59e0b',
-                    marginRight: '4px'
-                  }}
-                />
-                Media
-              </span>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    backgroundColor: '#94a3b8',
-                    marginRight: '4px'
-                  }}
-                />
-                Baja
-              </span>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                Texto = hora + ID de OT
-              </span>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                Clic en actividad = ver detalle
-              </span>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                gap: '5px'
-              }}
-            >
-              {[
-                'Todas',
-                'Programada',
-                'En proceso',
-                'Completada'
-              ].map((opcion) => (
-                <button
-                  key={opcion}
-                  onClick={() => setFiltro(opcion)}
-                  style={{
-                    border: `1px solid ${
-                      filtro === opcion
-                        ? '#ca8a04'
-                        : colores.borde
-                    }`,
-                    backgroundColor:
-                      filtro === opcion
-                        ? esOscuro
-                          ? '#3f3210'
-                          : '#fef3c7'
-                        : colores.tarjetaSecundaria,
-                    color:
-                      filtro === opcion
-                        ? '#ca8a04'
-                        : colores.secundario,
-                    borderRadius: '5px',
-                    padding: '6px 8px',
-                    fontSize: '9px',
-                    cursor: 'pointer',
-                    fontWeight:
-                      filtro === opcion
-                        ? '700'
-                        : '500'
-                  }}
-                >
-                  {opcion}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(7, minmax(0, 1fr))',
-              borderTop: `1px solid ${colores.borde}`,
-              borderLeft: `1px solid ${colores.borde}`
-            }}
-          >
-            {DIAS_SEMANA.map((dia) => (
-              <div
-                key={dia}
-                style={{
-                  padding: '7px 5px',
-                  textAlign: 'center',
-                  fontSize: '9px',
-                  fontWeight: '700',
-                  color: colores.secundario,
-                  borderRight: `1px solid ${colores.borde}`,
-                  borderBottom: `1px solid ${colores.borde}`,
-                  backgroundColor:
-                    colores.tarjetaSecundaria
-                }}
-              >
-                {dia}
-              </div>
-            ))}
-
-            {diasCalendario.map((fecha, index) => {
-              const eventos =
-                actividadesPorFecha(fecha);
-
-              return (
-                <div
-                  key={index}
-                  style={{
-                    minHeight: '60px',
-                    padding: '6px',
-                    borderRight: `1px solid ${colores.borde}`,
-                    borderBottom: `1px solid ${colores.borde}`,
-                    backgroundColor:
-                      fecha && esHoy(fecha)
-                        ? esOscuro
-                          ? '#171d27'
-                          : '#fffbeb'
-                        : colores.tarjeta,
-                    position: 'relative',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {fecha && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginBottom: '3px'
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '9px',
-                          fontWeight: '700',
-                          backgroundColor: esHoy(
-                            fecha
-                          )
-                            ? '#ca8a04'
-                            : 'transparent',
-                          color: esHoy(fecha)
-                            ? '#ffffff'
-                            : colores.secundario,
-                          border:
-                            esHoy(fecha)
-                              ? 'none'
-                              : '1px solid transparent'
-                        }}
-                      >
-                        {fecha.getDate()}
-                      </span>
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '3px'
-                    }}
-                  >
-                    {eventos
-                      .slice(0, 2)
-                      .map((evento) => (
-                        <button
-                          key={evento.id}
-                          type="button"
-                          onClick={() =>
-                            abrirDetalle(evento)
-                          }
-                          title={`${evento.codigo} - ${evento.actividad}`}
-                          style={{
-                            width: '100%',
-                            border: 'none',
-                            borderLeft: `3px solid ${obtenerClasePrioridad(
-                              evento.prioridad
-                            )}`,
-                            backgroundColor:
-                              esOscuro
-                                ? '#0b1329'
-                                : '#f8fafc',
-                            color: colores.texto,
-                            textAlign: 'left',
-                            padding: '3px 4px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontSize: '8px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {evento.horaInicio} ·{' '}
-                          {evento.codigo}
-                        </button>
-                      ))}
-
-                    {eventos.length > 2 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          abrirDetalle(
-                            eventos[2]
-                          )
-                        }
-                        style={{
-                          border: 'none',
-                          background: 'none',
-                          color: '#ca8a04',
-                          cursor: 'pointer',
-                          fontSize: '8px',
-                          textAlign: 'left',
-                          padding: '1px 3px'
-                        }}
-                      >
-                        +{eventos.length - 2} más
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div
-          style={{
-            ...styles.card,
-            padding: '0',
-            overflow: 'hidden'
-          }}
-        >
-          <div
-            style={{
-              padding: '14px 16px',
-              borderBottom: `1px solid ${colores.borde}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '14px',
-                  color: colores.texto
-                }}
-              >
-                Actividades del mes
-              </h2>
-
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: colores.secundario
-                }}
-              >
-                {actividadesDelMes.length} actividades
-                encontradas
-              </span>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                '90px 1.4fr 1fr 120px 88px 130px 105px',
-              padding: '9px 14px',
-              backgroundColor:
-                colores.tarjetaSecundaria,
-              borderBottom: `1px solid ${colores.borde}`,
-              fontSize: '8px',
-              fontWeight: '700',
-              color: colores.secundario
-            }}
-          >
-            <div>ID OT</div>
-            <div>Actividad / Cliente</div>
-            <div>Técnico</div>
-            <div>Fecha</div>
-            <div>Prioridad</div>
-            <div>Estado</div>
-            <div style={{ textAlign: 'right' }}>
-              Acciones
-            </div>
-          </div>
-
-          {actividadesDelMes.length === 0 ? (
-            <div
-              style={{
-                padding: '35px',
-                textAlign: 'center',
-                color: colores.secundario,
-                fontSize: '12px'
-              }}
-            >
-              No hay actividades para los filtros
-              seleccionados.
-            </div>
-          ) : (
-            actividadesDelMes.map((item) => {
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      '90px 1.4fr 1fr 120px 88px 130px 105px',
-                    padding: '11px 14px',
-                    borderBottom: `1px solid ${colores.borde}`,
-                    alignItems: 'center',
-                    fontSize: '10px',
-                    gap: '5px'
-                  }}
-                >
-                  <div
-                    style={{
-                      color: '#ca8a04',
-                      fontWeight: '700'
-                    }}
-                  >
-                    {item.codigo}
-                  </div>
-
-                  <div
-                    style={{
-                      minWidth: 0
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: colores.texto,
-                        fontWeight: '600',
-                        marginBottom: '3px',
-                        overflow: 'hidden',
-                        textOverflow:
-                          'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {item.actividad}
-                    </div>
-
-                    <div
-                      style={{
-                        color: colores.secundario,
-                        fontSize: '9px',
-                        overflow: 'hidden',
-                        textOverflow:
-                          'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {item.cliente}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      color: colores.texto
-                    }}
-                  >
-                    {item.tecnico}
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        color: colores.texto
-                      }}
-                    >
-                      {formatearFecha(item.fecha)}
-                    </div>
-
-                    <div
-                      style={{
-                        color: colores.secundario,
-                        fontSize: '9px',
-                        marginTop: '2px'
-                      }}
-                    >
-                      {item.horaInicio}
-                      {item.horaFin
-                        ? ` - ${item.horaFin}`
-                        : ''}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '9px',
-                        color: colores.texto
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: '6px',
-                          height: '6px',
-                          borderRadius: '50%',
-                          backgroundColor:
-                            obtenerClasePrioridad(
-                              item.prioridad
-                            )
-                        }}
-                      />
-
-                      {item.prioridad}
-                    </span>
-                  </div>
-
-                  <div>
-                    <EstadoToggle
-                      estado={item.estado}
-                      estados={ESTADOS.actividad}
-                      onClick={() =>
-                        cambiarEstadoActividad(
-                          item.id
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent:
-                        'flex-end',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <AccionesFila
-                      onVer={() =>
-                        abrirDetalle(item)
-                      }
-                      onEditar={() =>
-                        abrirEditar(item)
-                      }
-                      onEliminar={() =>
-                        eliminarActividad(
-                          item.id
-                        )
-                      }
-                      color={colores.iconColor}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+      <div className="mca-kpis">
+        <KpiCard
+          label="Servicios agendados"
+          value={resumen.total}
+          hint={`${resumen.canceladas} cancelados`}
+          icon={CalendarDays}
+          tone="yellow"
+        />
+        <KpiCard
+          label="Programados"
+          value={resumen.programadas}
+          hint="Pendientes de ejecución"
+          icon={CalendarClock}
+          tone="info"
+        />
+        <KpiCard
+          label="En proceso"
+          value={resumen.proceso}
+          hint="Atención en curso"
+          icon={Wrench}
+          tone="warning"
+        />
+        <KpiCard
+          label="Completados"
+          value={resumen.completadas}
+          hint="Servicios finalizados"
+          icon={CheckCircle2}
+          tone="success"
+        />
       </div>
 
-      {(modalNueva || modalEditar) && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor:
-              'rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            zIndex: 1000
-          }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              cerrarModales();
-            }
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '720px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              backgroundColor:
-                colores.tarjeta,
-              border: `1px solid ${colores.borde}`,
-              borderRadius: '9px',
-              boxShadow:
-                '0 20px 60px rgba(0,0,0,0.35)'
-            }}
-          >
-            <div
-              style={{
-                padding: '16px 18px',
-                borderBottom: `1px solid ${colores.borde}`,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: '16px',
-                    color: colores.texto
-                  }}
-                >
-                  {modalEditar
-                    ? 'Editar actividad'
-                    : 'Agendar nueva OT'}
-                </h2>
-
-                <p
-                  style={{
-                    margin: '4px 0 0',
-                    color: colores.secundario,
-                    fontSize: '10px'
-                  }}
-                >
-                  Complete la información de la
-                  orden de trabajo
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={cerrarModales}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  color: colores.secundario,
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={guardarActividad}>
-              <div
-                style={{
-                  padding: '18px',
-                  display: 'grid',
-                  gridTemplateColumns:
-                    'repeat(2, minmax(0, 1fr))',
-                  gap: '14px'
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Código OT
-                  </label>
-
-                  <input
-                    name="codigo"
-                    value={formData.codigo}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Cliente *
-                  </label>
-
-                  <input
-                    name="cliente"
-                    value={formData.cliente}
-                    onChange={manejarCambio}
-                    placeholder="Nombre del cliente"
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    gridColumn:
-                      '1 / -1'
-                  }}
-                >
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Actividad *
-                  </label>
-
-                  <input
-                    name="actividad"
-                    value={formData.actividad}
-                    onChange={manejarCambio}
-                    placeholder="Descripción de la actividad"
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Técnico *
-                  </label>
-
-                  <select
-                    name="tecnico"
-                    value={formData.tecnico}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  >
-                    <option value="">
-                      Seleccione un técnico
-                    </option>
-
-                    {TECNICOS.map((tecnico) => (
-                      <option
-                        key={tecnico}
-                        value={tecnico}
-                      >
-                        {tecnico}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Fecha *
-                  </label>
-
-                  <input
-                    type="date"
-                    name="fecha"
-                    value={formData.fecha}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Hora inicio *
-                  </label>
-
-                  <input
-                    type="time"
-                    name="horaInicio"
-                    value={formData.horaInicio}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Hora fin
-                  </label>
-
-                  <input
-                    type="time"
-                    name="horaFin"
-                    value={formData.horaFin}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Prioridad
-                  </label>
-
-                  <select
-                    name="prioridad"
-                    value={formData.prioridad}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  >
-                    <option value="Alta">
-                      Alta
-                    </option>
-                    <option value="Media">
-                      Media
-                    </option>
-                    <option value="Baja">
-                      Baja
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Estado
-                  </label>
-
-                  <select
-                    name="estado"
-                    value={formData.estado}
-                    onChange={manejarCambio}
-                    style={inputStyle}
-                  >
-                    <option value="Programada">
-                      Programada
-                    </option>
-                    <option value="En proceso">
-                      En proceso
-                    </option>
-                    <option value="Completada">
-                      Completada
-                    </option>
-                    <option value="Cancelada">
-                      Cancelada
-                    </option>
-                  </select>
-                </div>
-
-                <div
-                  style={{
-                    gridColumn:
-                      '1 / -1'
-                  }}
-                >
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '5px',
-                      color: colores.texto
-                    }}
-                  >
-                    Descripción
-                  </label>
-
-                  <textarea
-                    name="descripcion"
-                    value={formData.descripcion}
-                    onChange={manejarCambio}
-                    placeholder="Detalles adicionales de la actividad..."
-                    rows="4"
-                    style={{
-                      ...inputStyle,
-                      resize: 'vertical'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '13px 18px',
-                  borderTop: `1px solid ${colores.borde}`,
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '8px'
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={cerrarModales}
-                  style={{
-                    border: `1px solid ${colores.borde}`,
-                    backgroundColor:
-                      colores.tarjetaSecundaria,
-                    color: colores.texto,
-                    borderRadius: '6px',
-                    padding: '9px 13px',
-                    fontSize: '10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  style={{
-                    border: 'none',
-                    backgroundColor: '#ca8a04',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                    padding: '9px 13px',
-                    fontSize: '10px',
-                    fontWeight: '700',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {modalEditar
-                    ? 'Guardar Cambios'
-                    : 'Agendar Actividad'}
-                </button>
-              </div>
-            </form>
-          </div>
+      <div
+        className={`mca-notice is-${incidencias.length > 0 ? (erroresAgenda > 0 ? 'danger' : 'warning') : 'success'}`}
+        style={{ marginBottom: 16, alignItems: 'center' }}
+      >
+        {incidencias.length > 0 ? (
+          <AlertTriangle size={18} strokeWidth={2} />
+        ) : (
+          <CheckCircle2 size={18} strokeWidth={2} />
+        )}
+        <div style={{ flex: 1 }}>
+          {incidencias.length > 0 ? (
+            <>
+              <strong>Revisión de agenda:</strong> {erroresAgenda} conflicto(s) y{' '}
+              {advertenciasAgenda} advertencia(s) en servicios activos. Revisa los cruces de técnicos,
+              horarios fuera de atención o fechas vencidas.
+            </>
+          ) : (
+            <>
+              <strong>Agenda validada.</strong> Los servicios activos están dentro del horario de
+              atención, sin cruces de técnicos ni fechas vencidas.
+            </>
+          )}
         </div>
-      )}
+        {incidencias.length > 0 && (
+          <Button size="sm" onClick={() => setModalValidacion(true)}>
+            Ver incidencias
+          </Button>
+        )}
+      </div>
 
-      {modalDetalle &&
-        actividadSeleccionada && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor:
-                'rgba(0, 0, 0, 0.65)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-              zIndex: 1000
-            }}
-            onMouseDown={(e) => {
-              if (
-                e.target === e.currentTarget
-              ) {
-                cerrarModales();
-              }
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '600px',
-                backgroundColor:
-                  colores.tarjeta,
-                border: `1px solid ${colores.borde}`,
-                borderRadius: '9px',
-                overflow: 'hidden',
-                boxShadow:
-                  '0 20px 60px rgba(0,0,0,0.35)'
-              }}
+      <Panel
+        title="Servicios programados"
+        subtitle={`${filtradas.length} de ${actividades.length} servicios · margen de ${BUFFER_ENTRE_SERVICIOS_MINUTOS} min entre servicios del mismo técnico`}
+        actions={
+          <>
+            <SearchInput
+              value={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por código, cliente, servicio o técnico..."
+            />
+            <select
+              className="mca-select"
+              style={{ width: 150 }}
+              value={filtroPeriodo}
+              onChange={(event) => setFiltroPeriodo(event.target.value)}
+              aria-label="Filtrar por periodo"
             >
-              <div
-                style={{
-                  padding: '16px 18px',
-                  borderBottom: `1px solid ${colores.borde}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start'
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: '#ca8a04',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    {actividadSeleccionada.codigo}
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: '17px',
-                      color: colores.texto
-                    }}
-                  >
-                    {
-                      actividadSeleccionada.actividad
-                    }
-                  </h2>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={cerrarModales}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: colores.secundario,
-                    fontSize: '20px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div
-                style={{
-                  padding: '18px',
-                  display: 'grid',
-                  gridTemplateColumns:
-                    'repeat(2, minmax(0, 1fr))',
-                  gap: '15px'
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    CLIENTE
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: colores.texto
-                    }}
-                  >
-                    {
-                      actividadSeleccionada.cliente
-                    }
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    TÉCNICO
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: colores.texto
-                    }}
-                  >
-                    {
-                      actividadSeleccionada.tecnico
-                    }
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    FECHA
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: colores.texto
-                    }}
-                  >
-                    {formatearFecha(
-                      actividadSeleccionada.fecha
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    HORARIO
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: colores.texto
-                    }}
-                  >
-                    {
-                      actividadSeleccionada.horaInicio
-                    }
-
-                    {actividadSeleccionada.horaFin
-                      ? ` - ${actividadSeleccionada.horaFin}`
-                      : ''}
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    PRIORIDAD
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      fontSize: '11px',
-                      color: colores.texto
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        backgroundColor:
-                          obtenerClasePrioridad(
-                            actividadSeleccionada.prioridad
-                          )
-                      }}
-                    />
-
-                    {
-                      actividadSeleccionada.prioridad
-                    }
-                  </div>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    ESTADO
-                  </div>
-
-                  <EstadoToggle
-                    estado={
-                      (
-                        actividades.find(
-                          (a) =>
-                            a.id ===
-                            actividadSeleccionada?.id
-                        ) || actividadSeleccionada
-                      )?.estado
-                    }
-                    estados={ESTADOS.actividad}
-                    onClick={() =>
-                      cambiarEstadoActividad(
-                        actividadSeleccionada.id
-                      )
-                    }
-                  />
-                </div>
-
-                <div
-                  style={{
-                    gridColumn:
-                      '1 / -1'
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      color: colores.secundario,
-                      fontWeight: '700',
-                      marginBottom: '5px'
-                    }}
-                  >
-                    DESCRIPCIÓN
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      lineHeight: '1.5',
-                      color: colores.texto,
-                      backgroundColor:
-                        colores.tarjetaSecundaria,
-                      border: `1px solid ${colores.borde}`,
-                      borderRadius: '6px',
-                      padding: '10px'
-                    }}
-                  >
-                    {actividadSeleccionada.descripcion ||
-                      'Sin descripción registrada.'}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '13px 18px',
-                  borderTop: `1px solid ${colores.borde}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    eliminarActividad(
-                      actividadSeleccionada.id
-                    )
-                  }
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: '#ef4444',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Eliminar
-                </button>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '8px'
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={
-                      irAEditarDesdeDetalle
-                    }
-                    style={{
-                      border: `1px solid ${colores.borde}`,
-                      backgroundColor:
-                        colores.tarjetaSecundaria,
-                      color: colores.texto,
-                      borderRadius: '6px',
-                      padding: '9px 13px',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <EditIcon
-                      color={
-                        colores.iconColor
+              <option value="Todas">Todo el periodo</option>
+              <option value="Hoy">Hoy</option>
+              <option value="Semana">Próximos 7 días</option>
+              <option value="Mes">Este mes</option>
+            </select>
+            <select
+              className="mca-select"
+              style={{ width: 145 }}
+              value={filtroEstado}
+              onChange={(event) => setFiltroEstado(event.target.value)}
+              aria-label="Filtrar por estado"
+            >
+              <option value="Todas">Todos los estados</option>
+              {ESTADOS_AGENDA.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+        flush
+      >
+        <div className="mca-table-wrap">
+          <table className="mca-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Cliente</th>
+                <th>Servicio</th>
+                <th>Técnico</th>
+                <th>Fecha</th>
+                <th>Horario</th>
+                <th>Estado</th>
+                <th className="mca-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtradas.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="mca-table__empty">
+                    <EmptyState
+                      icon={CalendarDays}
+                      title="Sin servicios en la agenda"
+                      message="Ajusta los filtros o agenda un servicio con cliente, técnico y horario disponible."
+                      action={
+                        <Button size="sm" icon={CalendarPlus} onClick={abrirNuevo}>
+                          Agendar servicio
+                        </Button>
                       }
                     />
-                    Editar
-                  </button>
+                  </td>
+                </tr>
+              ) : (
+                filtradas.map((actividad) => (
+                  <tr key={actividad.id}>
+                    <td className="is-nowrap">
+                      <Badge tone="yellow">{actividad.codigo}</Badge>
+                    </td>
+                    <td>
+                      <div className="is-primary">{actividad.cliente}</div>
+                      <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                        {actividad.telefono || 'Sin teléfono'}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="is-primary" style={{ fontSize: 12 }}>
+                        {actividad.servicio}
+                      </div>
+                      <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                        {actividad.prioridad} prioridad
+                      </div>
+                    </td>
+                    <td>{actividad.tecnico}</td>
+                    <td className="is-nowrap">
+                      <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        <span>{formatearFecha(actividad.fecha)}</span>
+                        {actividad.fecha === hoy && <Badge tone="info">Hoy</Badge>}
+                      </div>
+                      <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                        {nombreDia(actividad.fecha)}
+                      </div>
+                    </td>
+                    <td className="is-nowrap">
+                      <div className="is-primary" style={{ fontSize: 12 }}>
+                        {actividad.horaInicio} – {actividad.horaFin}
+                      </div>
+                      <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                        {actividad.horas} h · {formatearHora12(actividad.horaInicio)}
+                      </div>
+                    </td>
+                    <td>
+                      <EstadoToggle
+                        estado={actividad.estado}
+                        estados={ESTADOS.actividad}
+                        width={118}
+                        onClick={() => handleCambiarEstado(actividad)}
+                      />
+                    </td>
+                    <td className="mca-center">
+                      <AccionesFila
+                        onVer={() => setActividadDetalle(actividad)}
+                        onEditar={() => abrirEditar(actividad)}
+                        onEliminar={() => setActividadEliminar(actividad)}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
-                  <button
-                    type="button"
-                    onClick={cerrarModales}
-                    style={{
-                      border: 'none',
-                      backgroundColor:
-                        '#ca8a04',
-                      color: '#ffffff',
-                      borderRadius: '6px',
-                      padding: '9px 13px',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Cerrar
-                  </button>
+      <Modal
+        open={modalFormulario}
+        onClose={cerrarFormulario}
+        title={actividadEditando ? 'Editar servicio agendado' : 'Agendar servicio'}
+        subtitle={
+          actividadEditando
+            ? `${actividadEditando.codigo} · ${actividadEditando.cliente}`
+            : 'El código de agenda se genera automáticamente.'
+        }
+        icon={actividadEditando ? CalendarClock : CalendarPlus}
+        size="lg"
+        footer={
+          <>
+            <Button onClick={cerrarFormulario}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-agenda">
+              {actividadEditando ? 'Guardar cambios' : 'Agendar servicio'}
+            </Button>
+          </>
+        }
+      >
+        <form id="form-agenda" className="mca-form-grid" onSubmit={handleGuardar}>
+          <Field
+            label="Cliente"
+            required
+            full
+            error={errorCampo('clienteId')}
+            hint="Busca por nombre, documento, contacto o municipio; los datos se completan solos."
+          >
+            <Combobox
+              value={formulario.clienteId}
+              onChange={seleccionarCliente}
+              options={opcionesClientes}
+              placeholder="Buscar cliente..."
+              emptyText="No se encontraron clientes"
+            />
+          </Field>
+
+          <Field label="Teléfono" hint="Se completa al seleccionar el cliente.">
+            <input
+              className="mca-input"
+              type="text"
+              value={formulario.telefono}
+              disabled
+              placeholder="Automático"
+            />
+          </Field>
+
+          <Field label="Dirección del servicio" hint="Se completa al seleccionar el cliente.">
+            <input
+              className="mca-input"
+              type="text"
+              value={formulario.direccion}
+              disabled
+              placeholder="Automático"
+            />
+          </Field>
+
+          <Field
+            label="Servicio"
+            required
+            full
+            error={errorCampo('servicioId')}
+            hint="La duración se toma automáticamente del tiempo estimado del servicio."
+          >
+            <Combobox
+              value={formulario.servicioId}
+              onChange={seleccionarServicio}
+              options={opcionesServicios}
+              placeholder="Buscar servicio del catálogo..."
+              emptyText="No se encontraron servicios"
+            />
+          </Field>
+
+          <Field label="Duración estimada" hint="Calculada desde el servicio seleccionado.">
+            <input
+              className="mca-input"
+              type="text"
+              value={horasFormulario > 0 ? `${horasFormulario} ${horasFormulario === 1 ? 'hora' : 'horas'}` : ''}
+              disabled
+              placeholder="Selecciona un servicio"
+            />
+          </Field>
+
+          <Field label="Técnico responsable" required error={errorCampo('tecnicoId')}>
+            <select
+              className="mca-select"
+              value={formulario.tecnicoId}
+              onChange={(event) => {
+                setFormulario((prev) => ({ ...prev, tecnicoId: event.target.value }));
+                setErrores((prev) => ({ ...prev, tecnicoId: undefined }));
+              }}
+            >
+              <option value="">Selecciona un técnico</option>
+              {tecnicos.map((tecnico) => (
+                <option key={tecnico.id} value={tecnico.id}>
+                  {tecnico.nombre} · {tecnico.especialidad}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="Fecha del servicio"
+            required
+            error={errorCampo('fecha')}
+            hint={
+              horarioFormulario
+                ? `${nombreDia(formulario.fecha)} · atención de ${horarioFormulario.apertura} a ${horarioFormulario.cierre}`
+                : 'Este día no tiene atención. Elige otro.'
+            }
+          >
+            <input
+              className="mca-input"
+              type="date"
+              min={hoy}
+              max={sumarDias(DIAS_MAXIMOS_AGENDA)}
+              value={formulario.fecha}
+              onChange={(event) => cambiarFecha(event.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Hora de inicio"
+            required
+            error={errorCampo('horaInicio')}
+            hint={`Agenda con al menos ${MARGEN_MINIMO_AGENDA_MINUTOS} min de anticipación.`}
+          >
+            <input
+              className="mca-input"
+              type="time"
+              step="900"
+              value={formulario.horaInicio}
+              onChange={(event) => {
+                setFormulario((prev) => ({ ...prev, horaInicio: event.target.value }));
+                setErrores((prev) => ({ ...prev, horaInicio: undefined }));
+              }}
+            />
+          </Field>
+
+          <Field label="Hora de finalización" hint="Calculada con la duración del servicio.">
+            <input
+              className="mca-input"
+              type="text"
+              value={horaFinFormulario ? `${horaFinFormulario} · ${formatearHora12(horaFinFormulario)}` : ''}
+              disabled
+              placeholder="Se calcula al elegir hora y servicio"
+            />
+          </Field>
+
+          <Field label="Prioridad">
+            <select
+              className="mca-select"
+              value={formulario.prioridad}
+              onChange={(event) => setFormulario((prev) => ({ ...prev, prioridad: event.target.value }))}
+            >
+              {PRIORIDADES_AGENDA.map((prioridad) => (
+                <option key={prioridad} value={prioridad}>
+                  {prioridad}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Estado">
+            <select
+              className="mca-select"
+              value={formulario.estado}
+              onChange={(event) => setFormulario((prev) => ({ ...prev, estado: event.target.value }))}
+            >
+              {ESTADOS_AGENDA.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Descripción del trabajo" full>
+            <textarea
+              className="mca-textarea"
+              rows={2}
+              value={formulario.descripcion}
+              onChange={(event) => setFormulario((prev) => ({ ...prev, descripcion: event.target.value }))}
+              placeholder="Detalle del servicio, materiales o indicaciones para el técnico."
+            />
+          </Field>
+
+          <div className="mca-field mca-field--full">
+            <div className="mca-notice is-info">
+              <Clock3 size={16} strokeWidth={2} />
+              <div>
+                <strong>Horario de atención:</strong> lunes a viernes 07:00–18:00 · sábados
+                08:00–13:00. Se reservan {BUFFER_ENTRE_SERVICIOS_MINUTOS} minutos entre servicios del
+                mismo técnico.
+              </div>
+            </div>
+          </div>
+
+          {validacionViva && (
+            <div className="mca-field mca-field--full">
+              <div className={`mca-notice is-${validacionViva.mensajes.length > 0 ? 'warning' : 'success'}`}>
+                {validacionViva.mensajes.length > 0 ? (
+                  <AlertTriangle size={16} strokeWidth={2} />
+                ) : (
+                  <CheckCircle2 size={16} strokeWidth={2} />
+                )}
+                <div>
+                  {validacionViva.mensajes.length > 0 ? (
+                    <>
+                      <strong>Revisa la programación:</strong> {validacionViva.mensajes[0]}
+                    </>
+                  ) : (
+                    <>
+                      <strong>Horario disponible.</strong> Termina a las {validacionViva.horaFin} sin
+                      cruces con otros servicios del técnico.
+                    </>
+                  )}
                 </div>
+              </div>
+            </div>
+          )}
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(actividadDetalle)}
+        onClose={() => setActividadDetalle(null)}
+        title={actividadDetalle?.codigo || 'Detalle del servicio'}
+        subtitle={actividadDetalle ? `${actividadDetalle.cliente} · ${actividadDetalle.servicio}` : ''}
+        icon={CalendarCheck2}
+        size="lg"
+        footer={
+          actividadDetalle && (
+            <>
+              <Button onClick={() => setActividadDetalle(null)}>Cerrar</Button>
+              <Button variant="primary" icon={CalendarClock} onClick={() => abrirEditar(actividadDetalle)}>
+                Editar agenda
+              </Button>
+            </>
+          )
+        }
+      >
+        {actividadDetalle && (
+          <div className="mca-stack">
+            {actividadDetalle.fecha < hoy
+              && ['Programada', 'En proceso'].includes(actividadDetalle.estado) && (
+                <div className="mca-notice is-warning">
+                  <AlertTriangle size={16} strokeWidth={2} />
+                  <div>
+                    Este servicio quedó en una fecha pasada y sigue activo. Reprograma o cambia su
+                    estado para mantener la agenda validada.
+                  </div>
+                </div>
+              )}
+
+            <DetailGrid>
+              <DetailItem label="Cliente">{actividadDetalle.cliente}</DetailItem>
+              <DetailItem label="Teléfono">{actividadDetalle.telefono || '—'}</DetailItem>
+              <DetailItem label="Dirección" full>{actividadDetalle.direccion || '—'}</DetailItem>
+              <DetailItem label="Servicio">{actividadDetalle.servicio}</DetailItem>
+              <DetailItem label="Técnico">{actividadDetalle.tecnico}</DetailItem>
+              <DetailItem label="Fecha">
+                {formatearFecha(actividadDetalle.fecha)} · {nombreDia(actividadDetalle.fecha)}
+              </DetailItem>
+              <DetailItem label="Horario">
+                {actividadDetalle.horaInicio} – {actividadDetalle.horaFin}
+              </DetailItem>
+              <DetailItem label="Duración">{actividadDetalle.horas} horas</DetailItem>
+              <DetailItem label="Prioridad">{actividadDetalle.prioridad}</DetailItem>
+              <DetailItem label="Estado">
+                <EstadoToggle estado={actividadDetalle.estado} estados={ESTADOS.actividad} width={118} />
+              </DetailItem>
+              <DetailItem label="Descripción" full>
+                {actividadDetalle.descripcion || 'Sin descripción registrada.'}
+              </DetailItem>
+            </DetailGrid>
+
+            <div className="mca-notice is-info">
+              <Users size={16} strokeWidth={2} />
+              <div>
+                <strong>Técnico:</strong> {actividadDetalle.tecnico}. Verifica que no existan otros
+                servicios del mismo técnico dentro de los {BUFFER_ENTRE_SERVICIOS_MINUTOS} minutos
+                anteriores o posteriores a este horario.
               </div>
             </div>
           </div>
         )}
-    </div>
+      </Modal>
+
+      <Modal
+        open={modalValidacion}
+        onClose={() => setModalValidacion(false)}
+        title="Validación de agenda"
+        subtitle="Revisión de horarios, fechas y cruces de técnicos en servicios activos."
+        icon={ShieldCheck}
+        size="lg"
+        footer={<Button onClick={() => setModalValidacion(false)}>Cerrar</Button>}
+      >
+        <div className="mca-stack">
+          {incidencias.length === 0 ? (
+            <div className="mca-notice is-success">
+              <CheckCircle2 size={18} strokeWidth={2} />
+              <div>
+                <strong>Agenda sin conflictos.</strong> Todos los servicios activos están dentro del
+                horario permitido, con fechas válidas y sin cruces de técnicos.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mca-notice is-warning">
+                <AlertTriangle size={18} strokeWidth={2} />
+                <div>
+                  Se encontraron {incidencias.length} incidencia(s): {erroresAgenda} de severidad alta
+                  (conflictos u horarios inválidos) y {advertenciasAgenda} advertencia(s).
+                </div>
+              </div>
+
+              <div className="mca-table-wrap">
+                <table className="mca-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Cliente / Técnico</th>
+                      <th>Severidad</th>
+                      <th>Detalle</th>
+                      <th className="mca-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {incidencias.map((incidencia, indice) => (
+                      <tr key={`${incidencia.id}-${indice}`}>
+                        <td className="is-nowrap">
+                          <Badge tone={incidencia.severidad === 'error' ? 'danger' : 'warning'}>
+                            {incidencia.codigo}
+                          </Badge>
+                        </td>
+                        <td>{incidencia.cliente || '—'}</td>
+                        <td>
+                          <Badge tone={incidencia.severidad === 'error' ? 'danger' : 'warning'}>
+                            {incidencia.severidad === 'error' ? 'Alta' : 'Advertencia'}
+                          </Badge>
+                        </td>
+                        <td>{incidencia.mensaje}</td>
+                        <td className="mca-center">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const actividad = actividades.find(
+                                (item) => String(item.id) === String(incidencia.id),
+                              );
+                              setModalValidacion(false);
+                              if (actividad) abrirEditar(actividad);
+                            }}
+                          >
+                            Revisar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <div className="mca-notice is-info">
+            <Clock3 size={16} strokeWidth={2} />
+            <div>
+              La validación automática revisa: día de atención, horario permitido, fechas vencidas,
+              anticipación mínima de {MARGEN_MINIMO_AGENDA_MINUTOS} minutos y {BUFFER_ENTRE_SERVICIOS_MINUTOS}{' '}
+              minutos de margen entre servicios del mismo técnico.
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(actividadEliminar)}
+        title="Eliminar servicio de la agenda"
+        message={
+          actividadEliminar
+            ? `Se eliminará ${actividadEliminar.codigo} de ${actividadEliminar.cliente} programado para el ${formatearFecha(actividadEliminar.fecha)} a las ${actividadEliminar.horaInicio}. Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Eliminar servicio"
+        onCancel={() => setActividadEliminar(null)}
+        onConfirm={confirmarEliminar}
+      />
+
+      <Toast toast={toast} onClose={close} />
+    </PageShell>
   );
 }
 

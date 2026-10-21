@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { ThemeProvider } from './shared/context/ThemeContext.jsx';
 import Dashboard from './app/components/Dashboard.jsx';
 import { SplashScreen } from './shared/components/SplashScreen.jsx';
+import { inicializarDatos } from './shared/services/init.js';
 import './shared/styles/theme.css';
+import './shared/styles/ui.css';
 import './shared/styles/splash.css';
+
+inicializarDatos();
 
 export default function App() {
   const [cargando, setCargando] = useState(true);

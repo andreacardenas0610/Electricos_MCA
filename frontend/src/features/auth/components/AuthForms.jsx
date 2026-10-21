@@ -41,7 +41,7 @@ function MarcoAuth({ titulo, children, onBack }) {
       <div className="auth-backdrop" aria-hidden="true" />
       <button className="auth-theme-toggle" type="button" onClick={toggleTheme} aria-label={`Cambiar a modo ${theme === 'dark' ? 'claro' : 'oscuro'}`}>
         {theme === 'dark' ? <Sun size={14} aria-hidden="true" /> : <Moon size={14} aria-hidden="true" />}
-        {theme === 'dark' ? 'Light' : 'Dark'}
+        {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
       </button>
       <section className="auth-card" aria-labelledby="auth-title">
         <header className="auth-brand">

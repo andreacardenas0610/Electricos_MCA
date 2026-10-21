@@ -1,484 +1,629 @@
-import { useContext, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Bell } from 'lucide-react';
-import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
-import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
+import { useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CalendarCheck,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Gauge,
+  Handshake,
+  PackageOpen,
+  Plus,
+  ReceiptText,
+  UsersRound,
+  Wallet,
+  Wrench,
+} from 'lucide-react';
 
-export function PanelControl() {
-  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
-  const [periodoGrafico, setPeriodoGrafico] = useState('1A');
-  const [mostrarModal, setMostrarModal] = useState(false);
+import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import {
+  Badge,
+  Button,
+  DetailGrid,
+  DetailItem,
+  EmptyState,
+  KpiCard,
+  Modal,
+  PageHeader,
+  PageShell,
+  Panel,
+  Toast,
+  useToast,
+} from '../../../shared/components/ui.jsx';
+import {
+  fechaISO,
+  formatearFecha,
+  formatearMoneda,
+  useData,
+} from '../../../shared/services/base.js';
+import { formatearHora12 } from '../../../shared/services/catalogos.js';
+import {
+  AGENDA_KEY,
+  cambiarEstadoActividad,
+  obtenerActividades,
+  resumenAgenda,
+  validarAgendaCompleta,
+} from '../../../shared/services/agendaService.js';
+import { CLIENTES_KEY, obtenerClientes } from '../../../shared/services/clientesService.js';
+import {
+  COTIZACIONES_KEY,
+  cotizacionVencida,
+  fechaVencimiento,
+  obtenerCotizaciones,
+  resumenCotizaciones,
+} from '../../../shared/services/cotizacionesService.js';
+import { MATERIALES_KEY, obtenerMateriales } from '../../../shared/services/materialesService.js';
+import {
+  PAGOS_KEY,
+  obtenerCuentas,
+  obtenerPagos,
+  resumenPagos,
+} from '../../../shared/services/pagosService.js';
+import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
+import { TERCEROS_KEY, obtenerTecnicosActivos } from '../../../shared/services/tercerosService.js';
 
-  // Lista de cotizaciones para el modal
-  const [cotizaciones] = useState([
-    { id: 'COT-101', cliente: 'Industrias Alfa S.A.', monto: '$2,400,000', prioridad: 'Alta' },
-    { id: 'COT-102', cliente: 'Constructora del Norte', monto: '$1,850,000', prioridad: 'Media' },
-    { id: 'COT-103', cliente: 'Servicios Logísticos Global', monto: '$950,000', prioridad: 'Alta' },
-    { id: 'COT-104', cliente: 'Mantenimientos P-92', monto: '$3,004,000', prioridad: 'Por Vencer' },
-  ]);
+const ESTADOS_ACTIVOS = ['Programada', 'En proceso'];
 
-  // Estados de actividades
-  const [actividades, setActividades] = useState([
-    {
-      id: 1,
-      evento: 'Reposición de Stock',
-      subtexto: 'Unidad Transformadora XT-400',
-      icono: '📦',
-      personal: 'Carlos M.',
-      hora: '10:45 AM',
-      fecha: 'Hoy',
-      estado: 'Completado',
-    },
-    {
-      id: 2,
-      evento: 'Nueva Cotización Creada',
-      subtexto: 'Complejo Industrial P-92',
-      icono: '💰',
-      personal: 'S. Peterson',
-      hora: '09:12 AM',
-      fecha: 'Hoy',
-      estado: 'Pendiente',
-    },
-    {
-      id: 3,
-      evento: 'Retraso en Mantenimiento',
-      subtexto: 'Unidad de Flota #4',
-      icono: '⚠️',
-      personal: 'Sistema',
-      hora: '',
-      fecha: 'Ayer',
-      estado: 'Finalizado',
-    },
-    {
-      id: 4,
-      evento: 'Inspección de Equipos',
-      subtexto: 'Planta Principal',
-      icono: '🔍',
-      personal: 'M. López',
-      hora: '08:30 AM',
-      fecha: 'Hoy',
-      estado: 'Completado',
-    }
-  ]);
+const valorCompacto = (valor) => {
+  const numero = Number(valor) || 0;
+  if (numero >= 1000000) return `$${(numero / 1000000).toFixed(1).replace('.', ',')}M`;
+  if (numero >= 1000) return `$${Math.round(numero / 1000)}k`;
+  return numero > 0 ? `$${numero}` : '—';
+};
 
-  const cambiarEstado = (id) => {
-    setActividades(prev => prev.map(item => {
-      if (item.id === id) {
-        return { ...item, estado: estadoSiguiente(ESTADOS.panel, item.estado) };
-      }
-      return item;
-    }));
+export function PanelControl({ onNavegar }) {
+  const datos = useData(
+    [
+      COTIZACIONES_KEY,
+      PAGOS_KEY,
+      AGENDA_KEY,
+      MATERIALES_KEY,
+      SERVICIOS_KEY,
+      CLIENTES_KEY,
+      TERCEROS_KEY,
+    ],
+    () => ({
+      cotizaciones: obtenerCotizaciones(),
+      cuentas: obtenerCuentas(),
+      pagos: obtenerPagos(),
+      actividades: obtenerActividades(),
+      materiales: obtenerMateriales(),
+      servicios: obtenerServicios(),
+      clientes: obtenerClientes(),
+      tecnicos: obtenerTecnicosActivos(),
+      incidencias: validarAgendaCompleta(),
+    }),
+  );
+
+  const [rangoMeses, setRangoMeses] = useState(6);
+  const [detalleId, setDetalleId] = useState(null);
+  const { toast, notify, close } = useToast();
+
+  const navegar = (seccion) => {
+    if (typeof onNavegar === 'function') onNavegar(seccion);
   };
 
-  const esOscuro = temaGlobal === 'dark';
+  const cuentasActivas = useMemo(
+    () => datos.cuentas.filter((cuenta) => !cuenta.esHistorica),
+    [datos.cuentas],
+  );
+  const resumenCobro = useMemo(() => resumenPagos(cuentasActivas), [cuentasActivas]);
+  const resumenCot = useMemo(
+    () => resumenCotizaciones(datos.cotizaciones),
+    [datos.cotizaciones],
+  );
+  const resumenAg = useMemo(() => resumenAgenda(datos.actividades), [datos.actividades]);
 
-  const tema = {
-    bgPrincipal: esOscuro ? '#0b1329' : '#f8fafc',
-    bgCard: esOscuro ? '#182642' : '#ffffff',
-    bgHeader: esOscuro ? '#131f37' : '#ffffff',
-    bgInput: esOscuro ? '#0f172a' : '#f1f5f9',
-    bgBadge: esOscuro ? '#0f172a' : '#e2e8f0',
-    border: esOscuro ? '#213459' : '#e2e8f0',
-    borderSubtil: esOscuro ? '#1d2c4b' : '#f1f5f9',
-    textoPrincipal: esOscuro ? '#ffffff' : '#0f172a',
-    textoSecundario: esOscuro ? '#94a3b8' : '#64748b',
-    textoMuted: esOscuro ? '#64748b' : '#94a3b8',
-    primario: esOscuro ? '#facc15' : '#facc15',
-    primarioTexto: esOscuro ? '#0f172a' : '#ffffff',
-    barraGrafico: esOscuro ? '#c7d2fe' : '#93c5fd',
-    iconoBg: esOscuro ? '#23385d' : '#f1f5f9'
+  const hoy = fechaISO();
+  const agendaHoy = useMemo(
+    () => datos.actividades.filter(
+      (actividad) => actividad.fecha === hoy && ESTADOS_ACTIVOS.includes(actividad.estado),
+    ),
+    [datos.actividades, hoy],
+  );
+  const proximas = useMemo(
+    () => datos.actividades
+      .filter(
+        (actividad) => actividad.fecha >= hoy && ESTADOS_ACTIVOS.includes(actividad.estado),
+      )
+      .sort((a, b) => `${a.fecha} ${a.horaInicio}`.localeCompare(`${b.fecha} ${b.horaInicio}`))
+      .slice(0, 5),
+    [datos.actividades, hoy],
+  );
+
+  const pendientes = useMemo(
+    () => datos.cotizaciones.filter((cotizacion) => cotizacion.estadoCotizacion === 'Pendiente'),
+    [datos.cotizaciones],
+  );
+  const valorPendiente = useMemo(
+    () => pendientes.reduce((total, cotizacion) => total + cotizacion.total, 0),
+    [pendientes],
+  );
+  const stockCritico = useMemo(
+    () => datos.materiales
+      .filter((material) => material.estado !== 'Óptimo')
+      .sort((a, b) => a.stock - b.stock),
+    [datos.materiales],
+  );
+
+  const cuentasConSaldo = cuentasActivas.filter((cuenta) => cuenta.saldo > 0).length;
+  const serviciosActivos = datos.servicios.filter((servicio) => servicio.estado === 'Activo').length;
+  const clientesActivos = datos.clientes.filter((cliente) => cliente.estado !== 'Inactivo').length;
+  const totalAlertas = datos.incidencias.length + stockCritico.length;
+  const porcentajeRecaudo = resumenCobro.facturado > 0
+    ? Math.min(100, Math.round((resumenCobro.abonado / resumenCobro.facturado) * 100))
+    : 0;
+
+  const meses = useMemo(() => {
+    const ahora = new Date();
+    return Array.from({ length: rangoMeses }, (_, indice) => {
+      const fecha = new Date(
+        ahora.getFullYear(),
+        ahora.getMonth() - (rangoMeses - 1 - indice),
+        1,
+      );
+      const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      const total = datos.pagos.reduce(
+        (suma, pago) => (
+          String(pago.fecha).slice(0, 7) === clave ? suma + pago.monto : suma
+        ),
+        0,
+      );
+      return {
+        clave,
+        etiqueta: fecha.toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''),
+        anio: fecha.getFullYear(),
+        total,
+      };
+    });
+  }, [datos.pagos, rangoMeses]);
+
+  const totalPeriodo = meses.reduce((total, mes) => total + mes.total, 0);
+  const clavesPeriodo = new Set(meses.map((mes) => mes.clave));
+  const abonosPeriodo = datos.pagos.filter(
+    (pago) => clavesPeriodo.has(String(pago.fecha).slice(0, 7)),
+  ).length;
+  const maxRecaudo = Math.max(...meses.map((mes) => mes.total), 1);
+  const mesActual = meses[meses.length - 1]?.clave;
+
+  const actividadDetalle = datos.actividades.find(
+    (actividad) => String(actividad.id) === String(detalleId),
+  );
+
+  const cambiarEstado = (actividad) => {
+    try {
+      const actualizada = cambiarEstadoActividad(actividad.id);
+      notify('success', 'Estado actualizado', `${actualizada.codigo} · ${actualizada.estado}.`);
+    } catch (error) {
+      notify('error', 'No se pudo actualizar', error.message);
+    }
   };
 
   return (
-    <div style={{ 
-      padding: '24px 32px', 
-      backgroundColor: tema.bgPrincipal,
-      color: tema.textoPrincipal, 
-      display: 'flex', 
-      flexDirection: 'column', 
-      gap: '20px', 
-      width: '100%', 
-      minHeight: '100vh',
-      boxSizing: 'border-box',
-      transition: 'all 0.3s ease'
-    }}>
-      
-      {/* BARRA SUPERIOR */}
-      <header style={{ 
-        display: 'flex', 
-        justify: 'space-between', 
-        alignItems: 'center', 
-        backgroundColor: tema.bgHeader, 
-        padding: '12px 20px', 
-        borderRadius: '10px', 
-        border: `1px solid ${tema.border}`,
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-          <span style={{ color: tema.textoMuted }}>🔍</span>
-          <input 
-            type="text" 
-            placeholder="Buscar proyectos, cotizaciones o personal..." 
-            style={{ 
-              backgroundColor: 'transparent', 
-              border: 'none', 
-              color: tema.textoPrincipal, 
-              outline: 'none', 
-              width: '100%', 
-              fontSize: '13px' 
-            }}
-          />
-        </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Panel de Control"
+        title="Panel de Control"
+        subtitle="Resumen consolidado de agenda, cotizaciones, inventario y recaudo en tiempo real."
+        icon={Gauge}
+        actions={
+          <>
+            <Button icon={CalendarDays} onClick={() => navegar('programacion')}>
+              Ver agenda
+            </Button>
+            <Button variant="primary" icon={Plus} onClick={() => navegar('Cotizacion')}>
+              Nueva cotización
+            </Button>
+          </>
+        }
+      />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <button 
-            onClick={toggleTheme}
-            style={{
-              backgroundColor: tema.bgBadge,
-              border: `1px solid ${tema.border}`,
-              color: tema.textoPrincipal,
-              padding: '6px 12px',
-              borderRadius: '20px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
+      <div className="mca-kpis">
+        <KpiCard
+          label="Facturación aprobada"
+          value={formatearMoneda(resumenCobro.facturado, 'COP')}
+          hint={`${resumenCot.aprobadas} cotizaciones · ${resumenCobro.liquidadas} liquidadas`}
+          icon={ReceiptText}
+          tone="info"
+        />
+        <KpiCard
+          label="Recaudado"
+          value={formatearMoneda(resumenCobro.abonado, 'COP')}
+          hint={`${abonosPeriodo} abonos en los últimos ${rangoMeses} meses`}
+          icon={Wallet}
+          tone="success"
+        />
+        <KpiCard
+          label="Saldo por cobrar"
+          value={formatearMoneda(resumenCobro.saldo, 'COP')}
+          hint={`${cuentasConSaldo} cuentas con saldo pendiente`}
+          icon={Clock3}
+          tone="warning"
+        />
+        <KpiCard
+          label="Servicios activos"
+          value={resumenAg.programadas + resumenAg.proceso}
+          hint={`${agendaHoy.length} hoy · ${totalAlertas} alertas operativas`}
+          icon={CalendarCheck}
+          tone={totalAlertas > 0 ? 'danger' : 'yellow'}
+        />
+      </div>
+
+      <div className="mca-dashboard-grid">
+        <div className="mca-stack">
+          <Panel
+            title="Recaudo por mes"
+            subtitle={`Abonos recibidos en los últimos ${rangoMeses} meses`}
+            actions={
+              <div className="mca-row" style={{ gap: 6 }}>
+                <Button
+                  size="sm"
+                  variant={rangoMeses === 6 ? 'primary' : 'ghost'}
+                  onClick={() => setRangoMeses(6)}
+                >
+                  6M
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rangoMeses === 12 ? 'primary' : 'ghost'}
+                  onClick={() => setRangoMeses(12)}
+                >
+                  12M
+                </Button>
+              </div>
+            }
           >
-            {esOscuro ? '☀️ Modo Claro' : '🌙 Modo Oscuro'}
-          </button>
-
-          <span style={{ cursor: 'pointer', color: tema.textoSecundario }} title="Notificaciones"><Bell size={20} strokeWidth={1.8} /></span>
-          <span style={{ cursor: 'pointer', color: tema.textoSecundario }}>❓</span>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: `1px solid ${tema.border}`, paddingLeft: '16px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold' }}>Administrador</div>
-              <div style={{ fontSize: '10px', color: tema.textoMuted }}>Perfil de Admin</div>
-            </div>
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: tema.primario, overflow: 'hidden' }}>
-              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* CONTENIDO PRINCIPAL */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'minmax(0, 1fr) 320px', 
-        gap: '20px', 
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
-          
-          {/* GRÁFICO */}
-          <div style={{ 
-            backgroundColor: tema.bgCard, 
-            border: `1px solid ${tema.border}`, 
-            borderRadius: '12px', 
-            padding: '24px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+            <div className="mca-row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div>
-                <span style={{ fontSize: '11px', color: tema.textoSecundario, fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                  INGRESOS ANUALES TOTALES
-                </span>
-                <div style={{ fontSize: '32px', fontWeight: '800', color: tema.primario, marginTop: '4px' }}>
-                  $12,493,407
+                <div className="mca-chart-caption">Recaudado en el periodo</div>
+                <div className="mca-chart-total">{formatearMoneda(totalPeriodo, 'COP')}</div>
+                <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                  {abonosPeriodo} abonos registrados
                 </div>
               </div>
-              <div style={{ display: 'flex', backgroundColor: tema.bgInput, padding: '3px', borderRadius: '6px', border: `1px solid ${tema.border}` }}>
-                {['1M', '6M', '1A'].map((p) => (
-                  <button 
-                    key={p}
-                    onClick={() => setPeriodoGrafico(p)}
-                    style={{ 
-                      border: 'none', 
-                      backgroundColor: periodoGrafico === p ? tema.primario : 'transparent', 
-                      color: periodoGrafico === p ? tema.primarioTexto : tema.textoSecundario, 
-                      fontWeight: 'bold', 
-                      padding: '6px 12px', 
-                      borderRadius: '4px', 
-                      cursor: 'pointer', 
-                      fontSize: '11px' 
-                    }}
-                  >
-                    {p}
-                  </button>
-                ))}
+              <div style={{ textAlign: 'right' }}>
+                <Badge tone="success">{porcentajeRecaudo}% recaudado</Badge>
+                <div className="mca-progress" style={{ width: 150, marginTop: 8 }}>
+                  <div className="mca-progress__bar" style={{ width: `${porcentajeRecaudo}%` }} />
+                </div>
+                <div className="mca-soft" style={{ fontSize: 10, marginTop: 4 }}>
+                  {formatearMoneda(resumenCobro.saldo, 'COP')} por cobrar
+                </div>
               </div>
             </div>
-            
-            <div style={{ height: '180px', display: 'flex', alignItems: 'flex-end', gap: '12px', paddingTop: '20px', borderBottom: `1px solid ${tema.border}` }}>
-              {[
-                { alt: '35%' }, { alt: '50%' }, { alt: '40%' }, { alt: '60%' },
-                { alt: '52%' }, { alt: '70%' }, { alt: '64%' }, { alt: '82%' },
-                { alt: '88%' }, { alt: '92%' }, { alt: '100%', destacar: true }
-              ].map((bar, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                  <div style={{ 
-                    width: '100%', 
-                    height: bar.alt, 
-                    backgroundColor: bar.destacar ? tema.primario : tema.barraGrafico, 
-                    borderRadius: '3px 3px 0 0', 
-                    opacity: bar.destacar ? 1 : 0.8 
-                  }} />
+
+            <div className="mca-chart" role="img" aria-label="Recaudo mensual">
+              {meses.map((mes) => (
+                <div
+                  key={mes.clave}
+                  className={`mca-chart__col ${mes.clave === mesActual ? 'is-current' : ''}`}
+                  title={`${mes.etiqueta} ${mes.anio}: ${formatearMoneda(mes.total, 'COP')}`}
+                >
+                  <span className="mca-chart__value">{valorCompacto(mes.total)}</span>
+                  <div className="mca-chart__plot">
+                    <div
+                      className="mca-chart__bar"
+                      style={{ height: `${Math.max(3, Math.round((mes.total / maxRecaudo) * 100))}%` }}
+                    />
+                  </div>
+                  <span className="mca-chart__label">{mes.etiqueta}</span>
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '10px', color: tema.textoMuted, fontWeight: 'bold' }}>
-              <span>ENE</span><span>MAR</span><span>MAY</span><span>JUL</span><span>SEP</span><span>NOV</span>
-              <span style={{ color: tema.primario }}>ACTUAL</span>
-            </div>
-          </div>
+          </Panel>
 
-          {/* TABLA CON TOGGLE-BADGE */}
-          <div style={{ 
-            backgroundColor: tema.bgCard, 
-            border: `1px solid ${tema.border}`, 
-            borderRadius: '12px', 
-            padding: '24px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: tema.textoPrincipal }}>Actividad Operativa Reciente</h3>
-              <span style={{ fontSize: '12px', color: tema.primario, cursor: 'pointer', fontWeight: 'bold' }}>Ver Todos los Logs</span>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ color: tema.textoMuted, borderBottom: `1px solid ${tema.border}`, fontSize: '10px', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '8px 4px' }}>EVENTO</th>
-                  <th style={{ padding: '8px 4px' }}>PERSONAL</th>
-                  <th style={{ padding: '8px 4px' }}>FECHA/HORA</th>
-                  <th style={{ padding: '8px 4px', textAlign: 'center' }}>ESTADO</th>
-                </tr>
-              </thead>
-              <tbody>
-                {actividades.map((item, idx) => (
-                  <tr key={item.id} style={{ borderBottom: idx !== actividades.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
-                      <td style={{ padding: '12px 4px' }}>
-                        <div style={{ fontWeight: 'bold', color: tema.textoPrincipal }}>{item.icono} {item.evento}</div>
-                        <div style={{ fontSize: '10px', color: tema.textoMuted }}>{item.subtexto}</div>
-                      </td>
-                      <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>{item.personal}</td>
-                      <td style={{ padding: '12px 4px', color: tema.textoSecundario }}>
-                        {item.hora && <>{item.hora}<br/></>}
-                        <span style={{ fontSize: '10px', color: tema.textoMuted }}>{item.fecha}</span>
-                      </td>
-                      <td style={{ padding: '12px 4px', textAlign: 'center' }}>
-                        <EstadoToggle
-                          estado={item.estado}
-                          estados={ESTADOS.panel}
-                          onClick={() => cambiarEstado(item.id)}
-                        />
-                      </td>
+          <Panel
+            title="Próximos servicios"
+            subtitle={`${agendaHoy.length} para hoy · margen de 30 min entre servicios del mismo técnico`}
+            actions={
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={CalendarDays}
+                onClick={() => navegar('programacion')}
+              >
+                Ver agenda
+              </Button>
+            }
+            flush
+          >
+            {proximas.length === 0 ? (
+              <EmptyState
+                icon={CalendarCheck}
+                title="Sin servicios próximos"
+                message="Agenda un servicio para verlo reflejado en el panel."
+                action={
+                  <Button size="sm" icon={Plus} onClick={() => navegar('programacion')}>
+                    Agendar servicio
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="mca-table-wrap">
+                <table className="mca-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Cliente / Servicio</th>
+                      <th>Fecha</th>
+                      <th>Técnico</th>
+                      <th>Estado</th>
+                      <th className="mca-center">Acciones</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {proximas.map((actividad) => (
+                      <tr key={actividad.id}>
+                        <td className="is-nowrap">
+                          <Badge tone="yellow">{actividad.codigo}</Badge>
+                        </td>
+                        <td>
+                          <div className="is-primary">{actividad.cliente}</div>
+                          <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                            {actividad.servicio}
+                          </div>
+                        </td>
+                        <td className="is-nowrap">
+                          <div className="is-primary" style={{ fontSize: 12 }}>
+                            {formatearFecha(actividad.fecha)}
+                          </div>
+                          <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                            {formatearHora12(actividad.horaInicio)} – {formatearHora12(actividad.horaFin)}
+                          </div>
+                        </td>
+                        <td>{actividad.tecnico}</td>
+                        <td>
+                          <EstadoToggle
+                            estado={actividad.estado}
+                            estados={ESTADOS.actividad}
+                            width={112}
+                            onClick={() => cambiarEstado(actividad)}
+                          />
+                        </td>
+                        <td className="mca-center">
+                          <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
+                            <AccionesFila
+                              onVer={() => setDetalleId(actividad.id)}
+                              onEditar={() => navegar('programacion')}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        <div className="mca-stack">
+          <Panel
+            title="Cotizaciones por aprobar"
+            subtitle="Pipeline esperando decisión del cliente"
+            actions={<Badge tone={pendientes.length ? 'warning' : 'success'}>{pendientes.length}</Badge>}
+          >
+            <div className="mca-row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div>
+                <div className="mca-chart-caption">Valor potencial</div>
+                <div className="mca-chart-total" style={{ fontSize: 24 }}>
+                  {formatearMoneda(valorPendiente, 'COP')}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => navegar('Cotizacion')}>
+                Revisar
+              </Button>
+            </div>
+
+            {pendientes.length === 0 ? (
+              <div className="mca-notice is-success" style={{ marginTop: 14 }}>
+                <CheckCircle2 size={16} strokeWidth={2} />
+                <div>No hay cotizaciones pendientes de aprobación.</div>
+              </div>
+            ) : (
+              <div className="mca-list" style={{ marginTop: 12 }}>
+                {pendientes.slice(0, 4).map((cotizacion) => (
+                  <button
+                    key={cotizacion.id}
+                    type="button"
+                    className="mca-list__item mca-list__item--button"
+                    onClick={() => navegar('Cotizacion')}
+                  >
+                    <div className="mca-list__icon">
+                      <FileText size={16} strokeWidth={1.9} />
+                    </div>
+                    <div className="mca-list__body">
+                      <div className="mca-list__title">{cotizacion.cliente}</div>
+                      <div className="mca-list__meta">
+                        {cotizacion.id} · {cotizacion.proyecto}
+                      </div>
+                    </div>
+                    <div className="mca-list__value">
+                      <div className="mca-list__amount">
+                        {formatearMoneda(cotizacion.total, 'COP')}
+                      </div>
+                      <div className="mca-list__hint">
+                        {cotizacionVencida(cotizacion)
+                          ? <span className="mca-danger">Vencida</span>
+                          : `Vence ${formatearFecha(fechaVencimiento(cotizacion))}`}
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-        </div>
-
-        {/* COLUMNA DERECHA */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          <div style={{ 
-            backgroundColor: tema.bgCard, 
-            border: `1px solid ${tema.border}`, 
-            borderRadius: '12px', 
-            padding: '24px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justify: 'space-between'
-          }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: tema.textoPrincipal }}>Cotizaciones Pendientes</h3>
-                  <span style={{ fontSize: '11px', color: tema.textoMuted }}>Pipeline esperando aprobación</span>
-                </div>
-                <div style={{ backgroundColor: tema.bgInput, padding: '8px', borderRadius: '8px' }}>📋</div>
               </div>
+            )}
+          </Panel>
 
-              <div style={{ fontSize: '36px', fontWeight: 'bold', color: tema.primario, margin: '16px 0 4px 0' }}>24</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', color: tema.textoPrincipal, marginBottom: '24px' }}>Est. $8,204,000</div>
-
-              <div style={{ borderTop: `1px solid ${tema.border}`, paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: tema.textoSecundario }}>Alta Prioridad</span>
-                  <strong style={{ color: tema.primario }}>08</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: tema.textoSecundario }}>Por Vencer (72h)</span>
-                  <strong style={{ color: tema.textoPrincipal }}>03</strong>
+          <Panel
+            title="Alertas de operación"
+            subtitle="Puntos que requieren atención"
+            actions={<Badge tone={totalAlertas ? 'danger' : 'success'}>{totalAlertas}</Badge>}
+          >
+            {totalAlertas === 0 ? (
+              <div className="mca-notice is-success">
+                <CheckCircle2 size={16} strokeWidth={2} />
+                <div>Sin incidencias de agenda ni materiales en nivel crítico.</div>
+              </div>
+            ) : (
+              <div className="mca-stack" style={{ gap: 10 }}>
+                {datos.incidencias.slice(0, 2).map((incidencia, indice) => (
+                  <div
+                    key={`${incidencia.codigo}-${indice}`}
+                    className={`mca-notice is-${incidencia.severidad === 'error' ? 'danger' : 'warning'}`}
+                  >
+                    <AlertTriangle size={16} strokeWidth={2} />
+                    <div>
+                      <strong>{incidencia.codigo}</strong> · {incidencia.mensaje}
+                    </div>
+                  </div>
+                ))}
+                {stockCritico.slice(0, 2).map((material) => (
+                  <div key={material.id} className="mca-notice is-warning">
+                    <PackageOpen size={16} strokeWidth={2} />
+                    <div>
+                      <strong>{material.nombre}</strong> · {material.stock} {material.unidad.toLowerCase()} en
+                      inventario ({material.estado}).
+                    </div>
+                  </div>
+                ))}
+                <div className="mca-row" style={{ gap: 6 }}>
+                  {datos.incidencias.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => navegar('programacion')}>
+                      Revisar agenda
+                    </Button>
+                  )}
+                  {stockCritico.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => navegar('materiales')}>
+                      Ver inventario
+                    </Button>
+                  )}
                 </div>
               </div>
+            )}
+          </Panel>
+
+          <Panel title="Resumen general" subtitle="Datos maestros conectados">
+            <div className="mca-list">
+              <button
+                type="button"
+                className="mca-list__item mca-list__item--button"
+                onClick={() => navegar('clientes')}
+              >
+                <div className="mca-list__icon"><UsersRound size={16} strokeWidth={1.9} /></div>
+                <div className="mca-list__body">
+                  <div className="mca-list__title">Clientes registrados</div>
+                  <div className="mca-list__meta">{clientesActivos} activos</div>
+                </div>
+                <div className="mca-list__value">
+                  <div className="mca-list__amount">{datos.clientes.length}</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                className="mca-list__item mca-list__item--button"
+                onClick={() => navegar('servicios')}
+              >
+                <div className="mca-list__icon"><Wrench size={16} strokeWidth={1.9} /></div>
+                <div className="mca-list__body">
+                  <div className="mca-list__title">Servicios en catálogo</div>
+                  <div className="mca-list__meta">{serviciosActivos} activos</div>
+                </div>
+                <div className="mca-list__value">
+                  <div className="mca-list__amount">{datos.servicios.length}</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                className="mca-list__item mca-list__item--button"
+                onClick={() => navegar('materiales')}
+              >
+                <div className="mca-list__icon"><PackageOpen size={16} strokeWidth={1.9} /></div>
+                <div className="mca-list__body">
+                  <div className="mca-list__title">Materiales</div>
+                  <div className="mca-list__meta">
+                    {stockCritico.length} requieren reposición
+                  </div>
+                </div>
+                <div className="mca-list__value">
+                  <div className="mca-list__amount">{datos.materiales.length}</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                className="mca-list__item mca-list__item--button"
+                onClick={() => navegar('terceros')}
+              >
+                <div className="mca-list__icon"><Handshake size={16} strokeWidth={1.9} /></div>
+                <div className="mca-list__body">
+                  <div className="mca-list__title">Técnicos activos</div>
+                  <div className="mca-list__meta">Equipo de campo disponible</div>
+                </div>
+                <div className="mca-list__value">
+                  <div className="mca-list__amount">{datos.tecnicos.length}</div>
+                </div>
+              </button>
             </div>
-
-            <button 
-              onClick={() => setMostrarModal(true)}
-              style={{ 
-                width: '100%', 
-                marginTop: '24px', 
-                padding: '12px', 
-                borderRadius: '8px', 
-                border: 'none', 
-                backgroundColor: tema.primario, 
-                color: tema.primarioTexto, 
-                fontWeight: 'bold', 
-                cursor: 'pointer', 
-                fontSize: '13px'
-              }}
-            >
-              Revisar Fila →
-            </button>
-          </div>
-
-          <div style={{ 
-            backgroundColor: tema.bgCard, 
-            border: `1px solid ${tema.border}`, 
-            borderRadius: '12px', 
-            padding: '20px', 
-            display: 'flex', 
-            justify: 'space-between', 
-            alignItems: 'center'
-          }}>
-            <div>
-              <div style={{ fontSize: '11px', color: tema.textoSecundario, fontWeight: 'bold' }}>Proyectos Activos</div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: tema.textoPrincipal, marginTop: '4px' }}>42</div>
-            </div>
-            <div style={{ backgroundColor: tema.iconoBg, padding: '12px', borderRadius: '8px' }}>🛠️</div>
-          </div>
-
-          <div style={{ 
-            backgroundColor: tema.bgCard, 
-            border: `1px solid ${tema.border}`, 
-            borderRadius: '12px', 
-            padding: '20px', 
-            display: 'flex', 
-            justify: 'space-between', 
-            alignItems: 'center'
-          }}>
-            <div>
-              <div style={{ fontSize: '11px', color: tema.textoSecundario, fontWeight: 'bold' }}>Eficiencia de Materiales</div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: tema.textoPrincipal, marginTop: '4px' }}>94.8%</div>
-            </div>
-            <div style={{ backgroundColor: tema.primario, color: tema.primarioTexto, padding: '12px', borderRadius: '8px' }}>🏗️</div>
-          </div>
-
+          </Panel>
         </div>
-
       </div>
 
-      {/* MODAL ORGANIZADO Y CENTRADO */}
-      {mostrarModal && createPortal(
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(11, 19, 41, 0.75)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 999999,
-          padding: '16px'
-        }}>
-          <div style={{
-            backgroundColor: tema.bgCard,
-            border: `1px solid ${tema.border}`,
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '600px',
-            padding: '24px',
-            color: tema.textoPrincipal,
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            margin: 'auto'
-          }}>
-            {/* ENCABEZADO */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${tema.border}`, paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>📋 Fila de Cotizaciones Pendientes</h3>
-              <button 
-                onClick={() => setMostrarModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: tema.textoSecundario }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* RESUMEN INFORMATIVO */}
-            <p style={{ fontSize: '13px', color: tema.textoSecundario, marginTop: '16px', marginBottom: '8px' }}>
-              Hay <strong style={{ color: tema.primario }}>24 cotizaciones</strong> pendientes por un total estimado de <strong>$8,204,000</strong>.
-            </p>
-
-            {/* TABLA DE DETALLES */}
-            <div style={{ overflowY: 'auto', margin: '12px 0', flex: 1 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ color: tema.textoMuted, borderBottom: `1px solid ${tema.border}`, fontSize: '11px' }}>
-                    <th style={{ padding: '8px 4px' }}>CÓDIGO</th>
-                    <th style={{ padding: '8px 4px' }}>CLIENTE</th>
-                    <th style={{ padding: '8px 4px' }}>MONTO</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>PRIORIDAD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cotizaciones.map((cot, idx) => (
-                    <tr key={cot.id} style={{ borderBottom: idx !== cotizaciones.length - 1 ? `1px solid ${tema.borderSubtil}` : 'none' }}>
-                      <td style={{ padding: '10px 4px', fontWeight: 'bold', color: tema.primario }}>{cot.id}</td>
-                      <td style={{ padding: '10px 4px', color: tema.textoPrincipal }}>{cot.cliente}</td>
-                      <td style={{ padding: '10px 4px', fontWeight: 'bold' }}>{cot.monto}</td>
-                      <td style={{ padding: '10px 4px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '10px',
-                          fontWeight: 'bold',
-                          backgroundColor: cot.prioridad === 'Alta' ? '#fde8e8' : cot.prioridad === 'Por Vencer' ? '#fef3d6' : tema.bgBadge,
-                          color: cot.prioridad === 'Alta' ? '#991b1b' : cot.prioridad === 'Por Vencer' ? '#8c4a00' : tema.textoPrincipal
-                        }}>
-                          {cot.prioridad}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ACCIONES */}
-            <div style={{ borderTop: `1px solid ${tema.border}`, paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={() => setMostrarModal(false)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: `1px solid ${tema.border}`,
-                  backgroundColor: tema.bgInput,
-                  color: tema.textoPrincipal,
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
+      <Modal
+        open={Boolean(actividadDetalle)}
+        onClose={() => setDetalleId(null)}
+        title={actividadDetalle?.codigo}
+        subtitle={
+          actividadDetalle
+            ? `${actividadDetalle.cliente} · ${actividadDetalle.servicio}`
+            : ''
+        }
+        icon={CalendarDays}
+        size="lg"
+        footer={
+          actividadDetalle && (
+            <>
+              <Button onClick={() => setDetalleId(null)}>Cerrar</Button>
+              <Button
+                variant="primary"
+                icon={CalendarDays}
+                onClick={() => {
+                  setDetalleId(null);
+                  navegar('programacion');
                 }}
               >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+                Gestionar en agenda
+              </Button>
+            </>
+          )
+        }
+      >
+        {actividadDetalle && (
+          <DetailGrid>
+            <DetailItem label="Cliente">{actividadDetalle.cliente}</DetailItem>
+            <DetailItem label="Teléfono">{actividadDetalle.telefono || '—'}</DetailItem>
+            <DetailItem label="Servicio" full>{actividadDetalle.servicio}</DetailItem>
+            <DetailItem label="Técnico">{actividadDetalle.tecnico}</DetailItem>
+            <DetailItem label="Fecha">{formatearFecha(actividadDetalle.fecha)}</DetailItem>
+            <DetailItem label="Horario">
+              {actividadDetalle.horaInicio} – {actividadDetalle.horaFin} · {actividadDetalle.horas} h
+            </DetailItem>
+            <DetailItem label="Prioridad">{actividadDetalle.prioridad}</DetailItem>
+            <DetailItem label="Estado">
+              <EstadoToggle
+                estado={actividadDetalle.estado}
+                estados={ESTADOS.actividad}
+                width={112}
+              />
+            </DetailItem>
+            <DetailItem label="Dirección" full>{actividadDetalle.direccion || '—'}</DetailItem>
+            <DetailItem label="Descripción" full>{actividadDetalle.descripcion || '—'}</DetailItem>
+          </DetailGrid>
+        )}
+      </Modal>
 
-    </div>
+      <Toast toast={toast} onClose={close} />
+    </PageShell>
   );
 }
 

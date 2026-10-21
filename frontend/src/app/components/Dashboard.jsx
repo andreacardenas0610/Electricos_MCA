@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import {
   CalendarPlus,
   ClipboardCheck,
@@ -7,14 +7,17 @@ import {
   Gauge,
   Handshake,
   LogOut,
+  Moon,
   PackageOpen,
   Shield,
+  Sun,
   UserRoundPlus,
   UsersRound,
   Wrench,
 } from 'lucide-react';
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
+import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
 import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
 
 // Importación de las vistas
@@ -31,6 +34,7 @@ import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/manag
 export function Dashboard() {
   const [sesion, setSesion] = useState(getLocalSession);
   const autenticado = Boolean(sesion?.usuario);
+  const { theme: tema, toggleTheme } = useContext(ThemeContext);
 
   const [seccionActual, setSeccionActual] = useState('panel');
   const [mostrandoSplash, setMostrandoSplash] = useState(false);
@@ -75,7 +79,7 @@ export function Dashboard() {
       titulo: 'OPERACIONES',
       items: [
         { id: 'materiales', label: 'Materiales', icon: PackageOpen },
-        { id: 'servicios', label: ' Servicios', icon: Wrench },
+        { id: 'servicios', label: 'Servicios', icon: Wrench },
         { id: 'Cotizacion', label: 'Cotizaciones', icon: FileText },
         { id: 'AbonosVentas', label: 'Abonos y Ventas', icon: Coins },
         { id: 'programacion', label: 'Agenda', icon: CalendarPlus },
@@ -224,7 +228,28 @@ export function Dashboard() {
 
         {/* Acciones Inferiores y Perfil */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px', borderTop: '1px solid var(--sidebar-border)' }}>
-          
+          <button
+            type="button"
+            onClick={toggleTheme}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '9px 12px',
+              borderRadius: '8px',
+              border: '1px solid var(--sidebar-border)',
+              backgroundColor: 'transparent',
+              color: 'var(--sidebar-text)',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            {tema === 'dark' ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+            {tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          </button>
 
           {/* Tarjeta de Usuario Conectado */}
           <div style={{ 
@@ -290,8 +315,8 @@ export function Dashboard() {
       </aside>
 
       {/* ÁREA DE CONTENIDO DINÁMICO */}
-      <main style={{ flex: 1, backgroundColor: '#0f172a', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
-        {seccionActual === 'panel' && <PanelControl />}
+      <main style={{ flex: 1, backgroundColor: 'var(--bg-main)', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
+        {seccionActual === 'panel' && <PanelControl onNavegar={setSeccionActual} />}
         {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
         {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}
         {seccionActual === 'materiales' && <Materiales />}

@@ -1,752 +1,1592 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  BadgeCheck,
-  Bell,
   Building2,
+  CalendarDays,
+  CheckCircle2,
   ClipboardList,
-  FileText,
+  Clock3,
+  Factory,
   Handshake,
+  House,
+  Mail,
+  MapPin,
+  Phone,
   Plus,
-  Search,
-  Settings,
-  Trash2,
-  TriangleAlert,
   UsersRound,
+  Wrench,
 } from 'lucide-react';
-import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
-import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
+
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
-import { localRequest } from '../../../shared/localStore.js';
+import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import {
+  Badge,
+  Button,
+  Combobox,
+  ConfirmDialog,
+  DetailGrid,
+  DetailItem,
+  EmptyState,
+  Field,
+  KpiCard,
+  Modal,
+  PageHeader,
+  PageShell,
+  Panel,
+  SearchInput,
+  Toast,
+  useToast,
+} from '../../../shared/components/ui.jsx';
+import { formatearFecha, useData } from '../../../shared/services/base.js';
+import {
+  CLIENTES_KEY,
+  TIPOS_PROPIEDAD,
+  cambiarEstadoCliente,
+  eliminarCliente,
+  guardarCliente,
+  obtenerClientes,
+} from '../../../shared/services/clientesService.js';
+import {
+  AGENDA_KEY,
+  obtenerActividades,
+} from '../../../shared/services/agendaService.js';
+import {
+  ESTADOS_ORDEN,
+  ORDENES_KEY,
+  PRIORIDADES_ORDEN,
+  buscarOrdenes,
+  cambiarEstadoOrden,
+  eliminarOrden,
+  generarCodigoOrden,
+  guardarOrden,
+  obtenerOrdenes,
+  resumenOrdenes,
+} from '../../../shared/services/ordenesService.js';
+import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
+import {
+  TERCEROS_KEY,
+  cambiarEstadoTecnico,
+  eliminarTecnico,
+  guardarTecnico,
+  obtenerTecnicos,
+} from '../../../shared/services/tercerosService.js';
 
-const iconosModulo = {
-  clientes: {
-    encabezado: Building2,
-    fila: Building2,
-    metricas: [UsersRound, Search, BadgeCheck],
-  },
-  terceros: {
-    encabezado: Handshake,
-    fila: Handshake,
-    metricas: [Handshake, Search, BadgeCheck],
-  },
-  ordenes: {
-    encabezado: FileText,
-    fila: ClipboardList,
-    metricas: [ClipboardList, Search, Settings],
-  },
+const ESTADOS_ACTIVOS_AGENDA = ['Programada', 'En proceso'];
+const ESTADOS_CON_FECHA = ['Programada', 'En ejecución'];
+const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const TONO_PROPIEDAD = {
+  Residencial: 'info',
+  Comercial: 'indigo',
+  Industrial: 'warning',
 };
 
-const configuraciones = {
-  clientes: {
-    titulo: 'Clientes',
-    subtitulo: 'Empresas y personas que solicitan servicios eléctricos.',
-    icono: '🏢',
-    apiPath: '/clientes',
-    columnas: [
-      ['nombre', 'Cliente / Razón social'],
-      ['tipoPropiedad', 'Tipo de propiedad'],
-      ['documento', 'Documento / NIT'],
-      ['contacto', 'Contacto'],
-      ['telefono', 'Teléfono'],
-      ['estado', 'Estado'],
-    ],
-    campos: [
-      ['tipoPropiedad', 'Tipo de propiedad', 'segmented', ['Residencial', 'Comercial', 'Industrial']],
-      ['nombre', 'Razón social', 'text'],
-      ['documento', 'NIT', 'text'],
-      ['contacto', 'Persona de contacto', 'text'],
-      ['telefono', 'Teléfono', 'tel'],
-      ['correo', 'Correo electrónico', 'email'],
-      ['direccion', 'Dirección', 'text'],
-      ['municipio', 'Municipio', 'text'],
-      ['departamento', 'Departamento', 'text'],
-    ],
-  },
-  terceros: {
-    titulo: 'Terceros',
-    subtitulo: 'Técnicos externos asignados a los servicios eléctricos.',
-    icono: '🤝',
-    apiPath: '/terceros',
-    columnas: [
-      ['documento', 'Documento'],
-      ['contacto', 'Nombre del tercero'],
-      ['telefono', 'Teléfono'],
-      ['correo', 'Correo electrónico'],
-      ['estado', 'Estado'],
-    ],
-    campos: [
-      ['documento', 'Documento', 'text'],
-      ['contacto', 'Nombre del tercero', 'text'],
-      ['telefono', 'Teléfono', 'tel'],
-      ['correo', 'Correo electrónico', 'email'],
-    ],
-  },
-  ordenes: {
-    titulo: 'Órdenes de Servicio',
-    subtitulo: 'Crea, consulta y actualiza el seguimiento de los trabajos contratados.',
-    icono: '🧾',
-    apiPath: '/ordenes-servicio',
-    columnas: [
-      ['codigo', 'Código'],
-      ['cliente', 'Cliente'],
-      ['servicio', 'Servicio'],
-      ['fecha', 'Fecha programada'],
-      ['responsable', 'Responsable'],
-      ['estado', 'Estado'],
-    ],
-    campos: [
-      ['codigo', 'Código de orden', 'text'],
-      ['clienteId', 'Cliente', 'fk', 'clientes'],
-      ['servicioId', 'Servicio solicitado', 'fk', 'servicios'],
-      ['prioridadId', 'Prioridad', 'fk', 'prioridades'],
-      ['fecha', 'Fecha programada', 'date'],
-      ['responsableId', 'Técnico responsable', 'fk', 'tecnicos'],
-      ['estado', 'Estado', 'select', []],
-    ],
-  },
+const TONO_PRIORIDAD = {
+  Baja: 'neutral',
+  Media: 'info',
+  Alta: 'warning',
 };
 
-function obtenerOpcionesFK(catalogo, catalogos) {
-  return (catalogos[catalogo] || []).map((registro) => {
-    const nombre = registro.nombre || registro.nombre_razon_social || registro.nombre_completo || registro.contacto;
-    return {
-      id: String(registro.id),
-      nombre,
-      etiqueta: catalogo === 'servicios' ? `${registro.id} - ${nombre}` : nombre,
-    };
-  });
-}
-
-function normalizarRegistro(modulo, registro) {
-  if (modulo === 'clientes') {
-    return {
-      id: registro.id,
-      nombre: registro.nombre_razon_social,
-      documento: registro.documento_nit,
-      tipoCliente: registro.tipo_cliente,
-      tipoPropiedad: registro.tipo_propiedad,
-      tipoPropiedadId: registro.tipo_propiedad_id,
-      contacto: registro.contacto || '',
-      telefono: registro.telefono || '',
-      correo: registro.correo_electronico || '',
-      direccion: registro.direccion || '',
-      municipio: registro.municipio || '',
-      departamento: registro.departamento || '',
-      estado: registro.estado,
-    };
-  }
-  if (modulo === 'terceros') {
-    return {
-      id: registro.id,
-      contacto: registro.nombre_completo,
-      documento: registro.documento,
-      empresa: registro.empresa || '',
-      telefono: registro.telefono || '',
-      correo: registro.correo_electronico || '',
-      estado: registro.estado,
-    };
-  }
-  return {
-    id: registro.id,
-    codigo: registro.codigo,
-    clienteId: String(registro.cliente_id),
-    cliente: registro.cliente,
-    servicioId: registro.servicio_id == null ? '' : String(registro.servicio_id),
-    servicio: registro.servicio,
-    prioridadId: String(registro.prioridad_id),
-    prioridad: registro.prioridad,
-    fecha: registro.fecha_programada || '',
-    responsableId: String(registro.tercero_id),
-    responsable: registro.tecnico,
-    estadoId: String(registro.estado_id),
-    estado: registro.estado,
-    descripcion: registro.descripcion || '',
-  };
-}
-
-const fechaLocalISO = () => {
-  const hoy = new Date();
-  hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset());
-  return hoy.toISOString().slice(0, 10);
+const ICONO_PROPIEDAD = {
+  Residencial: House,
+  Comercial: Building2,
+  Industrial: Factory,
 };
 
-const etiquetaCampoCliente = (nombre, etiqueta, tipoPropiedad) => {
-  if (nombre === 'nombre') return tipoPropiedad === 'Residencial' ? 'Nombre completo' : 'Razón social';
-  if (nombre === 'documento') return tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT';
-  return etiqueta;
-};
+const FORMULARIO_CLIENTE = (cliente = null) => ({
+  tipoPropiedad: cliente?.tipoPropiedad || 'Comercial',
+  nombre: cliente?.nombre || '',
+  documento: cliente?.documento || '',
+  contacto: cliente?.contacto || '',
+  telefono: cliente?.telefono || '',
+  correo: cliente?.correo || '',
+  direccion: cliente?.direccion || '',
+  municipio: cliente?.municipio || '',
+  departamento: cliente?.departamento || '',
+  estado: cliente?.estado || 'Activo',
+});
 
-export function ModuloGestion({ modulo, usuario }) {
-  const config = configuraciones[modulo];
-  const iconos = iconosModulo[modulo];
-  const [IconoTotal, IconoBusqueda, IconoEstado] = iconos.metricas;
-  const IconoFila = iconos.fila;
-  const IconoEncabezado = iconos.encabezado;
-  const { theme: temaGlobal, toggleTheme } = useContext(ThemeContext);
-  const esOscuro = temaGlobal === 'dark';
-  const [registros, setRegistros] = useState([]);
-  const [catalogos, setCatalogos] = useState({});
-  const [cargando, setCargando] = useState(true);
+const FORMULARIO_TECNICO = (tecnico = null) => ({
+  nombre: tecnico?.nombre || '',
+  documento: tecnico?.documento || '',
+  telefono: tecnico?.telefono || '',
+  correo: tecnico?.correo || '',
+  especialidad: tecnico?.especialidad || '',
+});
+
+const FORMULARIO_ORDEN = (orden = null, codigo = '') => ({
+  codigo: orden?.codigo || codigo,
+  clienteId: orden?.clienteId || '',
+  servicioId: orden?.servicioId || '',
+  responsableId: orden?.responsableId || '',
+  prioridad: orden?.prioridad || 'Media',
+  fecha: orden?.fecha || '',
+  estado: orden?.estado || 'Pendiente',
+  descripcion: orden?.descripcion || '',
+});
+
+export function Clientes() {
+  const clientes = useData([CLIENTES_KEY], obtenerClientes);
   const [busqueda, setBusqueda] = useState('');
-  const [registroEditado, setRegistroEditado] = useState(null);
-  const [registroDetalle, setRegistroDetalle] = useState(null);
-  const [registroAEliminar, setRegistroAEliminar] = useState(null);
-  const [notificacion, setNotificacion] = useState(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [erroresFormulario, setErroresFormulario] = useState({});
+  const [filtroTipo, setFiltroTipo] = useState('Todos');
+  const [formulario, setFormulario] = useState(null);
+  const [errores, setErrores] = useState({});
+  const [detalleId, setDetalleId] = useState(null);
+  const [porEliminar, setPorEliminar] = useState(null);
+  const { toast, notify, close } = useToast();
 
-  useEffect(() => {
-    let vigente = true;
-    const cargarDatos = async () => {
-      setCargando(true);
-      try {
-        let lista;
-        let nuevosCatalogos = {};
-        if (modulo === 'clientes') {
-          const [clientes, tiposPropiedad] = await Promise.all([
-            localRequest(config.apiPath),
-            localRequest('/clientes/catalogos/tipos-propiedad'),
-          ]);
-          lista = clientes;
-          nuevosCatalogos = { tiposPropiedad };
-        } else if (modulo === 'terceros') {
-          lista = await localRequest(config.apiPath);
-        } else {
-          const [ordenes, catalogoOrdenes, clientes, terceros] = await Promise.all([
-            localRequest(config.apiPath),
-            localRequest('/ordenes-servicio/catalogos'),
-            localRequest('/clientes'),
-            localRequest('/terceros'),
-          ]);
-          lista = ordenes;
-          nuevosCatalogos = {
-            ...catalogoOrdenes,
-            clientes,
-            tecnicos: terceros,
-          };
-        }
-        if (vigente) {
-          setRegistros(lista.map((registro) => normalizarRegistro(modulo, registro)));
-          setCatalogos(nuevosCatalogos);
-        }
-      } catch (error) {
-        if (vigente) {
-          setNotificacion({ tipo: 'error', titulo: 'No se pudieron cargar los datos', mensaje: error.message });
-        }
-      } finally {
-        if (vigente) setCargando(false);
-      }
-    };
-    cargarDatos();
-    return () => { vigente = false; };
-  }, [config.apiPath, modulo]);
+  const filtrados = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    return clientes.filter((cliente) => {
+      if (filtroTipo !== 'Todos' && cliente.tipoPropiedad !== filtroTipo) return false;
+      if (!termino) return true;
+      return `${cliente.nombre} ${cliente.documento} ${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.municipio} ${cliente.departamento}`
+        .toLowerCase()
+        .includes(termino);
+    });
+  }, [clientes, busqueda, filtroTipo]);
 
-  useEffect(() => {
-    if (!notificacion) return undefined;
-    const temporizador = setTimeout(() => setNotificacion(null), 3500);
-    return () => clearTimeout(temporizador);
-  }, [notificacion]);
+  const resumen = useMemo(
+    () => ({
+      total: clientes.length,
+      activos: clientes.filter((cliente) => cliente.estado === 'Activo').length,
+      residenciales: clientes.filter((cliente) => cliente.tipoPropiedad === 'Residencial').length,
+      empresas: clientes.filter((cliente) => cliente.tipoPropiedad !== 'Residencial').length,
+    }),
+    [clientes],
+  );
 
-  const registrosFiltrados = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
-    if (!texto) return registros;
-    return registros.filter((registro) => Object.values(registro).some((valor) => String(valor).toLowerCase().includes(texto)));
-  }, [busqueda, registros]);
-
-  const generarCodigoOrden = () => {
-    const ultimoNumero = registros.reduce((mayor, registro) => {
-      const coincidencia = String(registro.codigo || '').match(/^OS-(\d+)$/i);
-      return coincidencia ? Math.max(mayor, Number(coincidencia[1])) : mayor;
-    }, 0);
-    return `OS-${String(ultimoNumero + 1).padStart(4, '0')}`;
-  };
+  const clienteDetalle = clientes.find((cliente) => String(cliente.id) === String(detalleId));
 
   const abrirNuevo = () => {
-    const valoresIniciales = Object.fromEntries(config.campos.map(([nombre, , tipo, opciones]) => [
-      nombre,
-      ['select', 'segmented'].includes(tipo)
-        ? opciones?.[0] || ''
-        : '',
-    ]));
-    if (modulo === 'clientes') {
-      valoresIniciales.tipoPropiedad = 'Residencial';
-    }
-    if (modulo === 'ordenes') {
-      const pendiente = catalogos.estados?.find((estado) => estado.nombre.toLowerCase() === 'pendiente');
-      valoresIniciales.estado = pendiente?.nombre || catalogos.estados?.[0]?.nombre || '';
-      valoresIniciales.prioridadId = String(catalogos.prioridades?.[0]?.id || '');
-      valoresIniciales.prioridad = catalogos.prioridades?.[0]?.nombre || '';
-    }
-    if (modulo === 'ordenes') valoresIniciales.codigo = generarCodigoOrden();
-    setRegistroEditado({ id: Date.now(), ...valoresIniciales });
-    setErroresFormulario({});
-    setMostrarFormulario(true);
+    setFormulario(FORMULARIO_CLIENTE());
+    setErrores({});
   };
 
-  const seleccionarFK = (nombre, catalogo, id) => {
-    const opcion = obtenerOpcionesFK(catalogo, catalogos).find((item) => item.id === id);
-    const campoNombre = nombre.replace(/Id$/, '');
-    setRegistroEditado((actual) => ({
-      ...actual,
-      [nombre]: id,
-      [campoNombre]: opcion?.nombre || '',
-    }));
-    setErroresFormulario((actuales) => ({ ...actuales, [nombre]: '' }));
+  const abrirEdicion = (cliente) => {
+    setDetalleId(null);
+    setFormulario({ ...FORMULARIO_CLIENTE(cliente), id: cliente.id });
+    setErrores({});
   };
 
-  const crearPayload = (registro) => {
-    if (modulo === 'clientes') {
-      const tipoPropiedad = catalogos.tiposPropiedad?.find(
-        (tipo) => tipo.nombre.toLowerCase() === registro.tipoPropiedad?.toLowerCase(),
-      );
-      if (!tipoPropiedad) {
-        throw new Error('El tipo de propiedad seleccionado no existe en los catálogos locales.');
-      }
-      return {
-        nombre_razon_social: registro.nombre,
-        documento_nit: registro.documento,
-        tipo_cliente: registro.tipoPropiedad === 'Residencial' ? 'Natural' : 'Jurídico',
-        tipo_propiedad_id: tipoPropiedad.id,
-        contacto: registro.contacto || '',
-        telefono: registro.telefono || '',
-        correo_electronico: registro.correo || '',
-        direccion: registro.direccion || '',
-        municipio: registro.municipio || '',
-        departamento: registro.departamento || '',
-        estado: registro.estado || 'Activo',
-      };
-    }
-    if (modulo === 'terceros') {
-      return {
-        nombre_completo: registro.contacto,
-        documento: registro.documento,
-        telefono: registro.telefono || '',
-        correo_electronico: registro.correo || '',
-        estado: registro.estado || 'Activo',
-      };
-    }
-    return {
-      codigo: registro.codigo,
-      cliente_id: Number(registro.clienteId),
-      servicio_id: Number(registro.servicioId),
-      fecha_programada: registro.fecha || null,
-      tercero_id: Number(registro.responsableId),
-      prioridad_id: Number(registro.prioridadId),
-      estado_id: Number(catalogos.estados?.find((estado) => estado.nombre === registro.estado)?.id || registro.estadoId),
-      descripcion: registro.descripcion || '',
-    };
+  const cerrarFormulario = () => {
+    setFormulario(null);
+    setErrores({});
   };
 
-  const guardarRegistro = async (evento) => {
+  const setCampo = (campo, valor) => {
+    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+    setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
+  };
+
+  const guardar = (evento) => {
     evento.preventDefault();
-    if (!registroEditado) {
-      setNotificacion({ tipo: 'error', titulo: 'No se pudo guardar', mensaje: 'No hay información válida para guardar.' });
+    const nuevosErrores = {};
+    if (!formulario.nombre.trim()) {
+      nuevosErrores.nombre = 'Escribe el nombre o razón social.';
+    }
+    if (!formulario.documento.trim()) {
+      nuevosErrores.documento = 'Escribe el documento o NIT.';
+    }
+    if (!formulario.telefono.trim()) {
+      nuevosErrores.telefono = 'Escribe el teléfono de contacto.';
+    }
+    if (formulario.correo.trim() && !CORREO_VALIDO.test(formulario.correo.trim())) {
+      nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
+    }
+    if (Object.keys(nuevosErrores).length) {
+      setErrores(nuevosErrores);
       return;
     }
-    const esNuevoRegistro = !registros.some((registro) => registro.id === registroEditado.id);
-    const errores = {};
-    camposFormulario.forEach(([nombre, etiqueta]) => {
-      const esFechaOpcional = modulo === 'ordenes'
-        && nombre === 'fecha'
-        && registroEditado.estado?.toLowerCase() !== 'programada';
-      const valor = registroEditado[nombre];
-      if (!esFechaOpcional && !String(valor ?? '').trim()) {
-        errores[nombre] = `El campo ${etiqueta.toLowerCase()} es obligatorio.`;
-      }
-    });
-    if (
-      (modulo === 'clientes' || modulo === 'terceros')
-      && registroEditado.correo
-      && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(registroEditado.correo.trim())
-    ) {
-      errores.correo = 'Ingresa un correo electrónico válido.';
-    }
-    if (Object.keys(errores).length) {
-      setErroresFormulario(errores);
-      return;
-    }
-    if (
-      modulo === 'ordenes'
-      && registroEditado.estado?.toLowerCase() === 'programada'
-      && registroEditado.fecha
-      && registroEditado.fecha < fechaLocalISO()
-    ) {
-      setErroresFormulario({ fecha: 'La fecha programada no puede ser anterior al día de hoy.' });
-      return;
-    }
+
     try {
-      const respuesta = await localRequest(
-        esNuevoRegistro ? config.apiPath : `${config.apiPath}/${registroEditado.id}`,
-        {
-          method: esNuevoRegistro ? 'POST' : 'PUT',
-          body: crearPayload(registroEditado),
-        },
+      const guardado = guardarCliente(formulario, formulario.id || null);
+      notify(
+        'success',
+        formulario.id ? 'Cliente actualizado' : 'Cliente creado',
+        `${guardado.nombre} · ${guardado.tipoPropiedad}.`,
       );
-      const registroGuardado = normalizarRegistro(modulo, respuesta);
-      setRegistros((actuales) => esNuevoRegistro
-        ? [registroGuardado, ...actuales]
-        : actuales.map((registro) => registro.id === registroGuardado.id ? registroGuardado : registro));
-      setMostrarFormulario(false);
-      setRegistroEditado(null);
-      setErroresFormulario({});
-      setNotificacion({ tipo: 'success', titulo: 'Registro guardado', mensaje: 'La información se guardó en este navegador.' });
+      cerrarFormulario();
     } catch (error) {
-      setNotificacion({ tipo: 'error', titulo: 'No se pudo guardar', mensaje: error.message });
+      notify('error', 'No se pudo guardar', error.message);
     }
   };
 
-  const eliminarRegistro = (id) => {
-    setRegistroAEliminar(registros.find((registro) => registro.id === id));
-  };
-
-  const confirmarEliminacion = async () => {
-    if (!registroAEliminar) {
-      setNotificacion({ tipo: 'error', titulo: 'No se pudo eliminar', mensaje: 'No se encontró el registro seleccionado.' });
-      return;
-    }
+  const cambiarEstado = (cliente) => {
     try {
-      await localRequest(`${config.apiPath}/${registroAEliminar.id}`, { method: 'DELETE' });
-      setRegistros((actuales) => actuales.filter((registro) => registro.id !== registroAEliminar.id));
-      setRegistroAEliminar(null);
-      setNotificacion({ tipo: 'success', titulo: 'Registro eliminado', mensaje: 'El registro se eliminó del almacenamiento local.' });
+      const actualizado = cambiarEstadoCliente(cliente.id);
+      notify('success', 'Estado actualizado', `${actualizado.nombre} · ${actualizado.estado}.`);
     } catch (error) {
-      setNotificacion({ tipo: 'error', titulo: 'No se pudo eliminar', mensaje: error.message });
+      notify('error', 'No se pudo cambiar el estado', error.message);
     }
   };
 
-  const estadosModulo = modulo === 'ordenes'
-    ? (catalogos.estados || []).map((estado) => ({
-      ...ESTADOS.orden.find((item) => item.nombre.toLowerCase() === estado.nombre.toLowerCase()) || ESTADOS.orden[0],
-      nombre: estado.nombre,
-    }))
-    : ESTADOS.usuario;
-  const camposFormulario = modulo === 'clientes'
-    ? config.campos
-      .filter(([nombre]) => registroEditado?.tipoPropiedad !== 'Residencial' || nombre !== 'contacto')
-      .map(([nombre, etiqueta, tipo, opciones]) => [
-        nombre,
-        etiquetaCampoCliente(nombre, etiqueta, registroEditado?.tipoPropiedad),
-        tipo,
-        opciones,
-      ])
-    : config.campos;
-  const camposFormularioConCatalogos = camposFormulario.map(([nombre, etiqueta, tipo, opciones]) => (
-    modulo === 'ordenes' && nombre === 'estado'
-      ? [nombre, etiqueta, tipo, catalogos.estados?.map((estado) => estado.nombre) || []]
-      : [nombre, etiqueta, tipo, opciones]
-  ));
-  const camposDetalle = modulo === 'clientes'
-    ? config.campos
-      .filter(([nombre]) => registroDetalle?.tipoPropiedad !== 'Residencial' || nombre !== 'contacto')
-      .map(([nombre, etiqueta]) => [
-        nombre,
-        etiquetaCampoCliente(nombre, etiqueta, registroDetalle?.tipoPropiedad),
-      ])
-    : config.campos;
-  const esNuevaOrden = modulo === 'ordenes'
-    && registroEditado
-    && !registros.some((registro) => registro.id === registroEditado.id);
-
-  const cambiarEstado = async (id) => {
-    const registro = registros.find((item) => item.id === id);
-    if (!registro) return;
-    const siguiente = modulo === 'ordenes'
-      ? catalogos.estados?.[(catalogos.estados.findIndex((item) => item.nombre === registro.estado) + 1) % catalogos.estados.length]
-      : { nombre: estadoSiguiente(estadosModulo, registro.estado) };
-    if (!siguiente) return;
-
+  const confirmarEliminacion = () => {
     try {
-      let respuesta;
-      if (modulo === 'ordenes') {
-        respuesta = await localRequest(`${config.apiPath}/${id}/estado`, {
-          method: 'PATCH',
-          body: { estado_id: siguiente.id },
-        });
-      } else {
-        respuesta = await localRequest(`${config.apiPath}/${id}`, {
-          method: 'PUT',
-          body: crearPayload({ ...registro, estado: siguiente.nombre }),
-        });
-      }
-      const actualizado = normalizarRegistro(modulo, respuesta);
-      setRegistros((actuales) => actuales.map((item) => item.id === id ? actualizado : item));
+      eliminarCliente(porEliminar.id);
+      notify('success', 'Cliente eliminado', porEliminar.nombre);
+      if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
+      setPorEliminar(null);
     } catch (error) {
-      setNotificacion({ tipo: 'error', titulo: 'No se pudo cambiar el estado', mensaje: error.message });
+      notify('error', 'No se pudo eliminar', error.message);
     }
   };
 
-  const cambiarCampoFormulario = (nombre, valor) => {
-    setRegistroEditado((actual) => {
-      const actualizacion = { ...actual, [nombre]: valor };
-      if (modulo === 'ordenes' && nombre === 'estado' && valor.toLowerCase() === 'pendiente') {
-        actualizacion.fecha = '';
-      }
-      if (
-        modulo === 'ordenes'
-        && nombre === 'estado'
-        && valor.toLowerCase() === 'programada'
-        && actualizacion.fecha
-        && actualizacion.fecha < fechaLocalISO()
-      ) {
-        actualizacion.fecha = '';
-      }
-      if (modulo === 'ordenes' && nombre === 'fecha' && !registros.some((registro) => registro.id === actual.id)) {
-        const estadoDestino = valor ? 'programada' : 'pendiente';
-        actualizacion.estado = catalogos.estados?.find(
-          (estado) => estado.nombre.toLowerCase() === estadoDestino,
-        )?.nombre || '';
-      }
-      return actualizacion;
-    });
-    setErroresFormulario((errores) => ({
-      ...errores,
-      [nombre]: '',
-      ...(nombre === 'tipoPropiedad' && valor === 'Residencial' ? { contacto: '' } : {}),
-    }));
-  };
-
-  const tema = esOscuro ? {
-    page: '#0b1329', card: '#111c38', border: '#1e2d4a', text: '#ffffff', subtext: '#94a3b8', input: '#0b1329', rowBorder: '#162447', secondary: '#1e2d4a'
-  } : {
-    page: '#f8fafc', card: '#ffffff', border: '#e2e8f0', text: '#0f172a', subtext: '#64748b', input: '#ffffff', rowBorder: '#f1f5f9', secondary: '#ffffff'
-  };
-
-  
   return (
-    <section style={{ ...styles.page, backgroundColor: tema.page, color: tema.text }}>
-      <header style={{ ...styles.topBar, borderColor: tema.border }}>
-        <div style={{ color: tema.subtext, fontSize: '12px' }}>Eléctricos MCA / {config.titulo}</div>
-        <div style={styles.userTools}>
-          <button type="button" onClick={toggleTheme} style={{ ...styles.themeButton, backgroundColor: tema.card, borderColor: tema.border, color: tema.text }}>
-            {esOscuro ? '☀️ Claro' : '🌙 Oscuro'}
-          </button>
-          <button type="button" title="Notificaciones" style={{ ...styles.notificationButton, color: esOscuro ? '#cbd5e1' : '#475569' }}>
-            <Bell size={18} strokeWidth={1.8} />
-          </button>
-          <div style={{ ...styles.userTools, borderLeft: `1px solid ${tema.border}`, paddingLeft: '12px' }}>
-            <div style={styles.userInfo}>
-              <strong style={{ color: tema.text }}>{usuario?.nombre || usuario?.usuario || 'Usuario'}</strong>
-              <span style={{ color: tema.subtext }}>{usuario?.rol || 'Administrador'}</span>
-            </div>
-            <div style={{ ...styles.userAvatar, backgroundColor: esOscuro ? '#2d3655' : '#e2e8f0' }}>👤</div>
-          </div>
-        </div>
-      </header>
-      <header style={styles.header}>
-        <div>
-          <div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '8px' }}><IconoEncabezado size={16} strokeWidth={1.8} /> MÓDULO DE GESTIÓN</div>
-          <h1 style={styles.title}>{config.titulo}</h1>
-          <p style={{ ...styles.subtitle, color: tema.subtext }}>{config.subtitulo}</p>
-        </div>
-        <button type="button" onClick={abrirNuevo} disabled={cargando} style={{ ...styles.primaryButton, display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: cargando ? 0.6 : 1 }}><Plus size={16} strokeWidth={2} /> Nuevo registro</button>
-      </header>
+    <PageShell>
+      <PageHeader
+        eyebrow="Clientes"
+        title="Clientes"
+        subtitle="Empresas y personas que alimentan las cotizaciones, la agenda y las órdenes de servicio."
+        icon={UsersRound}
+        actions={
+          <Button variant="primary" icon={Plus} onClick={abrirNuevo}>
+            Nuevo cliente
+          </Button>
+        }
+      />
 
-      <div style={styles.summaryRow}>
-        <div style={{ ...styles.summaryCard, backgroundColor: tema.card, borderColor: tema.border }}><div style={{ ...styles.metricIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#dbeafe', color: esOscuro ? '#cbd5e1' : '#475569' }}><IconoTotal size={18} strokeWidth={1.8} /></div><div><span style={{ ...styles.summaryLabel, color: tema.subtext }}>REGISTROS TOTALES</span><strong style={styles.summaryValue}>{registros.length}</strong></div></div>
-        <div style={{ ...styles.summaryCard, backgroundColor: tema.card, borderColor: tema.border }}><div style={{ ...styles.metricIcon, backgroundColor: esOscuro ? '#332b0c' : '#fef3c7', color: esOscuro ? '#facc15' : '#a16207' }}><IconoBusqueda size={18} strokeWidth={1.8} /></div><div><span style={{ ...styles.summaryLabel, color: tema.subtext }}>RESULTADOS VISIBLES</span><strong style={styles.summaryValue}>{registrosFiltrados.length}</strong></div></div>
-        <div style={{ ...styles.summaryCard, backgroundColor: esOscuro ? '#332b0c' : '#fff8d9', borderColor: tema.border }}><div style={{ ...styles.metricIcon, backgroundColor: esOscuro ? '#3f3210' : '#fef3c7', color: esOscuro ? '#facc15' : '#a16207' }}><IconoEstado size={18} strokeWidth={1.8} /></div><div><span style={{ ...styles.summaryLabel, color: tema.subtext }}>ESTADO DEL MÓDULO</span><strong style={{ ...styles.summaryValue, color: '#facc15' }}>ACTIVO</strong></div></div>
+      <div className="mca-kpis">
+        <KpiCard
+          label="Clientes registrados"
+          value={resumen.total}
+          hint={`${clientes.length} fichas disponibles`}
+          icon={UsersRound}
+          tone="yellow"
+        />
+        <KpiCard
+          label="Clientes activos"
+          value={resumen.activos}
+          hint={`${resumen.total - resumen.activos} inactivos`}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <KpiCard
+          label="Residenciales"
+          value={resumen.residenciales}
+          hint="Personas naturales"
+          icon={House}
+          tone="info"
+        />
+        <KpiCard
+          label="Empresas"
+          value={resumen.empresas}
+          hint="Comerciales e industriales"
+          icon={Building2}
+          tone="indigo"
+        />
       </div>
 
-      <div style={{ ...styles.card, backgroundColor: tema.card, borderColor: tema.border }}>
-        <div style={styles.toolbar}>
-          <h2 style={{ margin: 0 }}>{config.titulo} registrados</h2>
-          <div style={styles.searchWrap}>
-            <Search size={16} strokeWidth={1.8} color={tema.subtext} aria-hidden="true" style={styles.searchIcon} />
-            <input aria-label={`Buscar ${config.titulo}`} value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar..." style={{ ...styles.search, backgroundColor: tema.input, borderColor: tema.border, color: tema.text }} />
-          </div>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
-            <thead><tr>{config.columnas.map(([, etiqueta]) => <th key={etiqueta} style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>{etiqueta}</th>)}<th style={{ ...styles.th, color: tema.subtext, borderColor: tema.border }}>Acciones</th></tr></thead>
+      <Panel
+        title="Directorio de clientes"
+        subtitle={`${filtrados.length} de ${clientes.length} clientes`}
+        actions={
+          <>
+            <SearchInput
+              value={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por nombre, documento, contacto o municipio..."
+            />
+            <select
+              className="mca-select"
+              style={{ width: 170 }}
+              value={filtroTipo}
+              onChange={(evento) => setFiltroTipo(evento.target.value)}
+              aria-label="Filtrar clientes por tipo de propiedad"
+            >
+              <option value="Todos">Todos los tipos</option>
+              {TIPOS_PROPIEDAD.map((tipo) => (
+                <option key={tipo.id} value={tipo.nombre}>
+                  {tipo.nombre}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+        flush
+      >
+        <div className="mca-table-wrap">
+          <table className="mca-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Documento / NIT</th>
+                <th>Tipo</th>
+                <th>Contacto</th>
+                <th>Teléfono</th>
+                <th>Municipio</th>
+                <th>Estado</th>
+                <th className="mca-center">Acciones</th>
+              </tr>
+            </thead>
             <tbody>
-              {cargando && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>Cargando datos locales...</td></tr>}
-              {registrosFiltrados.map((registro) => <tr key={registro.id}>
-                {config.columnas.map(([campo]) => <td key={campo} style={{ ...styles.td, color: tema.text, borderColor: tema.rowBorder }}>{campo === 'estado' ? <EstadoToggle estado={registro[campo]} estados={estadosModulo} onClick={() => cambiarEstado(registro.id)} /> : campo === config.columnas[0][0] ? <span style={styles.nameCell}><span style={{ ...styles.rowIcon, backgroundColor: esOscuro ? '#1e2d4a' : '#f1f5f9', color: tema.subtext }}><IconoFila size={16} strokeWidth={1.8} /></span>{registro[campo]}</span> : registro[campo]}</td>)}
-                <td style={{ ...styles.td, borderColor: tema.rowBorder }}>
-                  <AccionesFila
-                    onVer={() => setRegistroDetalle(registro)}
-                    onEditar={() => {
-                      setRegistroEditado(registro);
-                      setErroresFormulario({});
-                      setMostrarFormulario(true);
-                    }}
-                    onEliminar={() => eliminarRegistro(registro.id)}
-                    color={esOscuro ? '#cbd5e1' : '#475569'}
-                  />
-                </td>
-              </tr>)}
-              {!cargando && registrosFiltrados.length === 0 && <tr><td colSpan={config.columnas.length + 1} style={styles.empty}>No hay registros que coincidan con la búsqueda.</td></tr>}
+              {filtrados.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="mca-table__empty">
+                    <EmptyState
+                      icon={UsersRound}
+                      title="Sin clientes para mostrar"
+                      message="Ajusta los filtros o registra un nuevo cliente para comenzar."
+                      action={
+                        <Button size="sm" icon={Plus} onClick={abrirNuevo}>
+                          Nuevo cliente
+                        </Button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filtrados.map((cliente) => {
+                  const Icono = ICONO_PROPIEDAD[cliente.tipoPropiedad] || Building2;
+                  return (
+                    <tr key={cliente.id}>
+                      <td>
+                        <div className="mca-cell-title">
+                          <div className="mca-cell-icon">
+                            <Icono size={15} strokeWidth={1.9} />
+                          </div>
+                          <div>
+                            <div className="is-primary">{cliente.nombre}</div>
+                            <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                              {cliente.tipoCliente}
+                              {cliente.departamento ? ` · ${cliente.departamento}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="is-nowrap">{cliente.documento || '—'}</td>
+                      <td>
+                        <Badge tone={TONO_PROPIEDAD[cliente.tipoPropiedad] || 'neutral'}>
+                          {cliente.tipoPropiedad}
+                        </Badge>
+                      </td>
+                      <td>
+                        <div>{cliente.contacto || '—'}</div>
+                        {cliente.correo && (
+                          <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                            {cliente.correo}
+                          </div>
+                        )}
+                      </td>
+                      <td className="is-nowrap">
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <Phone size={13} strokeWidth={1.9} className="mca-soft" />
+                          <span>{cliente.telefono || '—'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
+                          <span>{cliente.municipio || '—'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <EstadoToggle
+                          estado={cliente.estado}
+                          estados={ESTADOS.usuario}
+                          width={110}
+                          onClick={() => cambiarEstado(cliente)}
+                        />
+                      </td>
+                      <td className="mca-center">
+                        <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
+                          <AccionesFila
+                            onVer={() => setDetalleId(cliente.id)}
+                            onEditar={() => abrirEdicion(cliente)}
+                            onEliminar={() => setPorEliminar(cliente)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Panel>
 
-      {mostrarFormulario && <div style={styles.overlay}>
-        <form noValidate onSubmit={guardarRegistro} style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> FORMULARIO</div><h2>{registroEditado?.id && registros.some((registro) => registro.id === registroEditado.id) ? 'Editar registro' : 'Nuevo registro'}</h2></div><button type="button" onClick={() => { setMostrarFormulario(false); setErroresFormulario({}); }} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.formGrid}>
-            {camposFormularioConCatalogos.map(([nombre, etiqueta, tipo, opciones]) => (
-              <label
-                key={nombre}
-                style={{
-                  ...styles.label,
-                  ...(tipo === 'segmented' ? styles.fullWidthField : {}),
-                  color: tema.subtext,
-                }}
-              >
-                {etiqueta}
-                {tipo === 'fk' ? (
-                  <select
-                    value={String(registroEditado?.[nombre] || '')}
-                    onChange={(evento) => seleccionarFK(nombre, opciones, evento.target.value)}
-                    aria-invalid={Boolean(erroresFormulario[nombre])}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
+      <Modal
+        open={Boolean(formulario)}
+        onClose={cerrarFormulario}
+        title={formulario?.id ? 'Editar cliente' : 'Nuevo cliente'}
+        subtitle="Estos datos se reutilizan automáticamente en cotizaciones, agenda y órdenes."
+        icon={Building2}
+        size="lg"
+        footer={
+          <>
+            <Button onClick={cerrarFormulario}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-cliente">
+              {formulario?.id ? 'Guardar cambios' : 'Crear cliente'}
+            </Button>
+          </>
+        }
+      >
+        {formulario && (
+          <form id="form-cliente" className="mca-form-grid" onSubmit={guardar} noValidate>
+            <Field
+              label="Tipo de propiedad"
+              full
+              hint="Residencial usa persona natural; Comercial e Industrial usan razón social."
+            >
+              <div className="mca-row" style={{ gap: 8 }}>
+                {TIPOS_PROPIEDAD.map((tipo) => (
+                  <Button
+                    key={tipo.id}
+                    size="sm"
+                    variant={formulario.tipoPropiedad === tipo.nombre ? 'primary' : 'ghost'}
+                    onClick={() => setCampo('tipoPropiedad', tipo.nombre)}
                   >
-                    <option value="">Selecciona {etiqueta.toLowerCase()}...</option>
-                    {obtenerOpcionesFK(opciones, catalogos).map((opcion) => (
-                      <option key={opcion.id} value={opcion.id}>{opcion.etiqueta}</option>
-                    ))}
-                  </select>
-                ) : tipo === 'select' && modulo === 'ordenes' && nombre === 'estado' && esNuevaOrden ? (
-                  <input
-                    type="text"
-                    value={registroEditado?.[nombre] || ''}
-                    readOnly
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
-                  />
-                ) : tipo === 'select' ? (
-                  <select
-                    value={registroEditado?.[nombre] || ''}
-                    onChange={(evento) => cambiarCampoFormulario(nombre, evento.target.value)}
-                    aria-invalid={Boolean(erroresFormulario[nombre])}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
-                  >
-                    {(modulo === 'ordenes' && nombre === 'estado'
-                      ? opciones.filter((opcion) => ['pendiente', 'programada', 'cancelada'].includes(opcion.toLowerCase()))
-                      : opciones
-                    ).map((opcion) => <option key={opcion}>{opcion}</option>)}
-                  </select>
-                ) : tipo === 'segmented' ? (
-                  <div role="radiogroup" aria-label={etiqueta} aria-invalid={Boolean(erroresFormulario[nombre])} style={styles.segmentedControl}>
-                    {opciones.map((opcion) => (
-                      <button
-                        key={opcion}
-                        type="button"
-                        role="radio"
-                        aria-checked={registroEditado?.[nombre] === opcion}
-                        onClick={() => cambiarCampoFormulario(nombre, opcion)}
-                        style={{
-                          ...styles.segmentedButton,
-                          backgroundColor: registroEditado?.[nombre] === opcion ? '#facc15' : tema.input,
-                          borderColor: registroEditado?.[nombre] === opcion ? '#eab308' : tema.border,
-                          color: registroEditado?.[nombre] === opcion ? '#172033' : tema.text,
-                        }}
-                      >
-                        {opcion}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <input
-                    type={tipo}
-                    min={modulo === 'ordenes' && nombre === 'fecha' ? fechaLocalISO() : undefined}
-                    disabled={modulo === 'ordenes' && nombre === 'fecha' && !esNuevaOrden && registroEditado?.estado === 'Pendiente'}
-                    readOnly={modulo === 'ordenes' && nombre === 'codigo'}
-                    value={registroEditado?.[nombre] || ''}
-                    onChange={(evento) => cambiarCampoFormulario(nombre, evento.target.value)}
-                    aria-invalid={Boolean(erroresFormulario[nombre])}
-                    style={{ ...styles.input, backgroundColor: tema.input, borderColor: erroresFormulario[nombre] ? '#dc2626' : tema.border, color: tema.text }}
-                  />
-                )}
-                {erroresFormulario[nombre] && (
-                  <span role="alert" style={styles.fieldError}>{erroresFormulario[nombre]}</span>
-                )}
-              </label>
-            ))}
-          </div>
-          <div style={styles.modalActions}><button type="button" onClick={() => { setMostrarFormulario(false); setErroresFormulario({}); }} style={styles.secondaryButton}>Cancelar</button><button type="submit" style={styles.primaryButton}>Guardar registro</button></div>
-        </form>
-      </div>}
+                    {tipo.nombre}
+                  </Button>
+                ))}
+              </div>
+            </Field>
 
-      {registroDetalle && <div style={styles.overlay}>
-        <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: esOscuro ? '#facc15' : '#a16207', display: 'flex', alignItems: 'center', gap: '7px' }}><IconoEncabezado size={15} strokeWidth={1.8} /> DETALLE</div><h2 style={{ margin: 0 }}>Información completa</h2></div><button type="button" onClick={() => setRegistroDetalle(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <div style={styles.detailGrid}>{camposDetalle.map(([nombre, etiqueta]) => <div key={nombre} style={{ ...styles.detailItem, borderColor: tema.border }}><span style={{ color: tema.subtext }}>{etiqueta}</span><strong>{registroDetalle[nombre] || 'No registrado'}</strong></div>)}</div>
-          <div style={styles.modalActions}><button type="button" onClick={() => setRegistroDetalle(null)} style={styles.primaryButton}>Cerrar detalle</button></div>
-        </div>
-      </div>}
+            <Field
+              label={formulario.tipoPropiedad === 'Residencial' ? 'Nombre completo' : 'Razón social'}
+              required
+              error={errores.nombre}
+            >
+              <input
+                className="mca-input"
+                value={formulario.nombre}
+                onChange={(evento) => setCampo('nombre', evento.target.value)}
+                placeholder={formulario.tipoPropiedad === 'Residencial' ? 'Ana María Gómez' : 'Empresa S.A.S.'}
+                autoFocus
+              />
+            </Field>
 
-      {registroAEliminar && <div style={styles.overlay}>
-        <div style={{ ...styles.modal, backgroundColor: tema.card, color: tema.text, maxWidth: '430px' }}>
-          <div style={styles.modalHeader}><div><div style={{ ...styles.eyebrow, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '7px' }}><TriangleAlert size={15} strokeWidth={1.8} /> CONFIRMAR ACCIÓN</div><h2 style={{ margin: 0 }}>Eliminar registro</h2></div><button type="button" onClick={() => setRegistroAEliminar(null)} style={{ ...styles.closeButton, color: tema.subtext }}>×</button></div>
-          <p style={{ color: tema.subtext, fontSize: '14px', lineHeight: 1.5, margin: '0 0 20px' }}>¿Seguro que deseas eliminar <strong style={{ color: tema.text }}>{registroAEliminar.nombre || registroAEliminar.contacto || registroAEliminar.documento || registroAEliminar.codigo}</strong>? Esta acción quitará el registro de la lista.</p>
-          <div style={styles.modalActions}><button type="button" onClick={() => setRegistroAEliminar(null)} style={styles.secondaryButton}>Cancelar</button><button type="button" onClick={confirmarEliminacion} style={{ ...styles.deleteButton, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}><Trash2 size={15} strokeWidth={1.8} /> Eliminar</button></div>
-        </div>
-      </div>}
+            <Field
+              label={formulario.tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT'}
+              required
+              error={errores.documento}
+            >
+              <input
+                className="mca-input"
+                value={formulario.documento}
+                onChange={(evento) => setCampo('documento', evento.target.value)}
+                placeholder={formulario.tipoPropiedad === 'Residencial' ? '1.020.304.050' : '900.123.456-7'}
+              />
+            </Field>
 
-      {notificacion && <div style={styles.notificationOverlay} role="status">
-        <div style={{ ...styles.notification, borderColor: notificacion.tipo === 'success' ? '#86efac' : '#fca5a5' }}>
-          <div style={{ ...styles.notificationIcon, backgroundColor: notificacion.tipo === 'success' ? '#dcfce7' : '#fee2e2', color: notificacion.tipo === 'success' ? '#15803d' : '#b91c1c' }}>{notificacion.tipo === 'success' ? '✓' : '!'}</div>
-          <div><strong>{notificacion.titulo}</strong><p>{notificacion.mensaje}</p></div>
-          <button type="button" onClick={() => setNotificacion(null)} style={styles.notificationClose} title="Cerrar">×</button>
-        </div>
-      </div>}
-    </section>
+            <Field label="Persona de contacto">
+              <input
+                className="mca-input"
+                value={formulario.contacto}
+                onChange={(evento) => setCampo('contacto', evento.target.value)}
+                placeholder="Nombre del contacto"
+              />
+            </Field>
+
+            <Field label="Teléfono" required error={errores.telefono}>
+              <input
+                className="mca-input"
+                type="tel"
+                value={formulario.telefono}
+                onChange={(evento) => setCampo('telefono', evento.target.value)}
+                placeholder="310 555 0000"
+              />
+            </Field>
+
+            <Field label="Correo electrónico" error={errores.correo}>
+              <input
+                className="mca-input"
+                type="email"
+                value={formulario.correo}
+                onChange={(evento) => setCampo('correo', evento.target.value)}
+                placeholder="contacto@empresa.com"
+              />
+            </Field>
+
+            <Field label="Municipio">
+              <input
+                className="mca-input"
+                value={formulario.municipio}
+                onChange={(evento) => setCampo('municipio', evento.target.value)}
+                placeholder="Bogotá"
+              />
+            </Field>
+
+            <Field label="Departamento">
+              <input
+                className="mca-input"
+                value={formulario.departamento}
+                onChange={(evento) => setCampo('departamento', evento.target.value)}
+                placeholder="Cundinamarca"
+              />
+            </Field>
+
+            <Field label="Dirección" full>
+              <input
+                className="mca-input"
+                value={formulario.direccion}
+                onChange={(evento) => setCampo('direccion', evento.target.value)}
+                placeholder="Calle 00 # 00-00"
+              />
+            </Field>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(clienteDetalle)}
+        onClose={() => setDetalleId(null)}
+        title={clienteDetalle?.nombre}
+        subtitle={
+          clienteDetalle
+            ? `${clienteDetalle.documento} · ${clienteDetalle.tipoPropiedad}`
+            : ''
+        }
+        icon={Building2}
+        size="lg"
+        footer={
+          clienteDetalle && (
+            <>
+              <Button onClick={() => setDetalleId(null)}>Cerrar</Button>
+              <Button variant="primary" onClick={() => abrirEdicion(clienteDetalle)}>
+                Editar cliente
+              </Button>
+            </>
+          )
+        }
+      >
+        {clienteDetalle && (
+          <DetailGrid>
+            <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
+            <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
+            <DetailItem label="Documento / NIT">{clienteDetalle.documento || '—'}</DetailItem>
+            <DetailItem label="Estado">
+              <EstadoToggle
+                estado={clienteDetalle.estado}
+                estados={ESTADOS.usuario}
+                width={110}
+              />
+            </DetailItem>
+            <DetailItem label="Contacto">{clienteDetalle.contacto || '—'}</DetailItem>
+            <DetailItem label="Teléfono">{clienteDetalle.telefono || '—'}</DetailItem>
+            <DetailItem label="Correo electrónico" full>
+              {clienteDetalle.correo || '—'}
+            </DetailItem>
+            <DetailItem label="Municipio">{clienteDetalle.municipio || '—'}</DetailItem>
+            <DetailItem label="Departamento">{clienteDetalle.departamento || '—'}</DetailItem>
+            <DetailItem label="Dirección" full>{clienteDetalle.direccion || '—'}</DetailItem>
+          </DetailGrid>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(porEliminar)}
+        title="Eliminar cliente"
+        message={
+          porEliminar
+            ? `¿Seguro que deseas eliminar a ${porEliminar.nombre}? Las cotizaciones y órdenes ya emitidas conservan su historial.`
+            : ''
+        }
+        confirmLabel="Eliminar cliente"
+        onCancel={() => setPorEliminar(null)}
+        onConfirm={confirmarEliminacion}
+      />
+
+      <Toast toast={toast} onClose={close} />
+    </PageShell>
   );
 }
 
-export function Clientes({ usuario }) { return <ModuloGestion modulo="clientes" usuario={usuario} />; }
-export function GestionTerceros({ usuario }) { return <ModuloGestion modulo="terceros" usuario={usuario} />; }
-export function OrdenesServicio({ usuario }) { return <ModuloGestion modulo="ordenes" usuario={usuario} />; }
+export function GestionTerceros() {
+  const datos = useData(
+    [TERCEROS_KEY, AGENDA_KEY],
+    () => ({
+      tecnicos: obtenerTecnicos(),
+      actividades: obtenerActividades(),
+    }),
+  );
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [formulario, setFormulario] = useState(null);
+  const [errores, setErrores] = useState({});
+  const [detalleId, setDetalleId] = useState(null);
+  const [porEliminar, setPorEliminar] = useState(null);
+  const { toast, notify, close } = useToast();
 
-const styles = {
-  page: { minHeight: '100vh', padding: '32px', backgroundColor: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' },
-  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid', paddingBottom: '14px', marginBottom: '28px' },
-  themeButton: { border: '1px solid', borderRadius: '20px', padding: '7px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' },
-  userTools: { display: 'flex', alignItems: 'center', gap: '12px' },
-  userInfo: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', fontSize: '10px' },
-  userAvatar: { width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' },
-  notificationButton: { border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '15px', padding: '4px' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '24px' },
-  eyebrow: { color: '#a16207', fontSize: '11px', fontWeight: '800', letterSpacing: '1px', marginBottom: '8px' },
-  title: { margin: 0, fontSize: '28px' },
-  subtitle: { margin: '6px 0 0', color: '#64748b', fontSize: '14px' },
-  primaryButton: { border: 'none', borderRadius: '7px', backgroundColor: '#facc15', color: '#172033', padding: '11px 16px', fontWeight: '800', cursor: 'pointer', whiteSpace: 'nowrap' },
-  secondaryButton: { border: '1px solid #cbd5e1', borderRadius: '7px', backgroundColor: '#fff', color: '#334155', padding: '10px 16px', fontWeight: '700', cursor: 'pointer' },
-  deleteButton: { border: '1px solid #dc2626', borderRadius: '7px', backgroundColor: '#dc2626', color: '#fff', padding: '10px 16px', fontWeight: '700', cursor: 'pointer' },
-  summaryRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '18px' },
-  summaryCard: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '9px', padding: '17px' },
-  metricIcon: { width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '17px', flexShrink: 0 },
-  summaryLabel: { color: '#64748b', display: 'block', fontSize: '10px', fontWeight: '800', letterSpacing: '0.5px' },
-  summaryValue: { display: 'block', fontSize: '24px', marginTop: '7px' },
-  card: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '9px', padding: '20px' },
-  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '16px' },
-  searchWrap: { position: 'relative', width: '260px', flexShrink: 0 },
-  searchIcon: { position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' },
-  search: { width: '100%', padding: '10px 12px 10px 36px', border: '1px solid #cbd5e1', borderRadius: '7px', outline: 'none' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-  th: { padding: '12px 8px', borderBottom: '1px solid', textAlign: 'left', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.4px' },
-  td: { padding: '14px 8px', borderBottom: '1px solid' },
-  tableHead: { color: '#64748b' },
-  nameCell: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: '700' },
-  rowIcon: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', borderRadius: '7px', fontSize: '14px' },
-  empty: { textAlign: 'center', padding: '32px', color: '#64748b' },
-  overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 20 },
-  modal: { width: 'min(680px, 100%)', backgroundColor: '#fff', borderRadius: '10px', padding: '24px', boxSizing: 'border-box' },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' },
-  closeButton: { border: 'none', background: 'transparent', color: '#64748b', fontSize: '28px', cursor: 'pointer', lineHeight: 1 },
-  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' },
-  fullWidthField: { gridColumn: '1 / -1' },
-  detailGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' },
-  detailItem: { display: 'flex', flexDirection: 'column', gap: '5px', borderBottom: '1px solid', padding: '9px 0', fontSize: '13px' },
-  label: { display: 'flex', flexDirection: 'column', gap: '6px', color: '#475569', fontSize: '12px', fontWeight: '700' },
-  input: { width: '100%', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px', color: '#0f172a', backgroundColor: '#fff', fontSize: '13px' },
-  fieldError: { display: 'block', marginTop: '5px', color: '#dc2626', fontSize: '12px', lineHeight: 1.4, fontWeight: '500' },
-  segmentedControl: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' },
-  segmentedButton: { border: '1px solid', borderRadius: '6px', padding: '10px 8px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' },
-  modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' },
-  notificationOverlay: { position: 'fixed', top: '24px', right: '24px', zIndex: 30 },
-  notification: { minWidth: '300px', maxWidth: '380px', display: 'flex', alignItems: 'flex-start', gap: '10px', backgroundColor: '#fff', border: '1px solid', borderRadius: '9px', padding: '14px 16px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.2)', color: '#0f172a' },
-  notificationIcon: { width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', flexShrink: 0 },
-  notificationClose: { border: 'none', background: 'transparent', color: '#64748b', fontSize: '20px', cursor: 'pointer', marginLeft: 'auto', lineHeight: 1 },
-};
+  const cargaTecnicos = useMemo(() => {
+    const carga = {};
+    datos.actividades
+      .filter((actividad) => ESTADOS_ACTIVOS_AGENDA.includes(actividad.estado))
+      .forEach((actividad) => {
+        const clave = String(actividad.tecnicoId);
+        carga[clave] = (carga[clave] || 0) + 1;
+      });
+    return carga;
+  }, [datos.actividades]);
+
+  const filtrados = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    return datos.tecnicos.filter((tecnico) => {
+      if (filtroEstado !== 'Todos' && tecnico.estado !== filtroEstado) return false;
+      if (!termino) return true;
+      return `${tecnico.nombre} ${tecnico.documento} ${tecnico.telefono} ${tecnico.correo} ${tecnico.especialidad}`
+        .toLowerCase()
+        .includes(termino);
+    });
+  }, [datos.tecnicos, busqueda, filtroEstado]);
+
+  const resumen = useMemo(
+    () => ({
+      total: datos.tecnicos.length,
+      activos: datos.tecnicos.filter((tecnico) => tecnico.estado === 'Activo').length,
+      especialidades: new Set(
+        datos.tecnicos.map((tecnico) => tecnico.especialidad).filter(Boolean),
+      ).size,
+      asignados: datos.actividades.filter(
+        (actividad) => ESTADOS_ACTIVOS_AGENDA.includes(actividad.estado),
+      ).length,
+    }),
+    [datos.tecnicos, datos.actividades],
+  );
+
+  const tecnicoDetalle = datos.tecnicos.find(
+    (tecnico) => String(tecnico.id) === String(detalleId),
+  );
+
+  const serviciosDetalle = useMemo(
+    () => datos.actividades
+      .filter(
+        (actividad) => String(actividad.tecnicoId) === String(tecnicoDetalle?.id)
+          && ESTADOS_ACTIVOS_AGENDA.includes(actividad.estado),
+      )
+      .sort((a, b) => `${a.fecha} ${a.horaInicio}`.localeCompare(`${b.fecha} ${b.horaInicio}`)),
+    [datos.actividades, tecnicoDetalle],
+  );
+
+  const abrirNuevo = () => {
+    setFormulario(FORMULARIO_TECNICO());
+    setErrores({});
+  };
+
+  const abrirEdicion = (tecnico) => {
+    setDetalleId(null);
+    setFormulario({ ...FORMULARIO_TECNICO(tecnico), id: tecnico.id });
+    setErrores({});
+  };
+
+  const cerrarFormulario = () => {
+    setFormulario(null);
+    setErrores({});
+  };
+
+  const setCampo = (campo, valor) => {
+    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+    setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
+  };
+
+  const guardar = (evento) => {
+    evento.preventDefault();
+    const nuevosErrores = {};
+    if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del tercero.';
+    if (!formulario.documento.trim()) nuevosErrores.documento = 'Escribe el documento.';
+    if (!formulario.telefono.trim()) nuevosErrores.telefono = 'Escribe el teléfono.';
+    if (formulario.correo.trim() && !CORREO_VALIDO.test(formulario.correo.trim())) {
+      nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
+    }
+    if (Object.keys(nuevosErrores).length) {
+      setErrores(nuevosErrores);
+      return;
+    }
+
+    try {
+      const guardado = guardarTecnico(formulario, formulario.id || null);
+      notify(
+        'success',
+        formulario.id ? 'Tercero actualizado' : 'Tercero creado',
+        `${guardado.nombre} · ${guardado.especialidad}.`,
+      );
+      cerrarFormulario();
+    } catch (error) {
+      notify('error', 'No se pudo guardar', error.message);
+    }
+  };
+
+  const cambiarEstado = (tecnico) => {
+    try {
+      const actualizado = cambiarEstadoTecnico(tecnico.id);
+      notify('success', 'Estado actualizado', `${actualizado.nombre} · ${actualizado.estado}.`);
+    } catch (error) {
+      notify('error', 'No se pudo cambiar el estado', error.message);
+    }
+  };
+
+  const solicitarEliminar = (tecnico) => {
+    if (cargaTecnicos[String(tecnico.id)]) {
+      notify(
+        'warning',
+        'Tercero con servicios activos',
+        'Reasigna sus servicios en la agenda antes de eliminarlo.',
+      );
+      return;
+    }
+    setPorEliminar(tecnico);
+  };
+
+  const confirmarEliminacion = () => {
+    try {
+      eliminarTecnico(porEliminar.id);
+      notify('success', 'Tercero eliminado', porEliminar.nombre);
+      if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
+      setPorEliminar(null);
+    } catch (error) {
+      notify('error', 'No se pudo eliminar', error.message);
+    }
+  };
+
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Terceros"
+        title="Terceros"
+        subtitle="Técnicos externos disponibles para asignar en la agenda y las órdenes de servicio."
+        icon={Handshake}
+        actions={
+          <Button variant="primary" icon={Plus} onClick={abrirNuevo}>
+            Nuevo tercero
+          </Button>
+        }
+      />
+
+      <div className="mca-kpis">
+        <KpiCard
+          label="Terceros registrados"
+          value={resumen.total}
+          hint={`${datos.tecnicos.length} fichas disponibles`}
+          icon={Handshake}
+          tone="yellow"
+        />
+        <KpiCard
+          label="Terceros activos"
+          value={resumen.activos}
+          hint={`${resumen.total - resumen.activos} inactivos`}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <KpiCard
+          label="Especialidades"
+          value={resumen.especialidades}
+          hint="Perfiles técnicos distintos"
+          icon={Wrench}
+          tone="info"
+        />
+        <KpiCard
+          label="Servicios asignados"
+          value={resumen.asignados}
+          hint="Agenda activa del equipo"
+          icon={CalendarDays}
+          tone="indigo"
+        />
+      </div>
+
+      <Panel
+        title="Equipo de terceros"
+        subtitle={`${filtrados.length} de ${datos.tecnicos.length} terceros`}
+        actions={
+          <>
+            <SearchInput
+              value={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por nombre, documento o especialidad..."
+            />
+            <select
+              className="mca-select"
+              style={{ width: 160 }}
+              value={filtroEstado}
+              onChange={(evento) => setFiltroEstado(evento.target.value)}
+              aria-label="Filtrar terceros por estado"
+            >
+              <option value="Todos">Todos</option>
+              <option value="Activo">Activos</option>
+              <option value="Inactivo">Inactivos</option>
+            </select>
+          </>
+        }
+        flush
+      >
+        <div className="mca-table-wrap">
+          <table className="mca-table">
+            <thead>
+              <tr>
+                <th>Tercero</th>
+                <th>Documento</th>
+                <th>Especialidad</th>
+                <th>Teléfono</th>
+                <th>Correo</th>
+                <th>Servicios activos</th>
+                <th>Estado</th>
+                <th className="mca-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="mca-table__empty">
+                    <EmptyState
+                      icon={Handshake}
+                      title="Sin terceros para mostrar"
+                      message="Ajusta los filtros o registra un nuevo técnico externo."
+                      action={
+                        <Button size="sm" icon={Plus} onClick={abrirNuevo}>
+                          Nuevo tercero
+                        </Button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filtrados.map((tecnico) => {
+                  const asignados = cargaTecnicos[String(tecnico.id)] || 0;
+                  return (
+                    <tr key={tecnico.id}>
+                      <td>
+                        <div className="mca-cell-title">
+                          <div className="mca-cell-icon">
+                            <Handshake size={15} strokeWidth={1.9} />
+                          </div>
+                          <div className="is-primary">{tecnico.nombre}</div>
+                        </div>
+                      </td>
+                      <td className="is-nowrap">{tecnico.documento || '—'}</td>
+                      <td>
+                        <Badge tone="indigo">{tecnico.especialidad}</Badge>
+                      </td>
+                      <td className="is-nowrap">
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <Phone size={13} strokeWidth={1.9} className="mca-soft" />
+                          <span>{tecnico.telefono || '—'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <Mail size={13} strokeWidth={1.9} className="mca-soft" />
+                          <span>{tecnico.correo || '—'}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <Badge tone={asignados ? 'warning' : 'neutral'}>
+                          {asignados} {asignados === 1 ? 'servicio' : 'servicios'}
+                        </Badge>
+                      </td>
+                      <td>
+                        <EstadoToggle
+                          estado={tecnico.estado}
+                          estados={ESTADOS.usuario}
+                          width={110}
+                          onClick={() => cambiarEstado(tecnico)}
+                        />
+                      </td>
+                      <td className="mca-center">
+                        <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
+                          <AccionesFila
+                            onVer={() => setDetalleId(tecnico.id)}
+                            onEditar={() => abrirEdicion(tecnico)}
+                            onEliminar={() => solicitarEliminar(tecnico)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Modal
+        open={Boolean(formulario)}
+        onClose={cerrarFormulario}
+        title={formulario?.id ? 'Editar tercero' : 'Nuevo tercero'}
+        subtitle="Los terceros activos se ofrecen automáticamente al agendar y crear órdenes."
+        icon={Handshake}
+        size="lg"
+        footer={
+          <>
+            <Button onClick={cerrarFormulario}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-tercero">
+              {formulario?.id ? 'Guardar cambios' : 'Crear tercero'}
+            </Button>
+          </>
+        }
+      >
+        {formulario && (
+          <form id="form-tercero" className="mca-form-grid" onSubmit={guardar} noValidate>
+            <Field label="Nombre del tercero" required error={errores.nombre}>
+              <input
+                className="mca-input"
+                value={formulario.nombre}
+                onChange={(evento) => setCampo('nombre', evento.target.value)}
+                placeholder="Nombre completo"
+                autoFocus
+              />
+            </Field>
+
+            <Field label="Documento" required error={errores.documento}>
+              <input
+                className="mca-input"
+                value={formulario.documento}
+                onChange={(evento) => setCampo('documento', evento.target.value)}
+                placeholder="71.555.000"
+              />
+            </Field>
+
+            <Field label="Teléfono" required error={errores.telefono}>
+              <input
+                className="mca-input"
+                type="tel"
+                value={formulario.telefono}
+                onChange={(evento) => setCampo('telefono', evento.target.value)}
+                placeholder="310 555 0000"
+              />
+            </Field>
+
+            <Field label="Correo electrónico" error={errores.correo}>
+              <input
+                className="mca-input"
+                type="email"
+                value={formulario.correo}
+                onChange={(evento) => setCampo('correo', evento.target.value)}
+                placeholder="tecnico@electricosmca.com"
+              />
+            </Field>
+
+            <Field
+              label="Especialidad"
+              full
+              hint="Se muestra al elegir el técnico responsable en agenda y órdenes."
+            >
+              <input
+                className="mca-input"
+                value={formulario.especialidad}
+                onChange={(evento) => setCampo('especialidad', evento.target.value)}
+                placeholder="Instalaciones y tableros"
+                list="especialidades-terceros"
+              />
+              <datalist id="especialidades-terceros">
+                {[...new Set(datos.tecnicos.map((tecnico) => tecnico.especialidad).filter(Boolean))]
+                  .map((especialidad) => (
+                    <option key={especialidad} value={especialidad} />
+                  ))}
+              </datalist>
+            </Field>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(tecnicoDetalle)}
+        onClose={() => setDetalleId(null)}
+        title={tecnicoDetalle?.nombre}
+        subtitle={
+          tecnicoDetalle
+            ? `${tecnicoDetalle.documento} · ${tecnicoDetalle.especialidad}`
+            : ''
+        }
+        icon={Handshake}
+        size="lg"
+        footer={
+          tecnicoDetalle && (
+            <>
+              <Button onClick={() => setDetalleId(null)}>Cerrar</Button>
+              <Button variant="primary" onClick={() => abrirEdicion(tecnicoDetalle)}>
+                Editar tercero
+              </Button>
+            </>
+          )
+        }
+      >
+        {tecnicoDetalle && (
+          <div className="mca-stack">
+            <DetailGrid>
+              <DetailItem label="Documento">{tecnicoDetalle.documento || '—'}</DetailItem>
+              <DetailItem label="Especialidad">{tecnicoDetalle.especialidad}</DetailItem>
+              <DetailItem label="Teléfono">{tecnicoDetalle.telefono || '—'}</DetailItem>
+              <DetailItem label="Correo">{tecnicoDetalle.correo || '—'}</DetailItem>
+              <DetailItem label="Estado">
+                <EstadoToggle
+                  estado={tecnicoDetalle.estado}
+                  estados={ESTADOS.usuario}
+                  width={110}
+                  onClick={() => cambiarEstado(tecnicoDetalle)}
+                />
+              </DetailItem>
+              <DetailItem label="Servicios activos">{serviciosDetalle.length}</DetailItem>
+            </DetailGrid>
+
+            {serviciosDetalle.length > 0 && (
+              <div>
+                <h3 className="mca-panel__title" style={{ fontSize: 13, marginBottom: 10 }}>
+                  Servicios asignados
+                </h3>
+                <div className="mca-list">
+                  {serviciosDetalle.map((actividad) => (
+                    <div key={actividad.id} className="mca-list__item">
+                      <div className="mca-list__icon">
+                        <CalendarDays size={16} strokeWidth={1.9} />
+                      </div>
+                      <div className="mca-list__body">
+                        <div className="mca-list__title">{actividad.servicio}</div>
+                        <div className="mca-list__meta">
+                          {actividad.codigo} · {actividad.cliente}
+                        </div>
+                      </div>
+                      <div className="mca-list__value">
+                        <div className="mca-list__amount" style={{ fontSize: 11.5 }}>
+                          {formatearFecha(actividad.fecha)}
+                        </div>
+                        <div className="mca-list__hint">
+                          {actividad.horaInicio} – {actividad.horaFin}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(porEliminar)}
+        title="Eliminar tercero"
+        message={
+          porEliminar
+            ? `¿Seguro que deseas eliminar a ${porEliminar.nombre}? Esta acción quita la ficha del directorio de terceros.`
+            : ''
+        }
+        confirmLabel="Eliminar tercero"
+        onCancel={() => setPorEliminar(null)}
+        onConfirm={confirmarEliminacion}
+      />
+
+      <Toast toast={toast} onClose={close} />
+    </PageShell>
+  );
+}
+
+export function OrdenesServicio() {
+  const datos = useData(
+    [ORDENES_KEY, CLIENTES_KEY, SERVICIOS_KEY, TERCEROS_KEY],
+    () => ({
+      ordenes: obtenerOrdenes(),
+      clientes: obtenerClientes(),
+      servicios: obtenerServicios(),
+      tecnicos: obtenerTecnicos(),
+    }),
+  );
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [formulario, setFormulario] = useState(null);
+  const [errores, setErrores] = useState({});
+  const [detalleId, setDetalleId] = useState(null);
+  const [porEliminar, setPorEliminar] = useState(null);
+  const { toast, notify, close } = useToast();
+
+  const filtrados = useMemo(() => {
+    const base = buscarOrdenes(busqueda, datos.ordenes);
+    if (filtroEstado === 'Todos') return base;
+    return base.filter((orden) => orden.estado === filtroEstado);
+  }, [datos.ordenes, busqueda, filtroEstado]);
+
+  const resumen = useMemo(() => resumenOrdenes(datos.ordenes), [datos.ordenes]);
+  const ordenDetalle = datos.ordenes.find(
+    (orden) => String(orden.id) === String(detalleId),
+  );
+
+  const opcionesClientes = useMemo(
+    () => datos.clientes.map((cliente) => ({
+      value: String(cliente.id),
+      label: cliente.nombre,
+      meta: `${cliente.documento} · ${cliente.municipio || 'Sin municipio'}`,
+      search: `${cliente.contacto} ${cliente.telefono} ${cliente.direccion}`,
+    })),
+    [datos.clientes],
+  );
+
+  const opcionesServicios = useMemo(
+    () => datos.servicios
+      .filter((servicio) => servicio.estado === 'Activo')
+      .map((servicio) => ({
+        value: String(servicio.id),
+        label: servicio.nombre,
+        meta: `${servicio.tiempo} · ${servicio.categoria}`,
+        search: servicio.desc,
+      })),
+    [datos.servicios],
+  );
+
+  const opcionesTecnicos = useMemo(
+    () => datos.tecnicos.map((tecnico) => ({
+      value: String(tecnico.id),
+      label: tecnico.nombre,
+      meta: `${tecnico.especialidad}${tecnico.estado === 'Inactivo' ? ' · Inactivo' : ''}`,
+    })),
+    [datos.tecnicos],
+  );
+
+  const clienteFormulario = datos.clientes.find(
+    (cliente) => String(cliente.id) === String(formulario?.clienteId),
+  );
+  const servicioFormulario = datos.servicios.find(
+    (servicio) => String(servicio.id) === String(formulario?.servicioId),
+  );
+
+  const abrirNuevo = () => {
+    setFormulario(FORMULARIO_ORDEN(null, generarCodigoOrden(datos.ordenes)));
+    setErrores({});
+  };
+
+  const abrirEdicion = (orden) => {
+    setDetalleId(null);
+    setFormulario({ ...FORMULARIO_ORDEN(orden), id: orden.id });
+    setErrores({});
+  };
+
+  const cerrarFormulario = () => {
+    setFormulario(null);
+    setErrores({});
+  };
+
+  const setCampo = (campo, valor) => {
+    setFormulario((actual) => {
+      const siguiente = { ...actual, [campo]: valor };
+      if (
+        campo === 'fecha'
+        && !['Finalizada', 'Cancelada', 'En ejecución'].includes(actual.estado)
+      ) {
+        siguiente.estado = valor ? 'Programada' : 'Pendiente';
+      }
+      return siguiente;
+    });
+    setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
+  };
+
+  const guardar = (evento) => {
+    evento.preventDefault();
+    const nuevosErrores = {};
+    if (!formulario.clienteId) nuevosErrores.clienteId = 'Selecciona el cliente.';
+    if (!formulario.servicioId) nuevosErrores.servicioId = 'Selecciona el servicio.';
+    if (!formulario.responsableId) nuevosErrores.responsableId = 'Selecciona el responsable.';
+    if (ESTADOS_CON_FECHA.includes(formulario.estado) && !formulario.fecha) {
+      nuevosErrores.fecha = 'Define la fecha programada para esta orden.';
+    }
+    if (Object.keys(nuevosErrores).length) {
+      setErrores(nuevosErrores);
+      return;
+    }
+
+    try {
+      const guardada = guardarOrden(formulario, formulario.id || null);
+      notify(
+        'success',
+        formulario.id ? 'Orden actualizada' : 'Orden creada',
+        `${guardada.codigo} · ${guardada.cliente}.`,
+      );
+      cerrarFormulario();
+    } catch (error) {
+      notify('error', 'No se pudo guardar', error.message);
+    }
+  };
+
+  const cambiarEstado = (orden) => {
+    try {
+      const actualizada = cambiarEstadoOrden(orden.id);
+      notify(
+        'success',
+        'Estado actualizado',
+        `${actualizada.codigo} · ${actualizada.estado}.`,
+      );
+    } catch (error) {
+      notify('error', 'No se pudo cambiar el estado', error.message);
+    }
+  };
+
+  const confirmarEliminacion = () => {
+    try {
+      eliminarOrden(porEliminar.id);
+      notify('success', 'Orden eliminada', porEliminar.codigo);
+      if (String(detalleId) === String(porEliminar.id)) setDetalleId(null);
+      setPorEliminar(null);
+    } catch (error) {
+      notify('error', 'No se pudo eliminar', error.message);
+    }
+  };
+
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Órdenes de Servicio"
+        title="Órdenes de Servicio"
+        subtitle="Coordina los trabajos contratados con cliente, servicio, técnico y fecha en un solo flujo."
+        icon={ClipboardList}
+        actions={
+          <Button variant="primary" icon={Plus} onClick={abrirNuevo}>
+            Nueva orden
+          </Button>
+        }
+      />
+
+      <div className="mca-kpis">
+        <KpiCard
+          label="Órdenes totales"
+          value={resumen.total}
+          hint={`${datos.ordenes.length} registros`}
+          icon={ClipboardList}
+          tone="yellow"
+        />
+        <KpiCard
+          label="Pendientes"
+          value={resumen.pendientes}
+          hint="Sin fecha programada"
+          icon={Clock3}
+          tone="warning"
+        />
+        <KpiCard
+          label="Programadas"
+          value={resumen.programadas + resumen.ejecucion}
+          hint={`${resumen.ejecucion} en ejecución`}
+          icon={CalendarDays}
+          tone="info"
+        />
+        <KpiCard
+          label="Finalizadas"
+          value={resumen.finalizadas}
+          hint={`${resumen.canceladas} canceladas`}
+          icon={CheckCircle2}
+          tone="success"
+        />
+      </div>
+
+      <Panel
+        title="Órdenes registradas"
+        subtitle={`${filtrados.length} de ${datos.ordenes.length} órdenes`}
+        actions={
+          <>
+            <SearchInput
+              value={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por código, cliente, servicio o responsable..."
+            />
+            <select
+              className="mca-select"
+              style={{ width: 170 }}
+              value={filtroEstado}
+              onChange={(evento) => setFiltroEstado(evento.target.value)}
+              aria-label="Filtrar órdenes por estado"
+            >
+              <option value="Todos">Todos los estados</option>
+              {ESTADOS_ORDEN.map((estado) => (
+                <option key={estado.id} value={estado.nombre}>
+                  {estado.nombre}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+        flush
+      >
+        <div className="mca-table-wrap">
+          <table className="mca-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Cliente / Servicio</th>
+                <th>Fecha</th>
+                <th>Responsable</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th className="mca-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="mca-table__empty">
+                    <EmptyState
+                      icon={ClipboardList}
+                      title="Sin órdenes para mostrar"
+                      message="Ajusta los filtros o crea una nueva orden de servicio."
+                      action={
+                        <Button size="sm" icon={Plus} onClick={abrirNuevo}>
+                          Nueva orden
+                        </Button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filtrados.map((orden) => (
+                  <tr key={orden.id}>
+                    <td className="is-nowrap">
+                      <Badge tone="yellow">{orden.codigo}</Badge>
+                    </td>
+                    <td>
+                      <div className="is-primary">{orden.cliente}</div>
+                      <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                        {orden.servicio}
+                        {orden.servicioHoras ? ` · ${orden.servicioHoras} h` : ''}
+                      </div>
+                    </td>
+                    <td className="is-nowrap">
+                      {orden.fecha ? (
+                        <>
+                          <div className="is-primary" style={{ fontSize: 12 }}>
+                            {formatearFecha(orden.fecha)}
+                          </div>
+                          <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                            Fecha programada
+                          </div>
+                        </>
+                      ) : (
+                        <span className="mca-muted">Sin programar</span>
+                      )}
+                    </td>
+                    <td>{orden.responsable}</td>
+                    <td>
+                      <Badge tone={TONO_PRIORIDAD[orden.prioridad] || 'neutral'}>
+                        {orden.prioridad}
+                      </Badge>
+                    </td>
+                    <td>
+                      <EstadoToggle
+                        estado={orden.estado}
+                        estados={ESTADOS.orden}
+                        width={120}
+                        onClick={() => cambiarEstado(orden)}
+                      />
+                    </td>
+                    <td className="mca-center">
+                      <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
+                        <AccionesFila
+                          onVer={() => setDetalleId(orden.id)}
+                          onEditar={() => abrirEdicion(orden)}
+                          onEliminar={() => setPorEliminar(orden)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Modal
+        open={Boolean(formulario)}
+        onClose={cerrarFormulario}
+        title={formulario?.id ? 'Editar orden de servicio' : 'Nueva orden de servicio'}
+        subtitle="El código y el estado se gestionan automáticamente según la fecha."
+        icon={ClipboardList}
+        size="lg"
+        footer={
+          <>
+            <Button onClick={cerrarFormulario}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-orden">
+              {formulario?.id ? 'Guardar cambios' : 'Crear orden'}
+            </Button>
+          </>
+        }
+      >
+        {formulario && (
+          <form id="form-orden" className="mca-form-grid" onSubmit={guardar} noValidate>
+            <Field label="Código de orden" hint="Generado automáticamente.">
+              <input className="mca-input" value={formulario.codigo} readOnly disabled />
+            </Field>
+
+            <Field label="Prioridad">
+              <select
+                className="mca-select"
+                value={formulario.prioridad}
+                onChange={(evento) => setCampo('prioridad', evento.target.value)}
+              >
+                {PRIORIDADES_ORDEN.map((prioridad) => (
+                  <option key={prioridad.id} value={prioridad.nombre}>
+                    {prioridad.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Cliente" required error={errores.clienteId} full>
+              <Combobox
+                value={formulario.clienteId}
+                onChange={(valor) => setCampo('clienteId', valor)}
+                options={opcionesClientes}
+                placeholder="Buscar cliente por nombre, NIT o contacto..."
+                emptyText="No hay clientes que coincidan"
+              />
+            </Field>
+
+            <Field label="Teléfono del cliente" hint="Se completa al seleccionar el cliente.">
+              <input
+                className="mca-input"
+                value={clienteFormulario?.telefono || ''}
+                placeholder="Automático"
+                disabled
+              />
+            </Field>
+
+            <Field label="Dirección del servicio" hint="Se completa al seleccionar el cliente.">
+              <input
+                className="mca-input"
+                value={clienteFormulario?.direccion || ''}
+                placeholder="Automático"
+                disabled
+              />
+            </Field>
+
+            <Field label="Servicio" required error={errores.servicioId} full>
+              <Combobox
+                value={formulario.servicioId}
+                onChange={(valor) => setCampo('servicioId', valor)}
+                options={opcionesServicios}
+                placeholder="Buscar servicio del catálogo..."
+                emptyText="No hay servicios activos que coincidan"
+              />
+            </Field>
+
+            <Field label="Duración estimada" hint="Calculada desde el servicio seleccionado.">
+              <input
+                className="mca-input"
+                value={servicioFormulario ? `${servicioFormulario.horas} h · ${servicioFormulario.tiempo}` : ''}
+                placeholder="Selecciona un servicio"
+                disabled
+              />
+            </Field>
+
+            <Field label="Responsable" required error={errores.responsableId}>
+              <Combobox
+                value={formulario.responsableId}
+                onChange={(valor) => setCampo('responsableId', valor)}
+                options={opcionesTecnicos}
+                placeholder="Buscar tercero..."
+                emptyText="No hay terceros disponibles"
+              />
+            </Field>
+
+            <Field
+              label="Fecha programada"
+              error={errores.fecha}
+              hint={
+                ESTADOS_CON_FECHA.includes(formulario.estado)
+                  ? 'Obligatoria para órdenes programadas o en ejecución.'
+                  : 'Al asignar fecha, la orden pasa a Programada.'
+              }
+            >
+              <input
+                className="mca-input"
+                type="date"
+                value={formulario.fecha}
+                onChange={(evento) => setCampo('fecha', evento.target.value)}
+              />
+            </Field>
+
+            <Field label="Estado" hint="Se propone automáticamente según la fecha.">
+              <select
+                className="mca-select"
+                value={formulario.estado}
+                onChange={(evento) => setCampo('estado', evento.target.value)}
+              >
+                {ESTADOS_ORDEN.map((estado) => (
+                  <option key={estado.id} value={estado.nombre}>
+                    {estado.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Descripción del trabajo" full>
+              <textarea
+                className="mca-textarea"
+                rows={3}
+                value={formulario.descripcion}
+                onChange={(evento) => setCampo('descripcion', evento.target.value)}
+                placeholder="Indicaciones, materiales o alcance del trabajo."
+              />
+            </Field>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(ordenDetalle)}
+        onClose={() => setDetalleId(null)}
+        title={ordenDetalle?.codigo}
+        subtitle={
+          ordenDetalle
+            ? `${ordenDetalle.cliente} · ${ordenDetalle.servicio}`
+            : ''
+        }
+        icon={ClipboardList}
+        size="lg"
+        footer={
+          ordenDetalle && (
+            <>
+              <Button onClick={() => setDetalleId(null)}>Cerrar</Button>
+              <Button variant="primary" onClick={() => abrirEdicion(ordenDetalle)}>
+                Editar orden
+              </Button>
+            </>
+          )
+        }
+      >
+        {ordenDetalle && (
+          <DetailGrid>
+            <DetailItem label="Cliente">{ordenDetalle.cliente}</DetailItem>
+            <DetailItem label="Documento">{ordenDetalle.clienteDocumento || '—'}</DetailItem>
+            <DetailItem label="Teléfono">{ordenDetalle.clienteTelefono || '—'}</DetailItem>
+            <DetailItem label="Responsable">{ordenDetalle.responsable}</DetailItem>
+            <DetailItem label="Servicio" full>{ordenDetalle.servicio}</DetailItem>
+            <DetailItem label="Duración estimada">
+              {ordenDetalle.servicioHoras ? `${ordenDetalle.servicioHoras} h` : '—'}
+            </DetailItem>
+            <DetailItem label="Prioridad">
+              <Badge tone={TONO_PRIORIDAD[ordenDetalle.prioridad] || 'neutral'}>
+                {ordenDetalle.prioridad}
+              </Badge>
+            </DetailItem>
+            <DetailItem label="Fecha programada">
+              {ordenDetalle.fecha ? formatearFecha(ordenDetalle.fecha) : 'Sin programar'}
+            </DetailItem>
+            <DetailItem label="Estado">
+              <EstadoToggle
+                estado={ordenDetalle.estado}
+                estados={ESTADOS.orden}
+                width={120}
+                onClick={() => cambiarEstado(ordenDetalle)}
+              />
+            </DetailItem>
+            <DetailItem label="Dirección del servicio" full>
+              {ordenDetalle.clienteDireccion || '—'}
+            </DetailItem>
+            <DetailItem label="Descripción" full>
+              {ordenDetalle.descripcion || '—'}
+            </DetailItem>
+          </DetailGrid>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(porEliminar)}
+        title="Eliminar orden de servicio"
+        message={
+          porEliminar
+            ? `¿Seguro que deseas eliminar la orden ${porEliminar.codigo} de ${porEliminar.cliente}?`
+            : ''
+        }
+        confirmLabel="Eliminar orden"
+        onCancel={() => setPorEliminar(null)}
+        onConfirm={confirmarEliminacion}
+      />
+
+      <Toast toast={toast} onClose={close} />
+    </PageShell>
+  );
+}
