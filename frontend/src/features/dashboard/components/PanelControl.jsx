@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -36,33 +38,26 @@ import {
   fechaISO,
   formatearFecha,
   formatearMoneda,
-  useData,
 } from '../../../shared/services/base.js';
 import { formatearHora12 } from '../../../shared/services/catalogos.js';
 import {
-  AGENDA_KEY,
-  cambiarEstadoActividad,
-  obtenerActividades,
+  estadoSiguienteAgenda,
   resumenAgenda,
   validarAgendaCompleta,
 } from '../../../shared/services/agendaService.js';
-import { CLIENTES_KEY, obtenerClientes } from '../../../shared/services/clientesService.js';
+import { normalizarCliente } from '../../../shared/services/clientesService.js';
 import {
-  COTIZACIONES_KEY,
   cotizacionVencida,
   fechaVencimiento,
-  obtenerCotizaciones,
+  normalizarCotizacion,
   resumenCotizaciones,
 } from '../../../shared/services/cotizacionesService.js';
-import { MATERIALES_KEY, obtenerMateriales } from '../../../shared/services/materialesService.js';
+import { normalizarMaterial } from '../../../shared/services/materialesService.js';
 import {
-  PAGOS_KEY,
-  obtenerCuentas,
-  obtenerPagos,
   resumenPagos,
 } from '../../../shared/services/pagosService.js';
-import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
-import { TERCEROS_KEY, obtenerTecnicosActivos } from '../../../shared/services/tercerosService.js';
+import { normalizarServicio } from '../../../shared/services/serviciosService.js';
+import { normalizarTecnico } from '../../../shared/services/tercerosService.js';
 
 const ESTADOS_ACTIVOS = ['Programada', 'En proceso'];
 
@@ -74,28 +69,44 @@ const valorCompacto = (valor) => {
 };
 
 export function PanelControl({ onNavegar }) {
-  const datos = useData(
-    [
-      COTIZACIONES_KEY,
-      PAGOS_KEY,
-      AGENDA_KEY,
-      MATERIALES_KEY,
-      SERVICIOS_KEY,
-      CLIENTES_KEY,
-      TERCEROS_KEY,
-    ],
-    () => ({
-      cotizaciones: obtenerCotizaciones(),
-      cuentas: obtenerCuentas(),
-      pagos: obtenerPagos(),
-      actividades: obtenerActividades(),
-      materiales: obtenerMateriales(),
-      servicios: obtenerServicios(),
-      clientes: obtenerClientes(),
-      tecnicos: obtenerTecnicosActivos(),
-      incidencias: validarAgendaCompleta(),
-    }),
-  );
+  const {
+    data: datos,
+    error,
+    loading,
+    reload: cargarDatos,
+  } = useApiData(async () => {
+    const [cotizaciones, cuentas, pagos, actividades, materiales, servicios, clientes, terceros] = await Promise.all([
+      apiRequest('/cotizaciones'),
+      apiRequest('/pagos/cuentas'),
+      apiRequest('/pagos'),
+      apiRequest('/agenda'),
+      apiRequest('/materiales'),
+      apiRequest('/servicios'),
+      apiRequest('/clientes'),
+      apiRequest('/terceros'),
+    ]);
+    return {
+      cotizaciones: cotizaciones.map(normalizarCotizacion),
+      cuentas,
+      pagos,
+      actividades,
+      materiales: materiales.map(normalizarMaterial),
+      servicios: servicios.map(normalizarServicio),
+      clientes: clientes.map(normalizarCliente),
+      tecnicos: terceros.map(normalizarTecnico).filter((tecnico) => tecnico.estado !== 'Inactivo'),
+      incidencias: validarAgendaCompleta(actividades),
+    };
+  }, {
+    cotizaciones: [],
+    cuentas: [],
+    pagos: [],
+    actividades: [],
+    materiales: [],
+    servicios: [],
+    clientes: [],
+    tecnicos: [],
+    incidencias: [],
+  });
 
   const [rangoMeses, setRangoMeses] = useState(6);
   const [detalleId, setDetalleId] = useState(null);
@@ -192,9 +203,13 @@ export function PanelControl({ onNavegar }) {
     (actividad) => String(actividad.id) === String(detalleId),
   );
 
-  const cambiarEstado = (actividad) => {
+  const cambiarEstado = async (actividad) => {
     try {
-      const actualizada = cambiarEstadoActividad(actividad.id);
+      const actualizada = await apiRequest(`/agenda/${encodeURIComponent(actividad.id)}/estado`, {
+        method: 'PATCH',
+        body: { estado: estadoSiguienteAgenda(actividad.estado) },
+      });
+      await cargarDatos();
       notify('success', 'Estado actualizado', `${actualizada.codigo} · ${actualizada.estado}.`);
     } catch (error) {
       notify('error', 'No se pudo actualizar', error.message);
@@ -203,6 +218,8 @@ export function PanelControl({ onNavegar }) {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudo cargar el panel desde la API: {error}</p>}
+      {loading && <p role="status">Cargando resumen desde la API...</p>}
       <PageHeader
         eyebrow="Panel de Control"
         title="Panel de Control"

@@ -1,5 +1,5 @@
 import { useContext, useState } from 'react';
-import { Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
+import { CircleAlert, Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import '../styles/auth.css';
@@ -14,7 +14,7 @@ export function Login({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(null);
     setEnviando(true);
 
     try {
@@ -24,7 +24,23 @@ export function Login({ onLogin }) {
       });
       onLogin(sesion);
     } catch (error) {
-      setError(error.message || 'No fue posible iniciar sesión.');
+      const mensaje = error.message || 'No fue posible iniciar sesión.';
+      if (mensaje.includes('No se pudo conectar con el servidor')) {
+        setError({
+          titulo: 'No hay conexión con el servidor',
+          detalle: 'Verifica que la API esté encendida y que la URL del servidor sea correcta.',
+        });
+      } else if (mensaje.toLowerCase().includes('usuario o contraseña incorrectos')) {
+        setError({
+          titulo: 'No se pudo iniciar sesión',
+          detalle: 'Verifica tu usuario y contraseña, y que tu cuenta tenga acceso web.',
+        });
+      } else {
+        setError({
+          titulo: 'No se pudo iniciar sesión',
+          detalle: mensaje,
+        });
+      }
     } finally {
       setEnviando(false);
     }
@@ -47,7 +63,11 @@ export function Login({ onLogin }) {
         <form className="auth-form" onSubmit={handleSubmit}>
           {error && (
             <div className="auth-error" role="alert">
-              {error}
+              <CircleAlert size={18} aria-hidden="true" />
+              <div className="auth-error-content">
+                <strong>{error.titulo}</strong>
+                <span>{error.detalle}</span>
+              </div>
             </div>
           )}
 

@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+"scripts": {
+    "start": "node --import dotenv/config src/server.js",
+    "dev": "node --import dotenv/config --watch src/server.js",
     "build": "npm run check",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js && node --check src/middleware/auth.js && node --check src/middleware/errores.js && node --check src/routes/auth.js && node --check src/routes/clientes.js && node --check src/routes/terceros.js && node --check src/routes/ordenes.js && node --check src/routes/materiales.js && node --check src/routes/servicios.js && node --check src/routes/cotizaciones.js && node --check src/routes/pagos.js && node --check src/routes/agenda.js && node --check src/routes/usuarios.js && node --check src/routes/roles.js && node --check src/utils/validacion.js && node --check scripts/configurar-usuario.js && node --check scripts/configurar-tecnico.js",
-    "configurar-usuario": "node scripts/configurar-usuario.js",
-    "configurar-tecnico": "node scripts/configurar-tecnico.js"
+    "configurar-usuario": "node --import dotenv/config scripts/configurar-usuario.js",
+    "configurar-tecnico": "node --import dotenv/config scripts/configurar-tecnico.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

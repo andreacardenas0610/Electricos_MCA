@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -28,21 +30,13 @@ import {
   Toast,
   useToast,
 } from '../../../shared/components/ui.jsx';
-import { formatearFecha, formatearMoneda, useData } from '../../../shared/services/base.js';
+import { formatearFecha, formatearMoneda } from '../../../shared/services/base.js';
 import {
   UNIDADES_MEDIDA,
   unidadSugeridaPorCategoria,
 } from '../../../shared/services/catalogos.js';
 import {
-  CATEGORIAS_MATERIALES_KEY,
-  MATERIALES_KEY,
   calcularEstadoStock,
-  crearCategoria,
-  eliminarMaterial,
-  generarCodigoMaterial,
-  guardarMaterial,
-  obtenerCategorias,
-  obtenerMateriales,
 } from '../../../shared/services/materialesService.js';
 
 const TONO_ESTADO = {
@@ -60,11 +54,18 @@ const FORMULARIO_VACIO = {
 };
 
 export function Materiales() {
-  const materiales = useData(
-    [MATERIALES_KEY, CATEGORIAS_MATERIALES_KEY],
-    obtenerMateriales,
-  );
-  const categorias = useData([CATEGORIAS_MATERIALES_KEY], obtenerCategorias);
+  const {
+    data: materiales,
+    error: errorMateriales,
+    loading: cargandoMateriales,
+    reload: cargarMateriales,
+  } = useApiData(() => apiRequest('/materiales'), []);
+  const {
+    data: categorias,
+    error: errorCategorias,
+    loading: cargandoCategorias,
+    reload: cargarCategorias,
+  } = useApiData(() => apiRequest('/materiales/categorias'), []);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
@@ -133,7 +134,7 @@ export function Materiales() {
     setErrores({});
   };
 
-  const handleGuardar = (event) => {
+  const handleGuardar = async (event) => {
     event.preventDefault();
 
     const nuevosErrores = {};
@@ -155,17 +156,21 @@ export function Materiales() {
     }
 
     try {
-      const guardado = guardarMaterial(
+      const guardado = await apiRequest(
+        materialEditando ? `/materiales/${encodeURIComponent(materialEditando.id)}` : '/materiales',
         {
-          nombre: formulario.nombre,
-          categoria: formulario.categoria,
-          unidad: formulario.unidad,
-          stock: cantidad,
-          precioUnitario: Number.isFinite(precio) ? precio : 0,
+          method: materialEditando ? 'PUT' : 'POST',
+          body: {
+            nombre: formulario.nombre,
+            categoria: formulario.categoria,
+            unidad: formulario.unidad,
+            stock: cantidad,
+            precioUnitario: Number.isFinite(precio) ? precio : 0,
+          },
         },
-        materialEditando?.id,
       );
 
+      await cargarMateriales();
       notify(
         'success',
         materialEditando ? 'Material actualizado' : 'Material registrado',
@@ -177,11 +182,15 @@ export function Materiales() {
     }
   };
 
-  const handleCrearCategoria = (event) => {
+  const handleCrearCategoria = async (event) => {
     event.preventDefault();
 
     try {
-      const categoria = crearCategoria(nuevaCategoria);
+      const categoria = await apiRequest('/materiales/categorias', {
+        method: 'POST',
+        body: nuevaCategoria,
+      });
+      await cargarCategorias();
       setFormulario((actual) => ({
         ...actual,
         categoria: categoria.nombre,
@@ -200,11 +209,12 @@ export function Materiales() {
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!materialEliminar) return;
 
     try {
-      eliminarMaterial(materialEliminar.id);
+      await apiRequest(`/materiales/${encodeURIComponent(materialEliminar.id)}`, { method: 'DELETE' });
+      await cargarMateriales();
       notify(
         'success',
         'Material eliminado',
@@ -243,17 +253,19 @@ export function Materiales() {
   const criticos = materiales.filter((material) => material.estado === 'Crítico').length;
   const bajos = materiales.filter((material) => material.estado === 'Bajo Stock').length;
 
-  const codigoSugerido = useMemo(() => {
-    if (materialEditando) return materialEditando.id;
-    if (!formulario.categoria) return '—';
-    return generarCodigoMaterial(formulario.categoria);
-  }, [materialEditando, formulario.categoria, materiales]);
+  const codigoSugerido = materialEditando?.id || 'Se asigna al guardar';
 
   const estadoSugerido =
     formulario.cantidad === '' ? null : calcularEstadoStock(formulario.cantidad);
 
   return (
     <PageShell>
+      {(errorMateriales || errorCategorias) && (
+        <p role="alert" style={{ color: '#b91c1c' }}>
+          No se pudo cargar el inventario desde la API: {errorMateriales || errorCategorias}
+        </p>
+      )}
+      {(cargandoMateriales || cargandoCategorias) && <p role="status">Cargando inventario desde la API...</p>}
       <PageHeader
         eyebrow="Inventario"
         title="Materiales"

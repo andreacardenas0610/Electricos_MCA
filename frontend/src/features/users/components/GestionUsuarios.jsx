@@ -12,6 +12,8 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -30,15 +32,8 @@ import {
   Toast,
   useToast,
 } from '../../../shared/components/ui.jsx';
-import { useData } from '../../../shared/services/base.js';
-import { ROLES_KEY, obtenerRoles } from '../../../shared/services/rolesService.js';
 import {
-  USUARIOS_KEY,
   ZONAS_USUARIO,
-  cambiarEstadoUsuario,
-  eliminarUsuario,
-  guardarUsuario,
-  obtenerUsuarios,
 } from '../../../shared/services/usuariosService.js';
 
 const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -63,10 +58,18 @@ const FORMULARIO_USUARIO = (usuario = null) => ({
 });
 
 export function GestionUsuarios() {
-  const datos = useData([USUARIOS_KEY, ROLES_KEY], () => ({
-    usuarios: obtenerUsuarios(),
-    roles: obtenerRoles(),
-  }));
+  const {
+    data: datos,
+    error,
+    loading,
+    reload: cargarDatos,
+  } = useApiData(async () => {
+    const [usuarios, roles] = await Promise.all([
+      apiRequest('/usuarios'),
+      apiRequest('/roles'),
+    ]);
+    return { usuarios, roles };
+  }, { usuarios: [], roles: [] });
   const { usuarios, roles } = datos;
 
   const [busqueda, setBusqueda] = useState('');
@@ -128,7 +131,7 @@ export function GestionUsuarios() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
-  const guardar = (evento) => {
+  const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre completo.';
@@ -138,11 +141,11 @@ export function GestionUsuarios() {
     } else if (!CORREO_VALIDO.test(formulario.correo.trim())) {
       nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
     }
-    if (!formulario.id && formulario.password.length < 6) {
-      nuevosErrores.password = 'La contraseña debe tener mínimo 6 caracteres.';
+    if (!formulario.id && formulario.password.length < 8) {
+      nuevosErrores.password = 'La contraseña debe tener mínimo 8 caracteres.';
     }
-    if (formulario.password && formulario.password.length < 6) {
-      nuevosErrores.password = 'La contraseña debe tener mínimo 6 caracteres.';
+    if (formulario.password && formulario.password.length < 8) {
+      nuevosErrores.password = 'La contraseña debe tener mínimo 8 caracteres.';
     }
     if (formulario.password !== formulario.confirmar) {
       nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
@@ -153,7 +156,23 @@ export function GestionUsuarios() {
     }
 
     try {
-      const guardado = guardarUsuario(formulario, formulario.id || null);
+      const { password } = formulario;
+      const datosUsuario = {
+        nombre: formulario.nombre,
+        usuario: formulario.usuario,
+        correo: formulario.correo,
+        telefono: formulario.telefono,
+        rol: formulario.rol,
+        zona: formulario.zona,
+      };
+      const guardado = await apiRequest(
+        formulario.id ? `/usuarios/${encodeURIComponent(formulario.id)}` : '/usuarios',
+        {
+          method: formulario.id ? 'PUT' : 'POST',
+          body: { ...datosUsuario, password },
+        },
+      );
+      await cargarDatos();
       notify(
         'success',
         formulario.id ? 'Usuario actualizado' : 'Usuario creado',
@@ -165,19 +184,24 @@ export function GestionUsuarios() {
     }
   };
 
-  const alternarEstado = (usuario) => {
+  const alternarEstado = async (usuario) => {
     try {
-      const actualizado = cambiarEstadoUsuario(usuario.id);
+      const actualizado = await apiRequest(`/usuarios/${encodeURIComponent(usuario.id)}/estado`, {
+        method: 'PATCH',
+        body: { estado: usuario.estado === 'Activo' ? 'Inactivo' : 'Activo' },
+      });
+      await cargarDatos();
       notify('success', `Usuario ${actualizado.estado.toLowerCase()}`, `${actualizado.nombre}.`);
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!porEliminar) return;
     try {
-      eliminarUsuario(porEliminar.id);
+      await apiRequest(`/usuarios/${encodeURIComponent(porEliminar.id)}`, { method: 'DELETE' });
+      await cargarDatos();
       notify('success', 'Usuario eliminado', `${porEliminar.nombre} ya no tiene acceso al sistema.`);
       setPorEliminar(null);
     } catch (error) {
@@ -188,6 +212,8 @@ export function GestionUsuarios() {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudieron cargar usuarios y roles desde la API: {error}</p>}
+      {loading && <p role="status">Cargando usuarios desde la API...</p>}
       <PageHeader
         eyebrow="Gestión usuarios"
         title="Usuarios del sistema"
@@ -414,7 +440,7 @@ export function GestionUsuarios() {
               label={formulario.id ? 'Nueva contraseña' : 'Contraseña'}
               required={!formulario.id}
               error={errores.password}
-              hint={formulario.id ? 'Déjala vacía para conservar la actual.' : 'Mínimo 6 caracteres.'}
+              hint={formulario.id ? 'Déjala vacía para conservar la actual.' : 'Mínimo 8 caracteres.'}
             >
               <input
                 className="mca-input"

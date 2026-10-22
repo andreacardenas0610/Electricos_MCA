@@ -238,13 +238,35 @@
 }
 
 .auth-error {
-  padding: 9px 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-sm);
   background: var(--danger-bg);
   color: var(--danger-text);
   font-size: 12px;
-  text-align: center;
+  text-align: left;
+}
+
+.auth-error > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.auth-error-content {
+  display: grid;
+  gap: 3px;
+  line-height: 1.45;
+}
+
+.auth-error-content strong {
+  font-size: 12px;
+}
+
+.auth-error-content span {
+  opacity: 0.9;
 }
 
 .auth-success {

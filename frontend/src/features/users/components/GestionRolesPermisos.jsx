@@ -12,6 +12,8 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -30,22 +32,12 @@ import {
   Toast,
   useToast,
 } from '../../../shared/components/ui.jsx';
-import { useData } from '../../../shared/services/base.js';
 import {
   ACCIONES_PERMISO,
   MODULOS_PERMISO,
-  ROLES_KEY,
-  cambiarEstadoRol,
-  eliminarRol,
   generarCodigoRol,
-  guardarRol,
-  obtenerRoles,
   permisosOtorgados,
 } from '../../../shared/services/rolesService.js';
-import {
-  USUARIOS_KEY,
-  obtenerUsuarios,
-} from '../../../shared/services/usuariosService.js';
 
 const PLATAFORMAS = ['Web', 'Móvil'];
 
@@ -64,10 +56,18 @@ function PlataformaIcono({ plataforma }) {
 }
 
 export function GestionRolesPermisos() {
-  const datos = useData([ROLES_KEY, USUARIOS_KEY], () => ({
-    roles: obtenerRoles(),
-    usuarios: obtenerUsuarios(),
-  }));
+  const {
+    data: datos,
+    error,
+    loading,
+    reload: cargarDatos,
+  } = useApiData(async () => {
+    const [roles, usuarios] = await Promise.all([
+      apiRequest('/roles'),
+      apiRequest('/usuarios'),
+    ]);
+    return { roles, usuarios };
+  }, { roles: [], usuarios: [] });
   const { roles, usuarios } = datos;
 
   const [busqueda, setBusqueda] = useState('');
@@ -143,7 +143,7 @@ export function GestionRolesPermisos() {
     });
   };
 
-  const guardar = (evento) => {
+  const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del rol.';
@@ -160,7 +160,14 @@ export function GestionRolesPermisos() {
     }
 
     try {
-      const guardado = guardarRol(formulario, formulario.id || null);
+      const guardado = await apiRequest(
+        formulario.id ? `/roles/${encodeURIComponent(formulario.id)}` : '/roles',
+        {
+          method: formulario.id ? 'PUT' : 'POST',
+          body: formulario,
+        },
+      );
+      await cargarDatos();
       setSeleccionadoId(guardado.id);
       notify(
         'success',
@@ -190,27 +197,36 @@ export function GestionRolesPermisos() {
     persistirPermisos({ ...rolActivo.permisos, [modulo]: siguientes });
   };
 
-  const persistirPermisos = (permisos) => {
+  const persistirPermisos = async (permisos) => {
     try {
-      guardarRol({ ...rolActivo, permisos }, rolActivo.id);
+      await apiRequest(`/roles/${encodeURIComponent(rolActivo.id)}`, {
+        method: 'PUT',
+        body: { ...rolActivo, permisos },
+      });
+      await cargarDatos();
     } catch (error) {
       notify('error', 'No se pudieron actualizar los permisos', error.message);
     }
   };
 
-  const alternarEstado = (rol) => {
+  const alternarEstado = async (rol) => {
     try {
-      const actualizado = cambiarEstadoRol(rol.id);
+      const actualizado = await apiRequest(`/roles/${encodeURIComponent(rol.id)}/estado`, {
+        method: 'PATCH',
+        body: { estado: rol.estado === 'Activo' ? 'Inactivo' : 'Activo' },
+      });
+      await cargarDatos();
       notify('success', `Rol ${actualizado.estado.toLowerCase()}`, actualizado.nombre);
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!porEliminar) return;
     try {
-      eliminarRol(porEliminar.id);
+      await apiRequest(`/roles/${encodeURIComponent(porEliminar.id)}`, { method: 'DELETE' });
+      await cargarDatos();
       notify('success', 'Rol eliminado', `${porEliminar.nombre} se retiró del sistema.`);
       setPorEliminar(null);
       if (String(rolActivo?.id) === String(porEliminar.id)) setSeleccionadoId(null);
@@ -222,6 +238,8 @@ export function GestionRolesPermisos() {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudieron cargar roles y usuarios desde la API: {error}</p>}
+      {loading && <p role="status">Cargando roles desde la API...</p>}
       <PageHeader
         eyebrow="Roles y permisos"
         title="Roles y permisos"

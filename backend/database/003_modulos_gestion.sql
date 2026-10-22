@@ -1,5 +1,46 @@
 BEGIN;
 
+-- El esquema original traía tablas cotizaciones y materiales con otra estructura.
+-- Se renombran como legacy_* para conservar sus datos y permitir crear las nuevas.
+DO $$
+DECLARE
+  indice RECORD;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'cotizaciones'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'cotizaciones' AND column_name = 'estado_id'
+  ) THEN
+    ALTER TABLE cotizaciones RENAME TO legacy_cotizaciones;
+    FOR indice IN
+      SELECT indexname FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = 'legacy_cotizaciones'
+        AND indexname NOT LIKE 'legacy_%'
+    LOOP
+      EXECUTE format('ALTER INDEX %I RENAME TO %I', indice.indexname, 'legacy_' || indice.indexname);
+    END LOOP;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'materiales'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'materiales' AND column_name = 'stock_minimo'
+  ) THEN
+    ALTER TABLE materiales RENAME TO legacy_materiales;
+    FOR indice IN
+      SELECT indexname FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = 'legacy_materiales'
+        AND indexname NOT LIKE 'legacy_%'
+    LOOP
+      EXECUTE format('ALTER INDEX %I RENAME TO %I', indice.indexname, 'legacy_' || indice.indexname);
+    END LOOP;
+  END IF;
+END $$;
+
 ALTER TABLE servicios
   ADD COLUMN IF NOT EXISTS codigo VARCHAR(32),
   ADD COLUMN IF NOT EXISTS descripcion TEXT,
@@ -17,11 +58,28 @@ SET codigo = 'ELEC-' || lpad(id::text, 3, '0')
 WHERE codigo IS NULL OR btrim(codigo) = '';
 
 UPDATE servicios
-SET horas = CASE
-  WHEN upper(moneda) = 'USD / H' THEN 4
-  WHEN upper(moneda) IN ('USD', 'COP', 'COP / H') THEN 8
-  ELSE 1
-END;
+SET horas = COALESCE(
+  tiempo_estimado_minutos / 60.0,
+  CASE
+    WHEN upper(moneda) = 'USD / H' THEN 4
+    WHEN upper(moneda) IN ('USD', 'COP', 'COP / H') THEN 8
+    ELSE 1
+  END
+);
+
+UPDATE servicios
+SET precio_numerico = precio_base
+WHERE precio_base IS NOT NULL AND (precio_numerico IS NULL OR precio_numerico = 0);
+
+UPDATE servicios s
+SET unidad = COALESCE(u.nombre, s.unidad)
+FROM unidades_medida u
+WHERE u.id = s.unidad_medida_id;
+
+UPDATE servicios s
+SET categoria = COALESCE(cs.nombre, s.categoria)
+FROM categorias_servicio cs
+WHERE cs.id = s.categoria_id;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_servicios_codigo
   ON servicios (codigo);
@@ -62,7 +120,10 @@ FROM (VALUES
   ('Transformadores', 'Unidad', 'EL-TRF'),
   ('Accesorios', 'Pieza', 'EL-ACC'),
   ('Iluminación', 'Unidad', 'EL-ILU'),
-  ('Herramientas', 'Unidad', 'EL-HER')
+  ('Herramientas', 'Unidad', 'EL-HER'),
+  ('Cableado y Conectores', 'Metro', 'CBL'),
+  ('Tubería y Conexiones', 'Metro', 'TUB'),
+  ('Repuestos de Climatización', 'Unidad', 'RCL')
 ) AS datos(nombre, unidad, prefijo)
 WHERE NOT EXISTS (
   SELECT 1 FROM categorias_materiales existente
@@ -82,6 +143,27 @@ CREATE TABLE IF NOT EXISTS materiales (
 
 CREATE INDEX IF NOT EXISTS idx_materiales_categoria
   ON materiales (categoria_id);
+
+-- Copia los materiales del esquema anterior a la nueva tabla de inventario.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'legacy_materiales'
+  ) THEN
+    INSERT INTO materiales (codigo, nombre, categoria_id, stock, unidad, precio_unitario)
+    SELECT lm.codigo,
+           lm.nombre,
+           nc.id,
+           COALESCE(lm.stock_actual, 0),
+           COALESCE((SELECT u.nombre FROM unidades_medida u WHERE u.id = lm.unidad_medida_id), 'Unidad'),
+           COALESCE(lm.precio_referencia, 0)
+    FROM legacy_materiales lm
+    JOIN categorias_material oc ON oc.id = lm.categoria_id
+    JOIN categorias_materiales nc ON lower(nc.nombre) = lower(oc.nombre)
+    ON CONFLICT (codigo) DO NOTHING;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS cotizaciones (
   codigo VARCHAR(32) PRIMARY KEY,
@@ -111,6 +193,49 @@ CREATE TABLE IF NOT EXISTS cotizaciones (
 CREATE INDEX IF NOT EXISTS idx_cotizaciones_cliente
   ON cotizaciones (cliente_id);
 
+-- Copia las cotizaciones del esquema anterior con su cliente y contacto principal.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'legacy_cotizaciones'
+  ) THEN
+    INSERT INTO cotizaciones
+      (codigo, cliente_id, cliente_nombre, documento, contacto, telefono, correo,
+       direccion, proyecto, fecha_emision, dias_vigencia, iva_porcentaje, descuento,
+       estado, notas, subtotal, monto_descuento, monto_impuesto, total)
+    SELECT lc.codigo,
+           lc.cliente_id,
+           COALESCE(cl.nombre_razon_social, 'Cliente sin nombre'),
+           COALESCE(cl.documento_nit, ''),
+           COALESCE(cc.nombre, ''),
+           COALESCE(cc.telefono, ''),
+           COALESCE(cc.correo_electronico, ''),
+           COALESCE(dc.direccion, ''),
+           'Proyecto migrado',
+           lc.fecha_emision::date,
+           30,
+           COALESCE(lc.porcentaje_iva, 16),
+           0,
+           CASE ec.nombre
+             WHEN 'Aprobada' THEN 'Aprobado'
+             WHEN 'Rechazada' THEN 'Rechazado'
+             ELSE 'Pendiente'
+           END,
+           COALESCE(lc.observaciones, ''),
+           COALESCE(lc.subtotal, 0),
+           0,
+           COALESCE(lc.total, 0) - COALESCE(lc.subtotal, 0),
+           COALESCE(lc.total, 0)
+    FROM legacy_cotizaciones lc
+    LEFT JOIN clientes cl ON cl.id = lc.cliente_id
+    LEFT JOIN contactos_cliente cc ON cc.cliente_id = lc.cliente_id AND cc.es_principal = TRUE
+    LEFT JOIN direcciones_cliente dc ON dc.cliente_id = lc.cliente_id AND dc.es_principal = TRUE
+    LEFT JOIN estados_cotizacion ec ON ec.id = lc.estado_id
+    ON CONFLICT (codigo) DO NOTHING;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS cotizacion_items (
   id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   cotizacion_codigo VARCHAR(32) NOT NULL
@@ -127,6 +252,46 @@ CREATE TABLE IF NOT EXISTS cotizacion_items (
 
 CREATE INDEX IF NOT EXISTS idx_cotizacion_items_codigo
   ON cotizacion_items (cotizacion_codigo, orden, id);
+
+-- Copia el detalle de las cotizaciones anteriores como ítems de la nueva estructura.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'legacy_cotizaciones'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'detalle_cotizacion'
+  ) THEN
+    INSERT INTO cotizacion_items
+      (cotizacion_codigo, tipo, referencia_id, descripcion, cantidad, precio_unitario,
+       unidad, moneda_servicio, orden)
+    SELECT lc.codigo,
+           CASE
+             WHEN dc.servicio_id IS NOT NULL THEN 'servicio'
+             WHEN dc.material_id IS NOT NULL THEN 'material'
+             ELSE 'item'
+           END,
+           CASE
+             WHEN dc.servicio_id IS NOT NULL THEN dc.servicio_id::text
+             WHEN dc.material_id IS NOT NULL THEN dc.material_id::text
+             ELSE NULL
+           END,
+           dc.descripcion,
+           COALESCE(dc.cantidad, 1),
+           COALESCE(dc.precio_unitario, 0),
+           'Unidad',
+           NULL,
+           dc.id
+    FROM detalle_cotizacion dc
+    JOIN legacy_cotizaciones lc ON lc.id = dc.cotizacion_c_id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM cotizacion_items ci
+      WHERE ci.cotizacion_codigo = lc.codigo
+        AND ci.descripcion = dc.descripcion
+    );
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS pagos (
   id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -149,6 +314,44 @@ CREATE TABLE IF NOT EXISTS pagos (
 
 CREATE INDEX IF NOT EXISTS idx_pagos_cotizacion
   ON pagos (cotizacion_codigo);
+
+-- Copia los abonos del esquema anterior como pagos de las cotizaciones migradas.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'legacy_cotizaciones'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'abonos'
+  ) THEN
+    INSERT INTO pagos
+      (codigo, cotizacion_codigo, cotizacion_referencia, cliente_nombre, documento,
+       proyecto, monto_total, monto, fecha, hora, metodo, referencia, nota)
+    SELECT a.codigo,
+           lc.codigo,
+           lc.codigo,
+           COALESCE(cl.nombre_razon_social, 'Cliente sin nombre'),
+           COALESCE(cl.documento_nit, ''),
+           'Proyecto migrado',
+           COALESCE(lc.total, 0),
+           a.monto,
+           a.fecha_pago::date,
+           a.fecha_pago::time,
+           CASE mp.nombre
+             WHEN 'Transferencia Bancaria' THEN 'Transferencia'
+             WHEN 'Tarjeta de Crédito/Débito' THEN 'Tarjeta Crédito'
+             ELSE COALESCE(mp.nombre, 'Efectivo')
+           END,
+           '',
+           'Abono migrado del esquema anterior'
+    FROM abonos a
+    JOIN legacy_cotizaciones lc ON lc.id = a.cotizacion_c_id
+    LEFT JOIN clientes cl ON cl.id = lc.cliente_id
+    LEFT JOIN metodos_pago mp ON mp.id = a.metodo_pago_id
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS agenda_actividades (
   id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,

@@ -57,4 +57,4 @@ npm install
 npm run dev
 ```
 
-Abre la dirección local que imprime Vite. El frontend ya usa el backend para iniciar sesión y para los módulos de clientes, terceros y órdenes; los demás módulos siguen con su comportamiento actual. Para preparar PostgreSQL y las cuentas, consulta [backend/README.md](./backend/README.md).
+Abre la dirección local que imprime Vite. El inicio de sesión y los módulos de clientes, terceros, órdenes, materiales, servicios, cotizaciones, pagos, agenda, usuarios y roles usan la API y PostgreSQL. Antes de usar los módulos, configura las variables de entorno, aplica las migraciones de la base de datos y crea la cuenta de administrador siguiendo [backend/README.md](./backend/README.md). Los datos de ejemplo que antes se guardaban en el navegador no se copian automáticamente a PostgreSQL.

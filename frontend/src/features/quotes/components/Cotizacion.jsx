@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import {
   EstadoToggle,
   ESTADOS,
@@ -36,29 +38,22 @@ import {
   fechaISO,
   formatearFecha,
   formatearMoneda,
-  useData,
 } from '../../../shared/services/base.js';
 import { precioEnCOP } from '../../../shared/services/catalogos.js';
-import { CLIENTES_KEY, obtenerClientes } from '../../../shared/services/clientesService.js';
+import { normalizarCliente } from '../../../shared/services/clientesService.js';
 import {
-  COTIZACIONES_KEY,
   MONEDA_COTIZACION,
   buscarCotizaciones,
   calcularTotales,
-  cambiarEstadoCotizacion,
   cotizacionVencida,
   crearItemMaterial,
   crearItemServicio,
-  eliminarCotizacion,
   fechaVencimiento,
-  generarIdCotizacion,
-  guardarCotizacion,
-  obtenerCotizaciones,
+  normalizarCotizacion,
   resumenCotizaciones,
 } from '../../../shared/services/cotizacionesService.js';
-import { MATERIALES_KEY, obtenerMateriales } from '../../../shared/services/materialesService.js';
-import { PAGOS_KEY, obtenerCuentas } from '../../../shared/services/pagosService.js';
-import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
+import { normalizarMaterial } from '../../../shared/services/materialesService.js';
+import { normalizarServicio } from '../../../shared/services/serviciosService.js';
 import { generarPdfCotizacion } from '../../../shared/utils/pdf.js';
 
 const FORMULARIO_VACIO = () => ({
@@ -80,11 +75,28 @@ const FORMULARIO_VACIO = () => ({
 });
 
 export function Cotizacion() {
-  const cotizaciones = useData([COTIZACIONES_KEY], obtenerCotizaciones);
-  const clientes = useData([CLIENTES_KEY], obtenerClientes);
-  const servicios = useData([SERVICIOS_KEY], obtenerServicios);
-  const materiales = useData([MATERIALES_KEY], obtenerMateriales);
-  const cuentas = useData([PAGOS_KEY, COTIZACIONES_KEY], obtenerCuentas);
+  const {
+    data,
+    error,
+    loading,
+    reload: cargarDatos,
+  } = useApiData(async () => {
+    const [cotizacionesApi, clientesApi, serviciosApi, materialesApi, cuentas] = await Promise.all([
+      apiRequest('/cotizaciones'),
+      apiRequest('/clientes'),
+      apiRequest('/servicios'),
+      apiRequest('/materiales'),
+      apiRequest('/pagos/cuentas'),
+    ]);
+    return {
+      cotizaciones: cotizacionesApi.map(normalizarCotizacion),
+      clientes: clientesApi.map(normalizarCliente),
+      servicios: serviciosApi.map(normalizarServicio),
+      materiales: materialesApi.map(normalizarMaterial),
+      cuentas,
+    };
+  }, { cotizaciones: [], clientes: [], servicios: [], materiales: [], cuentas: [] });
+  const { cotizaciones, clientes, servicios, materiales, cuentas } = data;
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todas');
@@ -269,7 +281,7 @@ export function Cotizacion() {
     }));
   };
 
-  const handleGuardar = (event) => {
+  const handleGuardar = async (event) => {
     event.preventDefault();
 
     const nuevosErrores = {};
@@ -286,8 +298,13 @@ export function Cotizacion() {
     }
 
     try {
-      const guardada = guardarCotizacion(
+      const guardada = await apiRequest(
+        cotizacionEditando
+          ? `/cotizaciones/${encodeURIComponent(cotizacionEditando.id)}`
+          : '/cotizaciones',
         {
+          method: cotizacionEditando ? 'PUT' : 'POST',
+          body: {
           ...formulario,
           fechaEmision: formulario.fechaEmision,
           fecha: formulario.fechaEmision,
@@ -295,10 +312,11 @@ export function Cotizacion() {
           ivaPorcentaje: Number(formulario.ivaPorcentaje) || 0,
           descuento: Number(formulario.descuento) || 0,
           items: formulario.items,
+          },
         },
-        cotizacionEditando?.id,
       );
 
+      await cargarDatos();
       notify(
         'success',
         cotizacionEditando ? 'Cotización actualizada' : 'Cotización creada',
@@ -310,11 +328,15 @@ export function Cotizacion() {
     }
   };
 
-  const handleCambiarEstado = (cotizacion) => {
+  const handleCambiarEstado = async (cotizacion) => {
     const siguiente = estadoSiguiente(ESTADOS.cotizacion, cotizacion.estadoCotizacion);
 
     try {
-      cambiarEstadoCotizacion(cotizacion.id, siguiente);
+      await apiRequest(`/cotizaciones/${encodeURIComponent(cotizacion.id)}/estado`, {
+        method: 'PATCH',
+        body: { estadoCotizacion: siguiente },
+      });
+      await cargarDatos();
       notify(
         'info',
         'Estado actualizado',
@@ -342,11 +364,12 @@ export function Cotizacion() {
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!cotizacionEliminar) return;
 
     try {
-      eliminarCotizacion(cotizacionEliminar.id);
+      await apiRequest(`/cotizaciones/${encodeURIComponent(cotizacionEliminar.id)}`, { method: 'DELETE' });
+      await cargarDatos();
       notify(
         'success',
         'Cotización eliminada',
@@ -361,6 +384,8 @@ export function Cotizacion() {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudieron cargar las cotizaciones desde la API: {error}</p>}
+      {loading && <p role="status">Cargando cotizaciones desde la API...</p>}
       <PageHeader
         eyebrow="Cotizaciones"
         title="Cotizaciones"
@@ -520,7 +545,7 @@ export function Cotizacion() {
         subtitle={
           cotizacionEditando
             ? `Cliente: ${cotizacionEditando.cliente}`
-            : `Se asignará el código ${generarIdCotizacion()} al guardar.`
+            : 'El servidor asignará el código al guardar.'
         }
         icon={FileText}
         size="xl"

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -35,18 +37,11 @@ import {
   fechaISO,
   formatearFecha,
   formatearMoneda,
-  useData,
 } from '../../../shared/services/base.js';
 import { formatearHora12 } from '../../../shared/services/catalogos.js';
-import { COTIZACIONES_KEY } from '../../../shared/services/cotizacionesService.js';
 import {
   METODOS_PAGO,
-  PAGOS_KEY,
-  actualizarPago,
   buscarCuentas,
-  eliminarPago,
-  obtenerCuentas,
-  registrarAbono,
   resumenPagos,
 } from '../../../shared/services/pagosService.js';
 
@@ -68,7 +63,12 @@ const FORMULARIO_PAGO = () => ({
 const escaparCsv = (valor) => `"${String(valor ?? '').replace(/"/g, '""')}"`;
 
 export default function AbonosVentas() {
-  const cuentas = useData([PAGOS_KEY, COTIZACIONES_KEY], obtenerCuentas);
+  const {
+    data: cuentas,
+    error,
+    loading,
+    reload: cargarCuentas,
+  } = useApiData(() => apiRequest('/pagos/cuentas'), []);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todas');
@@ -193,7 +193,7 @@ export default function AbonosVentas() {
     setErroresPago({});
   };
 
-  const handleGuardarPago = (event) => {
+  const handleGuardarPago = async (event) => {
     event.preventDefault();
 
     const monto = Number(formPago.monto);
@@ -216,13 +216,16 @@ export default function AbonosVentas() {
 
     try {
       if (modoPago === 'editar') {
-        actualizarPago(pagoEditando.id, {
-          monto,
-          metodo: formPago.metodo,
-          fecha: formPago.fecha,
-          hora: formPago.hora,
-          referencia: formPago.referencia.trim(),
-          nota: formPago.nota.trim(),
+        await apiRequest(`/pagos/${encodeURIComponent(pagoEditando.id)}`, {
+          method: 'PUT',
+          body: {
+            monto,
+            metodo: formPago.metodo,
+            fecha: formPago.fecha,
+            hora: formPago.hora,
+            referencia: formPago.referencia.trim(),
+            nota: formPago.nota.trim(),
+          },
         });
         notify(
           'success',
@@ -230,14 +233,17 @@ export default function AbonosVentas() {
           `${pagoEditando.id} · ${formatearMoneda(monto, 'COP')} en ${pagoEditando.cotizacionId}.`,
         );
       } else {
-        const pago = registrarAbono({
-          cotizacionId: formPago.cotizacionId,
-          monto,
-          metodo: formPago.metodo,
-          fecha: formPago.fecha,
-          hora: formPago.hora,
-          referencia: formPago.referencia.trim(),
-          nota: formPago.nota.trim(),
+        const pago = await apiRequest('/pagos', {
+          method: 'POST',
+          body: {
+            cotizacionId: formPago.cotizacionId,
+            monto,
+            metodo: formPago.metodo,
+            fecha: formPago.fecha,
+            hora: formPago.hora,
+            referencia: formPago.referencia.trim(),
+            nota: formPago.nota.trim(),
+          },
         });
         notify(
           'success',
@@ -245,16 +251,18 @@ export default function AbonosVentas() {
           `${pago.id} · ${formatearMoneda(monto, 'COP')} aplicado a ${pago.cotizacionId}.`,
         );
       }
+      await cargarCuentas();
       cerrarModalPago();
     } catch (error) {
       notify('error', 'No se pudo guardar el abono', error.message);
     }
   };
 
-  const confirmarEliminarPago = () => {
+  const confirmarEliminarPago = async () => {
     if (!pagoEliminar) return;
     try {
-      eliminarPago(pagoEliminar.id);
+      await apiRequest(`/pagos/${encodeURIComponent(pagoEliminar.id)}`, { method: 'DELETE' });
+      await cargarCuentas();
       notify(
         'success',
         'Abono eliminado',
@@ -347,6 +355,8 @@ export default function AbonosVentas() {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudieron cargar los pagos desde la API: {error}</p>}
+      {loading && <p role="status">Cargando pagos desde la API...</p>}
       <PageHeader
         eyebrow="Abonos y Ventas"
         title="Abonos y Ventas"

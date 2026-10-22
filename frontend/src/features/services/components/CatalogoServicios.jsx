@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -27,21 +29,13 @@ import {
   Toast,
   useToast,
 } from '../../../shared/components/ui.jsx';
-import { formatearFecha, formatearMoneda, useData } from '../../../shared/services/base.js';
+import { formatearFecha, formatearMoneda } from '../../../shared/services/base.js';
 import {
   CATEGORIAS_SERVICIO,
   MONEDAS_SERVICIO,
   UNIDADES_SERVICIO,
   reglaTiempoMoneda,
 } from '../../../shared/services/catalogos.js';
-import {
-  SERVICIOS_KEY,
-  cambiarEstadoServicio,
-  eliminarServicio,
-  generarCodigoServicio,
-  guardarServicio,
-  obtenerServicios,
-} from '../../../shared/services/serviciosService.js';
 
 const FORMULARIO_VACIO = {
   nombre: '',
@@ -62,7 +56,12 @@ const formatearPrecioServicio = (servicio) =>
   )}${String(servicio.moneda).includes('/ H') ? ' / h' : ''}`;
 
 export function CatalogoServicios() {
-  const servicios = useData([SERVICIOS_KEY], obtenerServicios);
+  const {
+    data: servicios,
+    error,
+    loading,
+    reload: cargarServicios,
+  } = useApiData(() => apiRequest('/servicios'), []);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('Todas');
@@ -105,7 +104,7 @@ export function CatalogoServicios() {
     setErrores({});
   };
 
-  const handleGuardar = (event) => {
+  const handleGuardar = async (event) => {
     event.preventDefault();
 
     const nuevosErrores = {};
@@ -122,18 +121,22 @@ export function CatalogoServicios() {
     }
 
     try {
-      const guardado = guardarServicio(
+      const guardado = await apiRequest(
+        servicioEditando ? `/servicios/${encodeURIComponent(servicioEditando.id)}` : '/servicios',
         {
+          method: servicioEditando ? 'PUT' : 'POST',
+          body: {
           nombre: formulario.nombre,
           categoria: formulario.categoria,
           desc: formulario.desc,
           unidad: formulario.unidad,
           moneda: formulario.moneda,
           precioNumerico: precio,
+          },
         },
-        servicioEditando?.id,
       );
 
+      await cargarServicios();
       notify(
         'success',
         servicioEditando ? 'Servicio actualizado' : 'Servicio registrado',
@@ -145,9 +148,13 @@ export function CatalogoServicios() {
     }
   };
 
-  const handleCambiarEstado = (servicio) => {
+  const handleCambiarEstado = async (servicio) => {
     try {
-      const actualizado = cambiarEstadoServicio(servicio.id);
+      const actualizado = await apiRequest(`/servicios/${encodeURIComponent(servicio.id)}/estado`, {
+        method: 'PATCH',
+        body: { estado: servicio.estado === 'Activo' ? 'Pausado' : 'Activo' },
+      });
+      await cargarServicios();
       notify(
         'info',
         'Estado actualizado',
@@ -158,11 +165,12 @@ export function CatalogoServicios() {
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!servicioEliminar) return;
 
     try {
-      eliminarServicio(servicioEliminar.id);
+      await apiRequest(`/servicios/${encodeURIComponent(servicioEliminar.id)}`, { method: 'DELETE' });
+      await cargarServicios();
       notify(
         'success',
         'Servicio eliminado',
@@ -198,10 +206,12 @@ export function CatalogoServicios() {
   const categoriasUsadas = new Set(servicios.map((servicio) => servicio.categoria)).size;
 
   const regla = reglaTiempoMoneda(formulario.moneda);
-  const codigoSugerido = servicioEditando ? servicioEditando.codigo : generarCodigoServicio();
+  const codigoSugerido = servicioEditando?.codigo || 'Se asigna al guardar';
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudo cargar el catálogo desde la API: {error}</p>}
+      {loading && <p role="status">Cargando servicios desde la API...</p>}
       <PageHeader
         eyebrow="Servicios"
         title="Catálogo de servicios"

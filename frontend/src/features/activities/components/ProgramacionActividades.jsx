@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { apiRequest } from '../../../shared/api.js';
+import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -36,7 +38,6 @@ import {
   fechaISO,
   formatearFecha,
   sumarDias,
-  useData,
 } from '../../../shared/services/base.js';
 import {
   BUFFER_ENTRE_SERVICIOS_MINUTOS,
@@ -50,22 +51,18 @@ import {
   nombreDia,
   sumarMinutosAHora,
 } from '../../../shared/services/catalogos.js';
-import { CLIENTES_KEY, obtenerClientes } from '../../../shared/services/clientesService.js';
+import { normalizarCliente } from '../../../shared/services/clientesService.js';
 import {
-  AGENDA_KEY,
   ESTADOS_AGENDA,
   PRIORIDADES_AGENDA,
   buscarActividades,
-  cambiarEstadoActividad,
-  eliminarActividad,
-  guardarActividad,
-  obtenerActividades,
+  estadoSiguienteAgenda,
   resumenAgenda,
   validarAgendaCompleta,
   validarCita,
 } from '../../../shared/services/agendaService.js';
-import { SERVICIOS_KEY, obtenerServicios } from '../../../shared/services/serviciosService.js';
-import { TERCEROS_KEY, obtenerTecnicosActivos } from '../../../shared/services/tercerosService.js';
+import { normalizarServicio } from '../../../shared/services/serviciosService.js';
+import { normalizarTecnico } from '../../../shared/services/tercerosService.js';
 
 const FORMULARIO_VACIO = () => ({
   clienteId: '',
@@ -108,10 +105,26 @@ function fechaSugerida() {
 }
 
 export function ProgramacionActividades() {
-  const actividades = useData([AGENDA_KEY], obtenerActividades);
-  const clientes = useData([CLIENTES_KEY], obtenerClientes);
-  const servicios = useData([SERVICIOS_KEY], obtenerServicios);
-  const tecnicos = useData([TERCEROS_KEY], obtenerTecnicosActivos);
+  const {
+    data,
+    error,
+    loading,
+    reload: cargarDatos,
+  } = useApiData(async () => {
+    const [actividades, clientes, servicios, terceros] = await Promise.all([
+      apiRequest('/agenda'),
+      apiRequest('/clientes'),
+      apiRequest('/servicios'),
+      apiRequest('/terceros'),
+    ]);
+    return {
+      actividades,
+      clientes: clientes.map(normalizarCliente),
+      servicios: servicios.map(normalizarServicio),
+      tecnicos: terceros.map(normalizarTecnico).filter((tecnico) => tecnico.estado !== 'Inactivo'),
+    };
+  }, { actividades: [], clientes: [], servicios: [], tecnicos: [] });
+  const { actividades, clientes, servicios, tecnicos } = data;
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todas');
@@ -174,7 +187,7 @@ export function ProgramacionActividades() {
   }, [actividades, busqueda, filtroEstado, filtroPeriodo, hoy, limiteSemana]);
 
   const resumen = useMemo(() => resumenAgenda(actividades), [actividades]);
-  const incidencias = useMemo(() => validarAgendaCompleta(), [actividades]);
+  const incidencias = useMemo(() => validarAgendaCompleta(actividades), [actividades]);
 
   const erroresAgenda = incidencias.filter((incidencia) => incidencia.severidad === 'error').length;
   const advertenciasAgenda = incidencias.length - erroresAgenda;
@@ -206,8 +219,9 @@ export function ProgramacionActividades() {
     return validarCita(
       { ...formulario, horas: horasFormulario, estado: formulario.estado },
       actividadEditando?.id,
+      { actividades, servicios },
     );
-  }, [formulario, horasFormulario, actividadEditando]);
+  }, [formulario, horasFormulario, actividadEditando, actividades, servicios]);
 
   const abrirNuevo = () => {
     const fecha = fechaSugerida();
@@ -284,7 +298,7 @@ export function ProgramacionActividades() {
     setErrores((prev) => ({ ...prev, fecha: undefined, horaInicio: undefined }));
   };
 
-  const handleGuardar = (event) => {
+  const handleGuardar = async (event) => {
     event.preventDefault();
 
     const nuevosErrores = {};
@@ -300,15 +314,27 @@ export function ProgramacionActividades() {
     }
 
     try {
-      const guardada = guardarActividad({
-        ...formulario,
-        clienteId: formulario.clienteId,
-        servicioId: formulario.servicioId,
-        tecnicoId: formulario.tecnicoId,
-        prioridad: formulario.prioridad,
-        estado: formulario.estado,
-      }, actividadEditando?.id);
+      const guardada = await apiRequest(
+        actividadEditando
+          ? `/agenda/${encodeURIComponent(actividadEditando.id)}`
+          : '/agenda',
+        {
+          method: actividadEditando ? 'PUT' : 'POST',
+          body: {
+            clienteId: formulario.clienteId,
+            servicioId: formulario.servicioId,
+            tecnicoId: formulario.tecnicoId,
+            fecha: formulario.fecha,
+            horaInicio: formulario.horaInicio,
+            estado: formulario.estado,
+            prioridad: formulario.prioridad,
+            descripcion: formulario.descripcion,
+            horas: horasFormulario,
+          },
+        },
+      );
 
+      await cargarDatos();
       notify(
         'success',
         actividadEditando ? 'Servicio actualizado' : 'Servicio agendado',
@@ -321,9 +347,13 @@ export function ProgramacionActividades() {
     }
   };
 
-  const handleCambiarEstado = (actividad) => {
+  const handleCambiarEstado = async (actividad) => {
     try {
-      const actualizada = cambiarEstadoActividad(actividad.id);
+      const actualizada = await apiRequest(`/agenda/${encodeURIComponent(actividad.id)}/estado`, {
+        method: 'PATCH',
+        body: { estado: estadoSiguienteAgenda(actividad.estado) },
+      });
+      await cargarDatos();
       notify(
         'info',
         'Estado actualizado',
@@ -334,10 +364,11 @@ export function ProgramacionActividades() {
     }
   };
 
-  const confirmarEliminar = () => {
+  const confirmarEliminar = async () => {
     if (!actividadEliminar) return;
     try {
-      eliminarActividad(actividadEliminar.id);
+      await apiRequest(`/agenda/${encodeURIComponent(actividadEliminar.id)}`, { method: 'DELETE' });
+      await cargarDatos();
       notify(
         'success',
         'Servicio eliminado',
@@ -354,6 +385,8 @@ export function ProgramacionActividades() {
 
   return (
     <PageShell>
+      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudo cargar la agenda desde la API: {error}</p>}
+      {loading && <p role="status">Cargando agenda desde la API...</p>}
       <PageHeader
         eyebrow="Agenda"
         title="Agenda de Servicios"

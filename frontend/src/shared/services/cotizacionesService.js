@@ -79,8 +79,8 @@ export function normalizarCotizacion(cotizacion) {
     correo: cotizacion.correo || '',
     direccion: cotizacion.direccion || '',
     proyecto: cotizacion.proyecto || 'Proyecto sin título',
-    fecha: cotizacion.fecha || cotizacion.fechaEmision || fechaISO(),
-    fechaEmision: cotizacion.fechaEmision || cotizacion.fecha || fechaISO(),
+    fecha: String(cotizacion.fecha || cotizacion.fechaEmision || fechaISO()).slice(0, 10),
+    fechaEmision: String(cotizacion.fechaEmision || cotizacion.fecha || fechaISO()).slice(0, 10),
     diasVigencia: Math.max(1, numero(cotizacion.diasVigencia, 30)),
     ivaPorcentaje: Math.min(100, Math.max(0, numero(cotizacion.ivaPorcentaje, 16))),
     descuento: Math.min(100, Math.max(0, numero(cotizacion.descuento))),
@@ -421,7 +421,8 @@ export function buscarCotizaciones(texto, cotizaciones = obtenerCotizaciones()) 
 }
 
 export function fechaVencimiento(cotizacion) {
-  return sumarDias(cotizacion.diasVigencia, new Date(`${cotizacion.fechaEmision}T12:00:00`));
+  const base = String(cotizacion.fechaEmision || '').slice(0, 10);
+  return sumarDias(cotizacion.diasVigencia, new Date(`${base}T12:00:00`));
 }
 
 export function cotizacionVencida(cotizacion) {

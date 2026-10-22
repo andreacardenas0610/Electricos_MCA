@@ -1,6 +1,8 @@
-import pg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const { Pool } = pg;
+import pkg from 'pg';
+const { Pool } = pkg;
 
 if (!process.env.DATABASE_URL) {
   throw new Error('Falta configurar DATABASE_URL en el archivo .env');
@@ -8,10 +10,7 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 5,
-  idleTimeoutMillis: 10_000,
-  connectionTimeoutMillis: 10_000,
-  ssl: process.env.DATABASE_SSL === 'true'
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });

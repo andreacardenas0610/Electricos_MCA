@@ -188,10 +188,12 @@ function agregarError(errores, campo, mensaje) {
   errores[campo].push(mensaje);
 }
 
-export function validarCita(datos, idExcluir = null) {
+export function validarCita(datos, idExcluir = null, contexto = {}) {
   const errores = {};
   const mensajes = [];
-  const servicio = obtenerServicio(datos.servicioId);
+  const servicio = contexto.servicios?.find(
+    (item) => String(item.id) === String(datos.servicioId),
+  ) || obtenerServicio(datos.servicioId);
   const horas = numero(datos.horas, horasServicio(servicio));
   const horaFin = sumarMinutosAHora(datos.horaInicio || '08:00', horas * 60);
 
@@ -265,7 +267,8 @@ export function validarCita(datos, idExcluir = null) {
     const inicioNuevo = horaAMinutos(datos.horaInicio);
     const finNuevo = horaAMinutos(horaFin);
 
-    const conflicto = obtenerActividades().find((actividad) => {
+    const actividades = contexto.actividades || obtenerActividades();
+    const conflicto = actividades.find((actividad) => {
       if (String(actividad.id) === String(idExcluir)) return false;
       if (String(actividad.tecnicoId) !== String(datos.tecnicoId)) return false;
       if (actividad.fecha !== datos.fecha) return false;
@@ -412,8 +415,7 @@ export function resumenAgenda(actividades) {
   );
 }
 
-export function validarAgendaCompleta() {
-  const actividades = obtenerActividades();
+export function validarAgendaCompleta(actividades = obtenerActividades()) {
   const incidencias = [];
   const hoy = fechaISO();
   const activas = actividades.filter((actividad) => ESTADOS_ACTIVOS.includes(actividad.estado));
