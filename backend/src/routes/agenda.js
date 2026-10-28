@@ -238,12 +238,19 @@ router.put('/:id', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const actual = await client.query(
-      'SELECT id FROM agenda_actividades WHERE id = $1 FOR UPDATE',
+      'SELECT id, estado FROM agenda_actividades WHERE id = $1 FOR UPDATE',
       [id],
     );
     if (!actual.rows[0]) {
       await client.query('ROLLBACK');
       return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    }
+    // Un servicio finalizado queda quemado: no se vuelve a editar.
+    if (actual.rows[0].estado === 'Completada') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        mensaje: 'El servicio ya está Completada y queda bloqueada. Solo se puede consultar.',
+      });
     }
     await client.query(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
@@ -290,6 +297,14 @@ router.patch('/:id/estado', async (req, res, next) => {
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
   if (!estados.includes(estado)) return res.status(400).json({ mensaje: 'estado no es válido.' });
   try {
+    const { rows: existente } = await pool.query('SELECT estado FROM agenda_actividades WHERE id = $1', [id]);
+    if (!existente[0]) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    if (existente[0].estado === 'Completada' && estado !== 'Completada') {
+      return res.status(409).json({
+        mensaje: 'El servicio ya está Completada y queda bloqueada. No se puede cambiar su estado.',
+      });
+    }
+
     const resultado = await pool.query(
       `UPDATE agenda_actividades SET estado = $1, actualizado_en = now()
        WHERE id = $2 RETURNING id`,
@@ -306,6 +321,14 @@ router.delete('/:id', async (req, res, next) => {
   const id = idValido(req.params.id);
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
   try {
+    const { rows: existente } = await pool.query('SELECT estado FROM agenda_actividades WHERE id = $1', [id]);
+    if (!existente[0]) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    if (existente[0].estado === 'Completada') {
+      return res.status(409).json({
+        mensaje: 'El servicio Completada está finalizado y no se puede eliminar.',
+      });
+    }
+
     const resultado = await pool.query('DELETE FROM agenda_actividades WHERE id = $1', [id]);
     if (!resultado.rowCount) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
     return res.status(204).end();

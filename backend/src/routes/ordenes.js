@@ -65,6 +65,21 @@ function validarOrden(datos) {
   return errores;
 }
 
+// Una orden Finalizada queda quemada: no se edita, no se elimina ni cambia de estado.
+async function nombreEstado(client, id) {
+  const { rows } = await client.query(
+    `SELECT e.nombre FROM ordenes_servicio os
+     JOIN estados_orden_servicio e ON e.id = os.estado_id
+     WHERE os.id = $1`,
+    [id],
+  );
+  return rows[0]?.nombre ?? null;
+}
+
+function ordenFinalizada(nombre) {
+  return nombre === 'Finalizada';
+}
+
 async function obtenerOrdenVisible(id, req) {
   const filtros = ['os.id = $1'];
   const parametros = [id];
@@ -263,6 +278,14 @@ router.patch('/:id/estado', async (req, res, next) => {
       return res.status(404).json({ mensaje: 'Orden de servicio no encontrada.' });
     }
 
+    const estadoActual = await nombreEstado(client, ordenId);
+    if (ordenFinalizada(estadoActual)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        mensaje: 'La orden está Finalizada y queda bloqueada. No se puede cambiar su estado.',
+      });
+    }
+
     const estadoResultado = await client.query(
       'SELECT nombre FROM estados_orden_servicio WHERE id = $1',
       [estadoId],
@@ -353,6 +376,13 @@ router.put('/:id', async (req, res, next) => {
   if (errores.length) return res.status(400).json({ mensaje: errores.join(' ') });
 
   try {
+    const estadoActual = await nombreEstado(pool, id);
+    if (ordenFinalizada(estadoActual)) {
+      return res.status(409).json({
+        mensaje: 'La orden está Finalizada y queda bloqueada. Solo se puede consultar.',
+      });
+    }
+
     const resultado = await pool.query(
       `UPDATE ordenes_servicio
        SET codigo = $1, cliente_id = $2, servicio_id = $3, fecha_programada = $4,
@@ -384,6 +414,13 @@ router.delete('/:id', async (req, res, next) => {
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
 
   try {
+    const estadoActual = await nombreEstado(pool, id);
+    if (ordenFinalizada(estadoActual)) {
+      return res.status(409).json({
+        mensaje: 'La orden Finalizada no se puede eliminar.',
+      });
+    }
+
     const resultado = await pool.query('DELETE FROM ordenes_servicio WHERE id = $1', [id]);
     if (!resultado.rowCount) return res.status(404).json({ mensaje: 'Orden de servicio no encontrada.' });
     return res.status(204).end();

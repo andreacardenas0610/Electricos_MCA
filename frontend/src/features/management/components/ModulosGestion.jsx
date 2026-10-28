@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
-import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import { EstadoToggle, ESTADOS, estadoSiguiente } from '../../../shared/components/EstadoToggle.jsx';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 import { CampoDepartamento, CampoMunicipio } from '../../../shared/components/UbicacionColombia.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { useApiData } from '../../../shared/useApiData.js';
@@ -37,14 +38,17 @@ import {
   Panel,
   SearchInput,
   Toast,
+  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha } from '../../../shared/services/base.js';
 import {
+  TIPOS_DOCUMENTO,
   TIPOS_PROPIEDAD,
   normalizarCliente,
 } from '../../../shared/services/clientesService.js';
 import {
+  PRIORIDADES_ORDEN,
   buscarOrdenes,
   generarCodigoOrden,
   resumenOrdenes,
@@ -78,6 +82,7 @@ const ICONO_PROPIEDAD = {
 const FORMULARIO_CLIENTE = (cliente = null) => ({
   tipoPropiedad: cliente?.tipoPropiedad || 'Comercial',
   nombre: cliente?.nombre || '',
+  tipoDocumento: cliente?.tipoDocumento || 'NIT',
   documento: cliente?.documento || '',
   contacto: cliente?.contacto || '',
   telefono: cliente?.telefono || '',
@@ -86,13 +91,21 @@ const FORMULARIO_CLIENTE = (cliente = null) => ({
   municipio: cliente?.municipio || '',
   departamento: cliente?.departamento || '',
   estado: cliente?.estado || 'Activo',
+  // Un empleado de la empresa también puede registrar compras: se vincula al tercero.
+  terceroId: cliente?.terceroId == null ? '' : String(cliente.terceroId),
+  esEmpleado: Boolean(cliente?.esEmpleado),
+  empleadoNombre: cliente?.empleadoNombre || '',
 });
 
 const FORMULARIO_TECNICO = (tecnico = null) => ({
   nombre: tecnico?.nombre || '',
+  tipoDocumento: tecnico?.tipoDocumento || 'Cédula',
   documento: tecnico?.documento || '',
   telefono: tecnico?.telefono || '',
   correo: tecnico?.correo || '',
+  direccion: tecnico?.direccion || '',
+  municipio: tecnico?.municipio || '',
+  departamento: tecnico?.departamento || '',
   especialidad: tecnico?.especialidad || '',
   estado: tecnico?.estado || 'Activo',
 });
@@ -148,6 +161,9 @@ function idCatalogoPorNombre(catalogo, nombre) {
   return catalogo.find((item) => normalizar(item.nombre) === normalizar(nombre))?.id;
 }
 
+// La orden Finalizada se quema: solo se puede consultar.
+const ordenFinalizada = (orden) => orden?.estado === 'Finalizada';
+
 export function Clientes() {
   const {
     data: clientes,
@@ -155,6 +171,10 @@ export function Clientes() {
     loading: cargandoClientes,
     reload: cargarClientes,
   } = useApiData(async () => (await apiRequest('/clientes')).map(normalizarCliente), []);
+  // Los terceros activos alimentan el selector "un empleado puede ser cliente".
+  const {
+    data: tecnicos,
+  } = useApiData(async () => (await apiRequest('/terceros')).map(normalizarTecnico), []);
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -207,23 +227,59 @@ export function Clientes() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
+  // Opción rápida: un empleado de la empresa figura como cliente.
+  const opcionesEmpleados = useMemo(
+    () => tecnicos
+      .filter((tecnico) => tecnico.estado !== 'Inactivo')
+      .map((tecnico) => ({
+        value: String(tecnico.id),
+        label: `${tecnico.nombre} · ${tecnico.documento}`,
+        meta: tecnico.especialidad,
+        search: `${tecnico.nombre} ${tecnico.documento} ${tecnico.telefono} ${tecnico.municipio}`,
+      })),
+    [tecnicos],
+  );
+
+  const elegirEmpleado = (valor) => {
+    const tecnico = tecnicos.find((item) => String(item.id) === String(valor));
+    setFormulario((actual) => ({
+      ...actual,
+      terceroId: valor || '',
+      esEmpleado: Boolean(tecnico),
+      empleadoNombre: tecnico?.nombre || '',
+      tipoDocumento: tecnico ? 'Cédula' : actual.tipoDocumento,
+      documento: tecnico ? tecnico.documento : actual.documento,
+      nombre: tecnico ? tecnico.nombre : actual.nombre,
+      telefono: tecnico && !actual.telefono ? tecnico.telefono : actual.telefono,
+      correo: tecnico && !actual.correo ? tecnico.correo : actual.correo,
+      direccion: tecnico && !actual.direccion ? tecnico.direccion : actual.direccion,
+      municipio: tecnico && !actual.municipio ? tecnico.municipio : actual.municipio,
+      departamento: tecnico && !actual.departamento ? tecnico.departamento : actual.departamento,
+    }));
+    setErrores((actuales) => ({ ...actuales, nombre: undefined, documento: undefined }));
+  };
+
   const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) {
       nuevosErrores.nombre = 'Escribe el nombre o razón social.';
     }
+    if (!formulario.tipoDocumento.trim()) {
+      nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
+    }
     if (!formulario.documento.trim()) {
-      nuevosErrores.documento = 'Escribe el documento o NIT.';
+      nuevosErrores.documento = 'Escribe el número del documento o NIT.';
     }
     if (!formulario.telefono.trim()) {
-      nuevosErrores.telefono = 'Escribe el teléfono de contacto.';
+      nuevosErrores.telefono = 'Escribe el número de la persona de contacto.';
     }
     if (formulario.correo.trim() && !CORREO_VALIDO.test(formulario.correo.trim())) {
       nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -235,6 +291,9 @@ export function Clientes() {
         nombre_razon_social: formulario.nombre.trim(),
         documento_nit: formulario.documento.trim(),
         tipo_cliente: tipoPropiedad.nombre === 'Residencial' ? 'Natural' : 'Jurídico',
+        tipo_documento: formulario.tipoDocumento,
+        tercero_id: Number(formulario.terceroId) > 0 ? Number(formulario.terceroId) : null,
+        es_empleado: formulario.esEmpleado === true || Number(formulario.terceroId) > 0,
         tipo_propiedad_id: tipoPropiedad.id,
         estado: formulario.estado,
         contacto: formulario.contacto.trim(),
@@ -253,7 +312,9 @@ export function Clientes() {
       notify(
         'success',
         formulario.id ? 'Cliente actualizado' : 'Cliente creado',
-        `${guardado.nombre} · ${guardado.tipoPropiedad}.`,
+        guardado.esEmpleado
+          ? `${guardado.nombre} · ${guardado.tipoPropiedad} · registrado como empleado-cliente.`
+          : `${guardado.nombre} · ${guardado.tipoPropiedad}.`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -269,6 +330,9 @@ export function Clientes() {
           nombre_razon_social: cliente.nombre,
           documento_nit: cliente.documento,
           tipo_cliente: cliente.tipoCliente,
+          tipo_documento: cliente.tipoDocumento,
+          tercero_id: Number(cliente.terceroId) > 0 ? Number(cliente.terceroId) : null,
+          es_empleado: cliente.esEmpleado,
           tipo_propiedad_id: TIPOS_PROPIEDAD.find((tipo) => tipo.nombre === cliente.tipoPropiedad)?.id,
           estado: cliente.estado === 'Activo' ? 'Inactivo' : 'Activo',
           contacto: cliente.contacto,
@@ -353,7 +417,7 @@ export function Clientes() {
             <SearchInput
               value={busqueda}
               onChange={setBusqueda}
-              placeholder="Buscar por nombre, documento, contacto o municipio..."
+              placeholder="Buscar por nombre, documento, contacto, departamento o municipio..."
             />
             <select
               className="mca-select"
@@ -377,12 +441,12 @@ export function Clientes() {
           <table className="mca-table">
             <thead>
               <tr>
-                <th>Cliente</th>
-                <th>Documento / NIT</th>
+                <th>Tipo doc. / NIT</th>
+                <th>Razón social / Nombre</th>
                 <th>Tipo</th>
-                <th>Contacto</th>
-                <th>Teléfono</th>
-                <th>Municipio</th>
+                <th>Persona de contacto</th>
+                <th>Nº de contacto</th>
+                <th>Departamento / Municipio</th>
                 <th>Estado</th>
                 <th className="mca-center">Acciones</th>
               </tr>
@@ -407,7 +471,13 @@ export function Clientes() {
                 filtrados.map((cliente) => {
                   const Icono = ICONO_PROPIEDAD[cliente.tipoPropiedad] || Building2;
                   return (
-                    <tr key={cliente.id}>
+                    <tr key={cliente.id} className={claseFilaEstado(cliente.estado, 'usuario')}>
+                      <td className="is-nowrap">
+                        <div>{cliente.tipoDocumento || '—'}</div>
+                        <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                          {cliente.documento || '—'}
+                        </div>
+                      </td>
                       <td>
                         <div className="mca-cell-title">
                           <div className="mca-cell-icon">
@@ -417,12 +487,13 @@ export function Clientes() {
                             <div className="is-primary">{cliente.nombre}</div>
                             <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
                               {cliente.tipoCliente}
-                              {cliente.departamento ? ` · ${cliente.departamento}` : ''}
                             </div>
+                            {cliente.esEmpleado && (
+                              <Badge tone="indigo" className="mca-badge--inline">Es empleado</Badge>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td className="is-nowrap">{cliente.documento || '—'}</td>
                       <td>
                         <Badge tone={TONO_PROPIEDAD[cliente.tipoPropiedad] || 'neutral'}>
                           {cliente.tipoPropiedad}
@@ -445,7 +516,10 @@ export function Clientes() {
                       <td>
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
-                          <span>{cliente.municipio || '—'}</span>
+                          <span>
+                            {cliente.departamento || '—'}
+                            {cliente.municipio ? ` · ${cliente.municipio}` : ''}
+                          </span>
                         </div>
                       </td>
                       <td>
@@ -495,6 +569,7 @@ export function Clientes() {
             <Field
               label="Tipo de propiedad"
               full
+              tooltip="Tipo de propiedad del cliente: Residencial para personas naturales, Comercial o Industrial para empresas."
               hint="Residencial usa persona natural; Comercial e Industrial usan razón social."
             >
               <div className="mca-row" style={{ gap: 8 }}>
@@ -512,9 +587,51 @@ export function Clientes() {
             </Field>
 
             <Field
+              label="Tipo de documento"
+              required
+              error={errores.tipoDocumento}
+              tooltip="Documento con el que se identifica al cliente: Cédula, Cédula de extranjería, NIT, Pasaporte."
+            >
+              <select
+                className="mca-select"
+                value={formulario.tipoDocumento}
+                onChange={(evento) => setCampo('tipoDocumento', evento.target.value)}
+              >
+                {TIPOS_DOCUMENTO.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label={formulario.tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT'}
+              required
+              error={errores.documento}
+              tooltip={
+                formulario.tipoPropiedad === 'Residencial'
+                  ? 'Número completo de la cédula del cliente, sin puntos y con el dígito verificado.'
+                  : 'Número completo del NIT del cliente, incluyendo el dígito de verificación.'
+              }
+            >
+              <input
+                className="mca-input"
+                value={formulario.documento}
+                onChange={(evento) => setCampo('documento', evento.target.value)}
+                placeholder={formulario.tipoPropiedad === 'Residencial' ? '1.020.304.050' : '900.123.456-7'}
+              />
+            </Field>
+
+            <Field
               label={formulario.tipoPropiedad === 'Residencial' ? 'Nombre completo' : 'Razón social'}
               required
               error={errores.nombre}
+              tooltip={
+                formulario.tipoPropiedad === 'Residencial'
+                  ? 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
+                  : 'Razón social registrada de la empresa, tal como aparece en el RUT.'
+              }
             >
               <input
                 className="mca-input"
@@ -526,19 +643,24 @@ export function Clientes() {
             </Field>
 
             <Field
-              label={formulario.tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT'}
-              required
-              error={errores.documento}
+              label="Es un empleado de la empresa"
+              full
+              hint="Un empleado puede ser cliente: al seleccionarlo se copian sus datos y la ficha queda marcada como empleado."
+              tooltip="Marca si quien compra es un empleado de Eléctricos MCA. Al elegirlo se copian su nombre, documento, teléfono y residencia."
             >
-              <input
-                className="mca-input"
-                value={formulario.documento}
-                onChange={(evento) => setCampo('documento', evento.target.value)}
-                placeholder={formulario.tipoPropiedad === 'Residencial' ? '1.020.304.050' : '900.123.456-7'}
+              <Combobox
+                value={formulario.terceroId}
+                onChange={elegirEmpleado}
+                options={opcionesEmpleados}
+                placeholder="Buscar empleado / tercero..."
+                emptyText="No hay terceros activos"
               />
             </Field>
 
-            <Field label="Persona de contacto">
+            <Field
+              label="Persona de contacto"
+              tooltip="Nombre de la persona que atiende la cuenta dentro de la empresa o del hogar."
+            >
               <input
                 className="mca-input"
                 value={formulario.contacto}
@@ -547,7 +669,12 @@ export function Clientes() {
               />
             </Field>
 
-            <Field label="Teléfono" required error={errores.telefono}>
+            <Field
+              label="Número de la persona de contacto"
+              required
+              error={errores.telefono}
+              tooltip="Celular o teléfono fijo, con código de área, de la persona de contacto."
+            >
               <input
                 className="mca-input"
                 type="tel"
@@ -557,7 +684,11 @@ export function Clientes() {
               />
             </Field>
 
-            <Field label="Correo electrónico" error={errores.correo}>
+            <Field
+              label="Correo electrónico"
+              error={errores.correo}
+              tooltip="Correo donde se envían la cotización en PDF y las notificaciones del servicio."
+            >
               <input
                 className="mca-input"
                 type="email"
@@ -567,7 +698,22 @@ export function Clientes() {
               />
             </Field>
 
-            <Field label="Municipio">
+            <Field
+              label="Departamento"
+              tooltip="Departamento donde se encuentra el cliente; limita la lista de municipios."
+            >
+              <CampoDepartamento
+                className="mca-input"
+                value={formulario.departamento}
+                onChange={(evento) => setCampo('departamento', evento.target.value)}
+                placeholder="Escribe o selecciona un departamento"
+              />
+            </Field>
+
+            <Field
+              label="Municipio"
+              tooltip="Municipio o ciudad de la propiedad; se usa para asignar técnicos cercanos."
+            >
               <CampoMunicipio
                 className="mca-input"
                 departamento={formulario.departamento}
@@ -577,16 +723,11 @@ export function Clientes() {
               />
             </Field>
 
-            <Field label="Departamento">
-              <CampoDepartamento
-                className="mca-input"
-                value={formulario.departamento}
-                onChange={(evento) => setCampo('departamento', evento.target.value)}
-                placeholder="Escribe o selecciona un departamento"
-              />
-            </Field>
-
-            <Field label="Dirección" full>
+            <Field
+              label="Dirección"
+              full
+              tooltip="Dirección completa donde se presta el servicio: calle, número, barrio y complemento."
+            >
               <input
                 className="mca-input"
                 value={formulario.direccion}
@@ -622,9 +763,16 @@ export function Clientes() {
       >
         {clienteDetalle && (
           <DetailGrid>
-            <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
-            <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
+            <DetailItem label="Tipo de documento">{clienteDetalle.tipoDocumento || '—'}</DetailItem>
             <DetailItem label="Documento / NIT">{clienteDetalle.documento || '—'}</DetailItem>
+            <DetailItem label="Razón social / Nombre">{clienteDetalle.nombre || '—'}</DetailItem>
+            <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
+            <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
+            <DetailItem label="Empleado">
+              {clienteDetalle.esEmpleado
+                ? clienteDetalle.empleadoNombre || clienteDetalle.nombre
+                : 'No es empleado'}
+            </DetailItem>
             <DetailItem label="Estado">
               <EstadoToggle
                 estado={clienteDetalle.estado}
@@ -637,8 +785,8 @@ export function Clientes() {
             <DetailItem label="Correo electrónico" full>
               {clienteDetalle.correo || '—'}
             </DetailItem>
-            <DetailItem label="Municipio">{clienteDetalle.municipio || '—'}</DetailItem>
             <DetailItem label="Departamento">{clienteDetalle.departamento || '—'}</DetailItem>
+            <DetailItem label="Municipio">{clienteDetalle.municipio || '—'}</DetailItem>
             <DetailItem label="Dirección" full>{clienteDetalle.direccion || '—'}</DetailItem>
           </DetailGrid>
         )}
@@ -674,10 +822,7 @@ export function GestionTerceros() {
       apiRequest('/ordenes-servicio'),
     ]);
     return {
-      tecnicos: tecnicosApi.map((tercero) => normalizarTecnico({
-        ...tercero,
-        especialidad: tercero.empresa,
-      })),
+      tecnicos: tecnicosApi.map(normalizarTecnico),
       actividades: ordenesApi.map((orden) => ({
         id: orden.id,
         tecnicoId: orden.tercero_id,
@@ -715,7 +860,7 @@ export function GestionTerceros() {
     return datos.tecnicos.filter((tecnico) => {
       if (filtroEstado !== 'Todos' && tecnico.estado !== filtroEstado) return false;
       if (!termino) return true;
-      return `${tecnico.nombre} ${tecnico.documento} ${tecnico.telefono} ${tecnico.correo} ${tecnico.especialidad}`
+      return `${tecnico.nombre} ${tecnico.documento} ${tecnico.telefono} ${tecnico.correo} ${tecnico.municipio} ${tecnico.departamento}`
         .toLowerCase()
         .includes(termino);
     });
@@ -774,38 +919,45 @@ export function GestionTerceros() {
     evento.preventDefault();
     const nuevosErrores = {};
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del tercero.';
-    if (!formulario.documento.trim()) nuevosErrores.documento = 'Escribe el documento.';
+    if (!formulario.tipoDocumento.trim()) nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
+    if (!formulario.documento.trim()) nuevosErrores.documento = 'Escribe el número del documento.';
     if (!formulario.telefono.trim()) nuevosErrores.telefono = 'Escribe el teléfono.';
     if (formulario.correo.trim() && !CORREO_VALIDO.test(formulario.correo.trim())) {
       nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
     }
+    if (!formulario.municipio.trim()) {
+      nuevosErrores.municipio = 'Escribe el municipio donde reside.';
+    }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
     try {
       const payload = {
         nombre_completo: formulario.nombre.trim(),
+        tipo_documento: formulario.tipoDocumento,
         documento: formulario.documento.trim(),
+        // La especialidad ya no se edita aquí: se conserva el valor registrado.
         empresa: formulario.especialidad.trim(),
         telefono: formulario.telefono.trim(),
         correo_electronico: formulario.correo.trim(),
+        direccion: formulario.direccion.trim(),
+        municipio: formulario.municipio.trim(),
+        departamento: formulario.departamento.trim(),
         estado: formulario.estado || 'Activo',
       };
       const resultado = await apiRequest(
         formulario.id ? `/terceros/${formulario.id}` : '/terceros',
         { method: formulario.id ? 'PUT' : 'POST', body: payload },
       );
-      const guardado = normalizarTecnico({
-        ...resultado,
-        especialidad: resultado.empresa,
-      });
+      const guardado = normalizarTecnico(resultado);
       await cargarTecnicos();
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
-        `${guardado.nombre} · ${guardado.especialidad}.`,
+        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'}.`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -814,24 +966,21 @@ export function GestionTerceros() {
   };
 
   const cambiarEstado = async (tecnico) => {
+    const siguiente = estadoSiguiente(ESTADOS.usuario, tecnico.estado);
     try {
-      const actualizado = await apiRequest(`/terceros/${tecnico.id}`, {
-        method: 'PUT',
-        body: {
-          nombre_completo: tecnico.nombre,
-          documento: tecnico.documento,
-          empresa: tecnico.especialidad,
-          telefono: tecnico.telefono,
-          correo_electronico: tecnico.correo,
-          estado: tecnico.estado === 'Activo' ? 'Inactivo' : 'Activo',
-        },
+      const actualizado = await apiRequest(`/terceros/${tecnico.id}/estado`, {
+        method: 'PATCH',
+        body: { estado: siguiente },
       });
       await cargarTecnicos();
-      const tecnicoActualizado = normalizarTecnico({
-        ...actualizado,
-        especialidad: actualizado.empresa,
-      });
-      notify('success', 'Estado actualizado', `${tecnicoActualizado.nombre} · ${tecnicoActualizado.estado}.`);
+      const tecnicoActualizado = normalizarTecnico(actualizado);
+      notify(
+        'success',
+        'Estado actualizado',
+        siguiente === 'Inactivo'
+          ? `${tecnicoActualizado.nombre} quedó inactivo y ya no se ofrece en agenda ni en órdenes.`
+          : `${tecnicoActualizado.nombre} vuelve a estar disponible para asignar.`,
+      );
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
     }
@@ -936,9 +1085,9 @@ export function GestionTerceros() {
           <table className="mca-table">
             <thead>
               <tr>
-                <th>Tercero</th>
-                <th>Documento</th>
-                <th>Especialidad</th>
+                <th>Tipo doc. / Documento</th>
+                <th>Razón social / Nombre</th>
+                <th>Departamento / Municipio</th>
                 <th>Teléfono</th>
                 <th>Correo</th>
                 <th>Servicios activos</th>
@@ -966,7 +1115,13 @@ export function GestionTerceros() {
                 filtrados.map((tecnico) => {
                   const asignados = cargaTecnicos[String(tecnico.id)] || 0;
                   return (
-                    <tr key={tecnico.id}>
+                    <tr key={tecnico.id} className={claseFilaEstado(tecnico.estado, 'usuario')}>
+                      <td className="is-nowrap">
+                        <div>{tecnico.tipoDocumento || '—'}</div>
+                        <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
+                          {tecnico.documento || '—'}
+                        </div>
+                      </td>
                       <td>
                         <div className="mca-cell-title">
                           <div className="mca-cell-icon">
@@ -975,9 +1130,14 @@ export function GestionTerceros() {
                           <div className="is-primary">{tecnico.nombre}</div>
                         </div>
                       </td>
-                      <td className="is-nowrap">{tecnico.documento || '—'}</td>
                       <td>
-                        <Badge tone="indigo">{tecnico.especialidad}</Badge>
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
+                          <span>
+                            {tecnico.departamento || '—'}
+                            {tecnico.municipio ? ` · ${tecnico.municipio}` : ''}
+                          </span>
+                        </div>
                       </td>
                       <td className="is-nowrap">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
@@ -1040,7 +1200,45 @@ export function GestionTerceros() {
       >
         {formulario && (
           <form id="form-tercero" className="mca-form-grid" onSubmit={guardar} noValidate>
-            <Field label="Nombre del tercero" required error={errores.nombre}>
+            <Field
+              label="Tipo de documento"
+              required
+              error={errores.tipoDocumento}
+              tooltip="Identificación tributaria del tercero: C.C., C.E., T.I.T. o NIT."
+            >
+              <select
+                className="mca-select"
+                value={formulario.tipoDocumento}
+                onChange={(evento) => setCampo('tipoDocumento', evento.target.value)}
+              >
+                {TIPOS_DOCUMENTO.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="Número de documento"
+              required
+              error={errores.documento}
+              tooltip="Número único de identificación del tercero; no puede repetirse."
+            >
+              <input
+                className="mca-input"
+                value={formulario.documento}
+                onChange={(evento) => setCampo('documento', evento.target.value)}
+                placeholder="71.555.000"
+              />
+            </Field>
+
+            <Field
+              label="Razón social / Nombre del tercero"
+              required
+              error={errores.nombre}
+              tooltip="Nombre o razón social tal como aparece en el documento de identidad."
+            >
               <input
                 className="mca-input"
                 value={formulario.nombre}
@@ -1050,16 +1248,12 @@ export function GestionTerceros() {
               />
             </Field>
 
-            <Field label="Documento" required error={errores.documento}>
-              <input
-                className="mca-input"
-                value={formulario.documento}
-                onChange={(evento) => setCampo('documento', evento.target.value)}
-                placeholder="71.555.000"
-              />
-            </Field>
-
-            <Field label="Teléfono" required error={errores.telefono}>
+            <Field
+              label="Teléfono"
+              required
+              error={errores.telefono}
+              tooltip="Línea directa para coordinar la visita técnica."
+            >
               <input
                 className="mca-input"
                 type="tel"
@@ -1069,7 +1263,11 @@ export function GestionTerceros() {
               />
             </Field>
 
-            <Field label="Correo electrónico" error={errores.correo}>
+            <Field
+              label="Correo electrónico"
+              error={errores.correo}
+              tooltip="Buzón para enviarle la orden de servicio y los soportes."
+            >
               <input
                 className="mca-input"
                 type="email"
@@ -1080,24 +1278,55 @@ export function GestionTerceros() {
             </Field>
 
             <Field
-              label="Especialidad"
+              label="Departamento"
+              required
+              error={errores.departamento}
+              tooltip="Departamento donde reside; limita la lista de municipios."
+            >
+              <CampoDepartamento
+                className="mca-input"
+                value={formulario.departamento}
+                onChange={(evento) => setCampo('departamento', evento.target.value)}
+                placeholder="Escribe o selecciona un departamento"
+              />
+            </Field>
+
+            <Field
+              label="Municipio donde reside"
+              required
+              error={errores.municipio}
+              hint="Se usa para asignar técnicos cerca del sitio del servicio."
+              tooltip="Municipio o ciudad de residencia del tercero."
+            >
+              <CampoMunicipio
+                className="mca-input"
+                departamento={formulario.departamento}
+                value={formulario.municipio}
+                onChange={(evento) => setCampo('municipio', evento.target.value)}
+                placeholder="Escribe o selecciona un municipio"
+              />
+            </Field>
+
+            <Field
+              label="Dirección de residencia"
               full
-              hint="Se muestra al elegir el técnico responsable en agenda y órdenes."
+              tooltip="Dirección completa (calle, número y barrio) del tercero."
             >
               <input
                 className="mca-input"
-                value={formulario.especialidad}
-                onChange={(evento) => setCampo('especialidad', evento.target.value)}
-                placeholder="Instalaciones y tableros"
-                list="especialidades-terceros"
+                value={formulario.direccion}
+                onChange={(evento) => setCampo('direccion', evento.target.value)}
+                placeholder="Calle 00 # 00-00, barrio"
               />
-              <datalist id="especialidades-terceros">
-                {[...new Set(datos.tecnicos.map((tecnico) => tecnico.especialidad).filter(Boolean))]
-                  .map((especialidad) => (
-                    <option key={especialidad} value={especialidad} />
-                  ))}
-              </datalist>
             </Field>
+
+            <div className="mca-notice is-info mca-field--full">
+              <Wrench size={15} strokeWidth={2} />
+              <span>
+                <strong>Especialidad:</strong> {formulario.especialidad || 'Técnico eléctrico'} ·
+                se muestra solo al ver la ficha del tercero.
+              </span>
+            </div>
           </form>
         )}
       </Modal>
@@ -1127,10 +1356,17 @@ export function GestionTerceros() {
         {tecnicoDetalle && (
           <div className="mca-stack">
             <DetailGrid>
-              <DetailItem label="Documento">{tecnicoDetalle.documento || '—'}</DetailItem>
+              <DetailItem label="Tipo de documento">{tecnicoDetalle.tipoDocumento || '—'}</DetailItem>
+              <DetailItem label="Número de documento">{tecnicoDetalle.documento || '—'}</DetailItem>
+              <DetailItem label="Razón social / Nombre">{tecnicoDetalle.nombre || '—'}</DetailItem>
               <DetailItem label="Especialidad">{tecnicoDetalle.especialidad}</DetailItem>
               <DetailItem label="Teléfono">{tecnicoDetalle.telefono || '—'}</DetailItem>
               <DetailItem label="Correo">{tecnicoDetalle.correo || '—'}</DetailItem>
+              <DetailItem label="Departamento">{tecnicoDetalle.departamento || '—'}</DetailItem>
+              <DetailItem label="Municipio donde reside">{tecnicoDetalle.municipio || '—'}</DetailItem>
+              <DetailItem label="Dirección de residencia" full>
+                {tecnicoDetalle.direccion || '—'}
+              </DetailItem>
               <DetailItem label="Estado">
                 <EstadoToggle
                   estado={tecnicoDetalle.estado}
@@ -1261,9 +1497,9 @@ export function OrdenesServicio() {
   const opcionesClientes = useMemo(
     () => datos.clientes.map((cliente) => ({
       value: String(cliente.id),
-      label: cliente.nombre,
-      meta: `${cliente.documento} · ${cliente.municipio || 'Sin municipio'}`,
-      search: `${cliente.contacto} ${cliente.telefono} ${cliente.direccion}`,
+      label: `${cliente.tipoDocumento || ''} ${cliente.documento || ''} · ${cliente.nombre}`.trim(),
+      meta: [cliente.departamento, cliente.municipio].filter(Boolean).join(' · ') || 'Sin ubicación',
+      search: `${cliente.contacto} ${cliente.telefono} ${cliente.direccion} ${cliente.departamento} ${cliente.municipio}`,
     })),
     [datos.clientes],
   );
@@ -1302,6 +1538,14 @@ export function OrdenesServicio() {
   };
 
   const abrirEdicion = (orden) => {
+    if (ordenFinalizada(orden)) {
+      notify(
+        'warning',
+        'Orden quemada',
+        `${orden.codigo} está Finalizada y queda bloqueada; solo puedes ver su detalle.`,
+      );
+      return;
+    }
     setDetalleId(null);
     setFormulario({ ...FORMULARIO_ORDEN(orden), id: orden.id });
     setErrores({});
@@ -1337,6 +1581,7 @@ export function OrdenesServicio() {
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -1369,6 +1614,14 @@ export function OrdenesServicio() {
   };
 
   const cambiarEstado = async (orden) => {
+    if (ordenFinalizada(orden)) {
+      notify(
+        'warning',
+        'Orden quemada',
+        `${orden.codigo} está Finalizada: no se le cambia el estado.`,
+      );
+      return;
+    }
     try {
       const estados = [...datos.catalogos.estados].sort((a, b) => Number(a.id) - Number(b.id));
       const indiceActual = estados.findIndex((estado) => String(estado.id) === String(orden.estadoId));
@@ -1507,7 +1760,7 @@ export function OrdenesServicio() {
                 </tr>
               ) : (
                 filtrados.map((orden) => (
-                  <tr key={orden.id}>
+                  <tr key={orden.id} className={claseFilaEstado(orden.estado, 'orden')}>
                     <td className="is-nowrap">
                       <Badge tone="yellow">{orden.codigo}</Badge>
                     </td>
@@ -1539,19 +1792,22 @@ export function OrdenesServicio() {
                       </Badge>
                     </td>
                     <td>
-                      <EstadoToggle
-                        estado={orden.estado}
-                        estados={ESTADOS.orden}
-                        width={120}
-                        onClick={() => cambiarEstado(orden)}
-                      />
+                      <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        <EstadoToggle
+                          estado={orden.estado}
+                          estados={ESTADOS.orden}
+                          width={120}
+                          onClick={ordenFinalizada(orden) ? undefined : () => cambiarEstado(orden)}
+                        />
+                        {ordenFinalizada(orden) && <Badge tone="neutral">Quemada</Badge>}
+                      </div>
                     </td>
                     <td className="mca-center">
                       <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
                         <AccionesFila
                           onVer={() => setDetalleId(orden.id)}
-                          onEditar={() => abrirEdicion(orden)}
-                          onEliminar={() => setPorEliminar(orden)}
+                          onEditar={ordenFinalizada(orden) ? undefined : () => abrirEdicion(orden)}
+                          onEliminar={ordenFinalizada(orden) ? undefined : () => setPorEliminar(orden)}
                         />
                       </div>
                     </td>
@@ -1567,7 +1823,11 @@ export function OrdenesServicio() {
         open={Boolean(formulario)}
         onClose={cerrarFormulario}
         title={formulario?.id ? 'Editar orden de servicio' : 'Nueva orden de servicio'}
-        subtitle="El código y el estado se gestionan automáticamente según la fecha."
+        subtitle={
+          formulario?.id
+            ? `Código ${formulario.codigo} · el estado se gestiona automáticamente según la fecha.`
+            : 'El código se genera solo al guardar y aparece en el listado; el estado se gestiona según la fecha.'
+        }
         icon={ClipboardList}
         size="lg"
         footer={
@@ -1581,17 +1841,16 @@ export function OrdenesServicio() {
       >
         {formulario && (
           <form id="form-orden" className="mca-form-grid" onSubmit={guardar} noValidate>
-            <Field label="Código de orden" hint="Generado automáticamente.">
-              <input className="mca-input" value={formulario.codigo} readOnly disabled />
-            </Field>
-
-            <Field label="Prioridad">
+            <Field
+              label="Prioridad"
+              tooltip="Alta, Media o Baja. Define el orden de atención de la orden de servicio."
+            >
               <select
                 className="mca-select"
                 value={formulario.prioridad}
                 onChange={(evento) => setCampo('prioridad', evento.target.value)}
               >
-                {datos.catalogos.prioridades.map((prioridad) => (
+                {PRIORIDADES_ORDEN.map((prioridad) => (
                   <option key={prioridad.id} value={prioridad.nombre}>
                     {prioridad.nombre}
                   </option>
@@ -1724,8 +1983,9 @@ export function OrdenesServicio() {
       >
         {ordenDetalle && (
           <DetailGrid>
-            <DetailItem label="Cliente">{ordenDetalle.cliente}</DetailItem>
-            <DetailItem label="Documento">{ordenDetalle.clienteDocumento || '—'}</DetailItem>
+            <DetailItem label="Tipo de documento">{ordenDetalle.clienteTipoDocumento || '—'}</DetailItem>
+            <DetailItem label="Documento / NIT">{ordenDetalle.clienteDocumento || '—'}</DetailItem>
+            <DetailItem label="Razón social / Nombre">{ordenDetalle.cliente}</DetailItem>
             <DetailItem label="Teléfono">{ordenDetalle.clienteTelefono || '—'}</DetailItem>
             <DetailItem label="Responsable">{ordenDetalle.responsable}</DetailItem>
             <DetailItem label="Servicio" full>{ordenDetalle.servicio}</DetailItem>
@@ -1749,7 +2009,9 @@ export function OrdenesServicio() {
               />
             </DetailItem>
             <DetailItem label="Dirección del servicio" full>
-              {ordenDetalle.clienteDireccion || '—'}
+              {[ordenDetalle.clienteDireccion, ordenDetalle.clienteDepartamento, ordenDetalle.clienteMunicipio]
+                .filter(Boolean)
+                .join(', ') || '—'}
             </DetailItem>
             <DetailItem label="Descripción" full>
               {ordenDetalle.descripcion || '—'}

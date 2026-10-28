@@ -45,6 +45,12 @@ export function fechaISO(date = new Date()) {
   return copia.toISOString().slice(0, 10);
 }
 
+export function horaActual(date = new Date()) {
+  const copia = new Date(date);
+  copia.setMinutes(copia.getMinutes() - copia.getTimezoneOffset());
+  return copia.toISOString().slice(11, 16);
+}
+
 export function sumarDias(dias, base = new Date()) {
   const fecha = new Date(base);
   fecha.setDate(fecha.getDate() + Number(dias || 0));

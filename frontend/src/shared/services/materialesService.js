@@ -9,11 +9,24 @@ export const MATERIALES_KEY = 'mca_materiales';
 export const CATEGORIAS_MATERIALES_KEY = 'mca_materiales_categorias';
 
 const LIMITE_STOCK_BAJO = 10;
+const LIMITE_STOCK_MEDIO = 20;
 
-export function calcularEstadoStock(stock) {
+// El usuario configura los dos parámetros de la alerta:
+// 0 = Crítico (rojo) · hasta stockMinimo = Bajo Stock (amarillo) ·
+// hasta stockMedio = Medio (amarillo) · por encima = Óptimo (gris).
+export function calcularEstadoStock(
+  stock,
+  minimo = LIMITE_STOCK_BAJO,
+  medio = LIMITE_STOCK_MEDIO,
+) {
   const cantidad = numero(stock);
+  const umbralBajo = numero(minimo) > 0 ? numero(minimo) : LIMITE_STOCK_BAJO;
+  const umbralMedio = numero(medio) > 0
+    ? Math.max(numero(medio), umbralBajo)
+    : Math.max(umbralBajo * 2, LIMITE_STOCK_MEDIO);
   if (cantidad <= 0) return 'Crítico';
-  if (cantidad <= LIMITE_STOCK_BAJO) return 'Bajo Stock';
+  if (cantidad <= umbralBajo) return 'Bajo Stock';
+  if (cantidad <= umbralMedio) return 'Medio';
   return 'Óptimo';
 }
 
@@ -79,6 +92,8 @@ const normalizarUnidad = (unidad = '') => {
 
 export function normalizarMaterial(material) {
   const stock = numero(material.stock);
+  const stockMinimo = numero(material.stockMinimo ?? material.stock_minimo) || LIMITE_STOCK_BAJO;
+  const stockMedio = numero(material.stockMedio ?? material.stock_medio) || Math.max(stockMinimo * 2, LIMITE_STOCK_MEDIO);
   return {
     ...material,
     id: String(material.id),
@@ -87,7 +102,10 @@ export function normalizarMaterial(material) {
     stock,
     unidad: normalizarUnidad(material.unidad),
     precioUnitario: numero(material.precioUnitario),
-    estado: calcularEstadoStock(stock),
+    stockMinimo,
+    stockMedio,
+    estadoInventario: material.estadoInventario || material.estado_inventario || 'Activo',
+    estado: material.estado || calcularEstadoStock(stock, stockMinimo, stockMedio),
   };
 }
 
@@ -170,7 +188,7 @@ export function guardarMaterial(datos, idOriginal = null) {
       stock,
       unidad,
       precioUnitario,
-      estado: calcularEstadoStock(stock),
+      estado: calcularEstadoStock(stock, datos.stockMinimo, datos.stockMedio),
       actualizadoEn: new Date().toISOString(),
     });
 

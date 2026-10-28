@@ -15,6 +15,7 @@ import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 import {
   Badge,
   Button,
@@ -298,7 +299,7 @@ export function GestionUsuarios() {
             </thead>
             <tbody>
               {filtrados.map((usuario) => (
-                <tr key={usuario.id}>
+                <tr key={usuario.id} className={claseFilaEstado(usuario.estado, 'usuario')}>
                   <td>
                     <div className="mca-row" style={{ gap: 10 }}>
                       <div

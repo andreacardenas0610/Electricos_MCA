@@ -45,6 +45,16 @@ export function generarPdfCotizacion(cotizacion) {
     </tr>
   `).join('');
 
+  const pagos = cotizacion.pagos || [];
+  const filasPagos = pagos.map((pago) => `
+    <tr>
+      <td><strong>${escapar(pago.id || pago.codigo || '—')}</strong></td>
+      <td>${formatearFecha(pago.fecha)} · ${escapar(pago.metodo || '—')}</td>
+      <td>${escapar(pago.referencia || '—')}</td>
+      <td class="right">${formatearMoneda(pago.monto, 'COP')}</td>
+    </tr>
+  `).join('');
+
   const total = Number(cotizacion.total || 0);
   const abonado = Number(cotizacion.abonado || 0);
   const saldo = Math.max(0, total - abonado);
@@ -245,6 +255,7 @@ export function generarPdfCotizacion(cotizacion) {
     .totals td { padding: 6px 8px; border: 0; }
     .totals .label { color: #64748b; }
     .totals .value { text-align: right; font-weight: 700; }
+    .totals .saldo, .totals .value.saldo { color: #b42318; }
     .totals tr.grand td {
       border-top: 2px solid #0b1329;
       padding-top: 10px;
@@ -263,6 +274,10 @@ export function generarPdfCotizacion(cotizacion) {
       border-radius: 0 5px 5px 0;
     }
     .notes strong { color: #0b1329; }
+    .notes--garantia {
+      border-left-color: #15803d;
+      background: #f0fdf4;
+    }
     .signs {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -373,6 +388,10 @@ export function generarPdfCotizacion(cotizacion) {
         ${Number(cotizacion.montoDescuento) > 0 ? `<tr><td class="label">Descuento (${cotizacion.descuento}%)</td><td class="value">− ${formatearMoneda(cotizacion.montoDescuento, 'COP')}</td></tr>` : ''}
         <tr><td class="label">IVA (${cotizacion.ivaPorcentaje}%)</td><td class="value">${formatearMoneda(cotizacion.montoImpuesto, 'COP')}</td></tr>
         <tr class="grand"><td>Total</td><td class="value">${formatearMoneda(total, 'COP')}</td></tr>
+        ${abonado > 0 ? `
+          <tr><td class="label">Abonado</td><td class="value">${formatearMoneda(abonado, 'COP')}</td></tr>
+          <tr><td class="label saldo">Saldo pendiente</td><td class="value saldo">${formatearMoneda(saldo, 'COP')}</td></tr>
+        ` : ''}
       </table>
     </div>
 
@@ -387,6 +406,33 @@ export function generarPdfCotizacion(cotizacion) {
       <div class="notes">
         <strong>Observaciones:</strong> ${escapar(cotizacion.notas)}
       </div>
+    ` : ''}
+
+    ${cotizacion.terminos ? `
+      <div class="notes">
+        <strong>Términos y condiciones:</strong><br />${escapar(cotizacion.terminos).replace(/\n/g, '<br />')}
+      </div>
+    ` : ''}
+
+    ${cotizacion.garantias ? `
+      <div class="notes notes--garantia">
+        <strong>Garantías:</strong><br />${escapar(cotizacion.garantias).replace(/\n/g, '<br />')}
+      </div>
+    ` : ''}
+
+    ${filasPagos ? `
+      <h2 class="section">Abonos registrados</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px">Pago</th>
+            <th>Fecha / Método</th>
+            <th>Referencia</th>
+            <th style="width:108px" class="right">Monto</th>
+          </tr>
+        </thead>
+        <tbody>${filasPagos}</tbody>
+      </table>
     ` : ''}
 
     <div class="signs">

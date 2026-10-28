@@ -1,4 +1,4 @@
-import { hasStore, numero, redondear, readStore, writeStore, fechaISO } from './base.js';
+import { hasStore, numero, redondear, readStore, writeStore, fechaISO, horaActual } from './base.js';
 import { obtenerCotizaciones, obtenerCotizacion } from './cotizacionesService.js';
 
 export const PAGOS_KEY = 'mca_abonos_pagos';
@@ -21,6 +21,18 @@ export function estadoPago(total, abonado) {
   return 'ABONO PARCIAL';
 }
 
+// El primer abono debe cubrir como mínimo el 30% del total de la cotización.
+export const ABONO_MINIMO_PORCENTAJE = 30;
+
+export function minimoAbonoInicial(cuenta) {
+  return redondear(Math.max(0, numero(cuenta?.montoTotal)) * (ABONO_MINIMO_PORCENTAJE / 100));
+}
+
+// El abono se registra el día en que se recibe el dinero: nunca con fecha futura.
+export function fechaPagoFutura(fecha) {
+  return Boolean(fecha) && String(fecha).slice(0, 10) > fechaISO();
+}
+
 export function normalizarPago(pago) {
   const snapshot = pago.cotizacion || pago.snapshot || {};
   return {
@@ -29,7 +41,7 @@ export function normalizarPago(pago) {
     cotizacionId: String(pago.cotizacionId || pago.codigo || ''),
     monto: Math.max(0, numero(pago.monto ?? pago.abono)),
     fecha: String(pago.fecha || fechaISO()).slice(0, 10),
-    hora: pago.hora || '09:00',
+    hora: pago.hora || horaActual(),
     metodo: pago.metodo || pago.metodoPago || 'Efectivo',
     referencia: pago.referencia || '',
     nota: pago.nota || '',
@@ -172,7 +184,7 @@ export function registrarAbono({ cotizacionId, monto, metodo, fecha, hora, refer
     monto: valor,
     metodo: metodo || 'Efectivo',
     fecha: fecha || fechaISO(),
-    hora: hora || '09:00',
+    hora: hora || horaActual(),
     referencia: referencia || '',
     nota: nota || '',
     cotizacion: cotizacion

@@ -464,7 +464,7 @@ export function GestionRolesPermisos() {
                   style={activo ? {
                     background: 'var(--bg-elevated)',
                     boxShadow: 'inset 3px 0 0 var(--accent-yellow)',
-                  } : undefined}
+                  } : rol.estado === 'Inactivo' ? { opacity: 0.62 } : undefined}
                 >
                   <div className="mca-list__icon">
                     <Shield size={18} strokeWidth={1.9} />
@@ -512,7 +512,12 @@ export function GestionRolesPermisos() {
       >
         {formulario && (
           <form id="form-rol" className="mca-form-grid" onSubmit={guardar}>
-            <Field label="Nombre del rol" required error={errores.nombre}>
+            <Field
+              label="Nombre del rol"
+              required
+              error={errores.nombre}
+              tooltip="Nombre legible del rol, por ejemplo Coordinador de obra."
+            >
               <input
                 className="mca-input"
                 value={formulario.nombre}
@@ -521,10 +526,21 @@ export function GestionRolesPermisos() {
                 autoFocus
               />
             </Field>
-            <Field label="Código" hint="Se calcula a partir del nombre.">
-              <input className="mca-input" value={formulario.codigo} readOnly disabled />
-            </Field>
-            <Field label="Descripción" full>
+            {/* Al crear no se muestra el código: se genera solo y queda visible en el listado. */}
+            {formulario?.id && (
+              <Field
+                label="Código"
+                hint="Se calcula a partir del nombre."
+                tooltip="Identificador interno del rol; se escribe solo a partir del nombre."
+              >
+                <input className="mca-input" value={formulario.codigo} readOnly disabled />
+              </Field>
+            )}
+            <Field
+              label="Descripción"
+              full
+              tooltip="Responsabilidades y alcance que tiene el rol dentro del sistema."
+            >
               <textarea
                 className="mca-textarea"
                 value={formulario.descripcion}

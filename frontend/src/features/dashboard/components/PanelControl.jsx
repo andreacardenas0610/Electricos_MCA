@@ -58,6 +58,7 @@ import {
 } from '../../../shared/services/pagosService.js';
 import { normalizarServicio } from '../../../shared/services/serviciosService.js';
 import { normalizarTecnico } from '../../../shared/services/tercerosService.js';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 
 const ESTADOS_ACTIVOS = ['Programada', 'En proceso'];
 
@@ -372,7 +373,7 @@ export function PanelControl({ onNavegar }) {
                   </thead>
                   <tbody>
                     {proximas.map((actividad) => (
-                      <tr key={actividad.id}>
+                      <tr key={actividad.id} className={claseFilaEstado(actividad.estado, 'actividad')}>
                         <td className="is-nowrap">
                           <Badge tone="yellow">{actividad.codigo}</Badge>
                         </td>

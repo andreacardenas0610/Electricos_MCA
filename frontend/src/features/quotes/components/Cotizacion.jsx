@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
   FileText,
+  Mail,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ import {
   EstadoToggle,
   ESTADOS,
   estadoSiguiente,
+  tonoEstado,
 } from '../../../shared/components/EstadoToggle.jsx';
 import {
   Badge,
@@ -32,16 +35,20 @@ import {
   Panel,
   SearchInput,
   Toast,
+  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
   fechaISO,
   formatearFecha,
   formatearMoneda,
+  horaActual,
 } from '../../../shared/services/base.js';
 import { precioEnCOP } from '../../../shared/services/catalogos.js';
 import { normalizarCliente } from '../../../shared/services/clientesService.js';
+import { METODOS_PAGO } from '../../../shared/services/pagosService.js';
 import {
+  ABONO_MINIMO_PORCENTAJE,
   MONEDA_COTIZACION,
   buscarCotizaciones,
   calcularTotales,
@@ -49,12 +56,15 @@ import {
   crearItemMaterial,
   crearItemServicio,
   fechaVencimiento,
+  minimoAbono,
   normalizarCotizacion,
+  ordenarPorLlegada,
   resumenCotizaciones,
 } from '../../../shared/services/cotizacionesService.js';
 import { normalizarMaterial } from '../../../shared/services/materialesService.js';
 import { normalizarServicio } from '../../../shared/services/serviciosService.js';
 import { generarPdfCotizacion } from '../../../shared/utils/pdf.js';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 
 const FORMULARIO_VACIO = () => ({
   clienteId: '',
@@ -70,8 +80,18 @@ const FORMULARIO_VACIO = () => ({
   ivaPorcentaje: '16',
   descuento: '0',
   notas: '',
+  terminos: '',
+  garantias: '',
   estadoCotizacion: 'Pendiente',
   items: [],
+});
+
+const ABONO_VACIO = () => ({
+  monto: '',
+  fecha: fechaISO(),
+  hora: horaActual(),
+  metodo: 'Transferencia',
+  referencia: '',
 });
 
 export function Cotizacion() {
@@ -110,15 +130,18 @@ export function Cotizacion() {
   const [cotizacionEliminar, setCotizacionEliminar] = useState(null);
   const [servicioSeleccionado, setServicioSeleccionado] = useState('');
   const [materialSeleccionado, setMaterialSeleccionado] = useState('');
+  const [cotizacionesCliente, setCotizacionesCliente] = useState([]);
+  const [abono, setAbono] = useState(ABONO_VACIO);
+  const [abonando, setAbonando] = useState(false);
 
   const { toast, notify, close } = useToast();
 
   const opcionesClientes = useMemo(
     () => clientes.map((cliente) => ({
       value: String(cliente.id),
-      label: cliente.nombre,
-      meta: cliente.documento,
-      search: `${cliente.contacto} ${cliente.correo} ${cliente.telefono} ${cliente.municipio} ${cliente.departamento}`,
+      label: `${cliente.tipoDocumento || ''} ${cliente.documento || ''} · ${cliente.nombre}`.trim(),
+      meta: [cliente.departamento, cliente.municipio].filter(Boolean).join(' · ') || 'Sin ubicación',
+      search: `${cliente.contacto} ${cliente.correo} ${cliente.telefono} ${cliente.departamento} ${cliente.municipio}`,
     })),
     [clientes],
   );
@@ -136,20 +159,23 @@ export function Cotizacion() {
   );
 
   const opcionesMateriales = useMemo(
-    () => materiales.map((material) => ({
-      value: String(material.id),
-      label: material.nombre,
-      meta: `${material.stock.toLocaleString('es-CO')} ${material.unidad.toLowerCase()} · ${formatearMoneda(material.precioUnitario, 'COP')}`,
-      search: `${material.id} ${material.categoria}`,
-    })),
+    () => materiales
+      .filter((material) => material.estadoInventario !== 'Inactivo')
+      .map((material) => ({
+        value: String(material.id),
+        label: material.nombre,
+        meta: `${material.stock.toLocaleString('es-CO')} ${material.unidad.toLowerCase()} · ${formatearMoneda(material.precioUnitario, 'COP')}`,
+        search: `${material.id} ${material.categoria}`,
+      })),
     [materiales],
   );
 
   const filtradas = useMemo(() => {
     const base = buscarCotizaciones(busqueda, cotizaciones);
-    return filtroEstado === 'Todas'
+    const porEstado = filtroEstado === 'Todas'
       ? base
       : base.filter((cotizacion) => cotizacion.estadoCotizacion === filtroEstado);
+    return ordenarPorLlegada(porEstado);
   }, [cotizaciones, busqueda, filtroEstado]);
 
   const resumen = useMemo(() => resumenCotizaciones(cotizaciones), [cotizaciones]);
@@ -171,11 +197,15 @@ export function Cotizacion() {
     ? cuentas.find((cuenta) => String(cuenta.cotizacionId) === String(cotizacionDetalle.id))
     : null;
 
+  const minimoDetalle = minimoAbono(cotizacionDetalle);
+  const abonadoDetalle = Number(cuentaDetalle?.abonado || 0);
+
   const abrirNueva = () => {
     setCotizacionEditando(null);
     setErrores({});
     setServicioSeleccionado('');
     setMaterialSeleccionado('');
+    setCotizacionesCliente([]);
     setFormulario(FORMULARIO_VACIO());
     setModalFormulario(true);
   };
@@ -185,6 +215,7 @@ export function Cotizacion() {
     setErrores({});
     setServicioSeleccionado('');
     setMaterialSeleccionado('');
+    setCotizacionesCliente([]);
     setFormulario({
       clienteId: cotizacion.clienteId ? String(cotizacion.clienteId) : '',
       cliente: cotizacion.cliente,
@@ -199,6 +230,8 @@ export function Cotizacion() {
       ivaPorcentaje: String(cotizacion.ivaPorcentaje),
       descuento: String(cotizacion.descuento),
       notas: cotizacion.notas,
+      terminos: cotizacion.terminos || '',
+      garantias: cotizacion.garantias || '',
       estadoCotizacion: cotizacion.estadoCotizacion,
       items: (cotizacion.items || []).map((item) => ({ ...item })),
     });
@@ -211,6 +244,21 @@ export function Cotizacion() {
     setErrores({});
     setServicioSeleccionado('');
     setMaterialSeleccionado('');
+    setCotizacionesCliente([]);
+  };
+
+  // Al traer el cliente se listan sus cotizaciones disponibles para seleccionar una.
+  const cargarCotizacionesCliente = async (id) => {
+    if (!id) {
+      setCotizacionesCliente([]);
+      return;
+    }
+    try {
+      const lista = await apiRequest(`/cotizaciones?cliente=${encodeURIComponent(id)}`);
+      setCotizacionesCliente(lista.map(normalizarCotizacion));
+    } catch {
+      setCotizacionesCliente([]);
+    }
   };
 
   const seleccionarCliente = (id) => {
@@ -225,11 +273,40 @@ export function Cotizacion() {
       telefono: cliente?.telefono || '',
       correo: cliente?.correo || '',
       direccion: cliente
-        ? [cliente.direccion, cliente.municipio].filter(Boolean).join(', ')
+        ? [cliente.direccion, cliente.departamento, cliente.municipio].filter(Boolean).join(', ')
         : actual.direccion,
     }));
     setErrores((actual) => ({ ...actual, clienteId: '' }));
+    void cargarCotizacionesCliente(id);
   };
+
+  const reutilizarCotizacion = (cotizacion) => {
+    setFormulario((actual) => ({
+      ...actual,
+      proyecto: cotizacion.proyecto,
+      diasVigencia: String(cotizacion.diasVigencia),
+      ivaPorcentaje: String(cotizacion.ivaPorcentaje),
+      descuento: String(cotizacion.descuento),
+      notas: cotizacion.notas,
+      terminos: cotizacion.terminos,
+      garantias: cotizacion.garantias,
+      items: (cotizacion.items || []).map((item) => ({ ...item, id: `item-${Date.now()}-${item.refId || item.descripcion}` })),
+    }));
+    notify(
+      'info',
+      'Cotización cargada',
+      `Se copiaron ${cotizacion.items.length} ítems de ${cotizacion.id}. La fecha de emisión será la de hoy.`,
+    );
+  };
+
+  // Un servicio arrastra automáticamente los materiales que tiene asignados.
+  const materialesDeServicio = (servicio) => (servicio.materiales || []).map((material) => ({
+    id: material.codigo,
+    nombre: material.nombre,
+    unidad: material.unidad,
+    precioUnitario: Number(material.precioUnitario || 0),
+    stock: Number(material.stock || 0),
+  }));
 
   const agregarServicio = (id) => {
     const servicio = servicios.find((item) => String(item.id) === String(id));
@@ -238,12 +315,28 @@ export function Cotizacion() {
       return;
     }
 
-    setFormulario((actual) => ({
-      ...actual,
-      items: [...actual.items, crearItemServicio(servicio, 1)],
-    }));
+    setFormulario((actual) => {
+      const nuevos = [crearItemServicio(servicio, 1)];
+
+      for (const material of materialesDeServicio(servicio)) {
+        const repetido = [...actual.items, ...nuevos].some(
+          (item) => item.tipo === 'material' && String(item.refId) === String(material.id),
+        );
+        if (!repetido) nuevos.push(crearItemMaterial(material, 1));
+      }
+
+      return { ...actual, items: [...actual.items, ...nuevos] };
+    });
     setErrores((actual) => ({ ...actual, items: '' }));
     setServicioSeleccionado('');
+
+    if (servicio.materiales?.length) {
+      notify(
+        'success',
+        'Materiales agregados',
+        `${servicio.nombre} añadió ${servicio.materiales.length} material(es) del catálogo. Puedes seguir agregando más.`,
+      );
+    }
   };
 
   const agregarMaterial = (id) => {
@@ -251,6 +344,16 @@ export function Cotizacion() {
     if (!material) {
       setMaterialSeleccionado('');
       return;
+    }
+
+    if (formulario.items.some((item) => item.tipo === 'material' && String(item.refId) === String(material.id))) {
+      notify('warning', 'Material repetido', `${material.nombre} ya está en esta cotización.`);
+      setMaterialSeleccionado('');
+      return;
+    }
+
+    if (material.stock <= 0) {
+      notify('warning', 'Advertencia de stock', `${material.nombre} está en 0 unidades; la API rechazará la cotización.`);
     }
 
     setFormulario((actual) => ({
@@ -292,8 +395,32 @@ export function Cotizacion() {
       nuevosErrores.items = 'Todas las cantidades deben ser mayores que cero.';
     }
 
+    const codigosMateriales = formulario.items
+      .filter((item) => item.tipo === 'material')
+      .map((item) => String(item.refId));
+    const repetido = codigosMateriales.find((codigo, indice) => codigosMateriales.indexOf(codigo) !== indice);
+    if (repetido) {
+      const material = materiales.find((item) => String(item.id) === repetido);
+      nuevosErrores.items = `${material?.nombre || repetido} está repetido; un material no se puede agregar dos veces.`;
+    }
+
+    const sobreStock = formulario.items
+      .filter((item) => item.tipo === 'material')
+      .filter((item) => {
+        const inventario = materiales.find((material) => String(material.id) === String(item.refId));
+        return inventario && Number(item.cantidad) > inventario.stock;
+      });
+    if (sobreStock.length) {
+      notify(
+        'warning',
+        'Advertencia de stock',
+        `${sobreStock.map((item) => `${item.descripcion} (${item.cantidad} solicitadas)`).join(', ')} supera el inventario disponible.`,
+      );
+    }
+
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -305,13 +432,14 @@ export function Cotizacion() {
         {
           method: cotizacionEditando ? 'PUT' : 'POST',
           body: {
-          ...formulario,
-          fechaEmision: formulario.fechaEmision,
-          fecha: formulario.fechaEmision,
-          diasVigencia: Number(formulario.diasVigencia) || 30,
-          ivaPorcentaje: Number(formulario.ivaPorcentaje) || 0,
-          descuento: Number(formulario.descuento) || 0,
-          items: formulario.items,
+            ...formulario,
+            // La fecha de emisión siempre la fija el servidor con la fecha del día.
+            fechaEmision: cotizacionEditando ? cotizacionEditando.fechaEmision : fechaISO(),
+            fecha: cotizacionEditando ? cotizacionEditando.fechaEmision : fechaISO(),
+            diasVigencia: Number(formulario.diasVigencia) || 30,
+            ivaPorcentaje: Number(formulario.ivaPorcentaje) || 0,
+            descuento: Number(formulario.descuento) || 0,
+            items: formulario.items,
           },
         },
       );
@@ -322,17 +450,38 @@ export function Cotizacion() {
         cotizacionEditando ? 'Cotización actualizada' : 'Cotización creada',
         `${guardada.id} · ${guardada.cliente} · Total ${formatearMoneda(guardada.total, 'COP')}.`,
       );
+      if (guardada.advertencias?.length) {
+        notify('warning', 'Advertencia de inventario', guardada.advertencias.join(' '));
+      }
       cerrarFormulario();
-    } catch (error) {
-      notify('error', 'No se pudo guardar la cotización', error.message);
+    } catch (requestError) {
+      notify('error', 'No se pudo guardar la cotización', requestError.message);
+      if (requestError.advertencias?.length) {
+        notify('warning', 'Advertencia de inventario', requestError.advertencias.join(' '));
+      }
     }
   };
 
   const handleCambiarEstado = async (cotizacion) => {
     const siguiente = estadoSiguiente(ESTADOS.cotizacion, cotizacion.estadoCotizacion);
+    const cuenta = cuentas.find((item) => String(item.cotizacionId) === String(cotizacion.id));
+
+    if (siguiente === 'Aprobado') {
+      const minimo = minimoAbono(cotizacion);
+      if (Number(cuenta?.abonado || 0) < minimo) {
+        notify(
+          'warning',
+          'Primero se recibe la plata',
+          `Registra un abono de al menos ${formatearMoneda(minimo, 'COP')} (${ABONO_MINIMO_PORCENTAJE}% del total) antes de aprobar ${cotizacion.id}.`,
+        );
+        setAbono(ABONO_VACIO());
+        setCotizacionDetalle(cotizacion);
+        return;
+      }
+    }
 
     try {
-      await apiRequest(`/cotizaciones/${encodeURIComponent(cotizacion.id)}/estado`, {
+      const actualizada = await apiRequest(`/cotizaciones/${encodeURIComponent(cotizacion.id)}/estado`, {
         method: 'PATCH',
         body: { estadoCotizacion: siguiente },
       });
@@ -342,8 +491,99 @@ export function Cotizacion() {
         'Estado actualizado',
         `${cotizacion.id} ahora está ${siguiente.toLowerCase()}.`,
       );
-    } catch (error) {
-      notify('error', 'No se pudo cambiar el estado', error.message);
+      if (siguiente === 'Aprobado') {
+        notify(
+          'success',
+          'Stock descontado',
+          `Los materiales de ${cotizacion.id} se descontaron del inventario. Si falta material, Materiales mostrará la fila en Bajo Stock o Crítico.`,
+        );
+      }
+      if (actualizada?.advertencias?.length) {
+        notify('warning', 'Advertencia de inventario', actualizada.advertencias.join(' '));
+      }
+    } catch (requestError) {
+      notify('error', 'No se pudo cambiar el estado', requestError.message);
+    }
+  };
+
+  const handleAbonar = async (event, cotizacion) => {
+    event.preventDefault();
+    if (!cotizacion) return;
+
+    const monto = Number(abono.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      notify('warning', 'Mensaje flotante de validación', 'Completa los mensajes obligatorios: El abono debe ser mayor que cero.');
+      return;
+    }
+    if (abono.fecha > fechaISO()) {
+      notify('warning', 'Mensaje flotante de validación', 'La fecha del abono debe ser hoy o anterior.');
+      return;
+    }
+
+    setAbonando(true);
+    try {
+      const cuenta = cuentas.find((item) => String(item.cotizacionId) === String(cotizacion.id));
+      const previo = Number(cuenta?.abonado || 0);
+      const pago = await apiRequest('/pagos', {
+        method: 'POST',
+        body: {
+          cotizacionId: cotizacion.id,
+          monto,
+          fecha: abono.fecha,
+          hora: abono.hora,
+          metodo: abono.metodo,
+          referencia: abono.referencia,
+          nota: 'Abono registrado desde Cotizaciones',
+        },
+      });
+      await cargarDatos();
+      setAbono(ABONO_VACIO());
+      notify(
+        'success',
+        'Abono registrado',
+        `${pago.id} · ${formatearMoneda(pago.monto, 'COP')} recibido el ${formatearFecha(pago.fecha)}.`,
+      );
+      if (previo <= 0 && cotizacion.estadoCotizacion !== 'Aprobado') {
+        notify(
+          'info',
+          'Ya puedes aprobar',
+          `Con el abono mínimo cubierto, cambia ${cotizacion.id} a Aprobado para descontar el inventario.`,
+        );
+      }
+    } catch (requestError) {
+      notify('error', 'No se pudo registrar el abono', requestError.message);
+    } finally {
+      setAbonando(false);
+    }
+  };
+
+  const handleEnviarCorreo = async (cotizacion) => {
+    if (!cotizacion) return;
+    try {
+      const resultado = await apiRequest(
+        `/cotizaciones/${encodeURIComponent(cotizacion.id)}/enviar-correo`,
+        { method: 'POST', body: {} },
+      );
+
+      if (resultado.enviado) {
+        notify('success', 'Cotización enviada', `El correo ${resultado.correo} recibió la cotización ${cotizacion.id}.`);
+        return;
+      }
+
+      if (resultado.mailto) {
+        window.location.href = resultado.mailto;
+        notify(
+          'info',
+          'Cliente de correo abierto',
+          `${resultado.correo} · ${resultado.mensaje || 'Confirma el envío desde tu cliente de correo.'}`,
+        );
+        return;
+      }
+
+      notify('info', 'Cotización lista para enviar', resultado.mensaje || '');
+    } catch (requestError) {
+      if (requestError.datos?.mailto) window.location.href = requestError.datos.mailto;
+      notify('error', 'No se pudo enviar la cotización', requestError.message);
     }
   };
 
@@ -353,7 +593,11 @@ export function Cotizacion() {
     );
 
     try {
-      generarPdfCotizacion({ ...cotizacion, abonado: cuenta?.abonado || 0 });
+      generarPdfCotizacion({
+        ...cotizacion,
+        abonado: cuenta?.abonado || 0,
+        pagos: cuenta?.pagos || [],
+      });
       notify(
         'info',
         'Vista de impresión abierta',
@@ -384,7 +628,11 @@ export function Cotizacion() {
 
   return (
     <PageShell>
-      {error && <p role="alert" style={{ color: '#b91c1c' }}>No se pudieron cargar las cotizaciones desde la API: {error}</p>}
+      {error && (
+        <p role="alert" className="mca-error">
+          No se pudieron cargar las cotizaciones desde la API: {error}
+        </p>
+      )}
       {loading && <p role="status">Cargando cotizaciones desde la API...</p>}
       <PageHeader
         eyebrow="Cotizaciones"
@@ -431,7 +679,7 @@ export function Cotizacion() {
 
       <Panel
         title="Listado de cotizaciones"
-        subtitle={`${filtradas.length} de ${cotizaciones.length} cotizaciones`}
+        subtitle={`${filtradas.length} de ${cotizaciones.length} · orden de llegada: Pendiente → Aprobado → Rechazado`}
         actions={
           <>
             <SearchInput
@@ -467,6 +715,7 @@ export function Cotizacion() {
                 <th>Vence</th>
                 <th className="is-number">Ítems</th>
                 <th className="is-number">Total</th>
+                <th className="is-number">Abonado</th>
                 <th>Estado</th>
                 <th className="mca-center">Acciones</th>
               </tr>
@@ -474,7 +723,7 @@ export function Cotizacion() {
             <tbody>
               {filtradas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="mca-table__empty">
+                  <td colSpan={9} className="mca-table__empty">
                     <EmptyState
                       icon={FileText}
                       title="Sin cotizaciones para mostrar"
@@ -488,50 +737,84 @@ export function Cotizacion() {
                   </td>
                 </tr>
               ) : (
-                filtradas.map((cotizacion) => (
-                  <tr key={cotizacion.id}>
-                    <td className="is-nowrap">
-                      <Badge tone="yellow">{cotizacion.id}</Badge>
-                    </td>
-                    <td>
-                      <div className="is-primary">{cotizacion.cliente}</div>
-                      <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
-                        {cotizacion.proyecto}
-                      </div>
-                    </td>
-                    <td className="is-muted is-nowrap">
-                      {formatearFecha(cotizacion.fechaEmision)}
-                    </td>
-                    <td className="is-nowrap">
-                      <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                        <span className="is-muted">{formatearFecha(fechaVencimiento(cotizacion))}</span>
-                        {cotizacionVencida(cotizacion) && (
-                          <Badge tone="danger">Vencida</Badge>
+                filtradas.map((cotizacion) => {
+                  const cuenta = cuentas.find(
+                    (item) => String(item.cotizacionId) === String(cotizacion.id),
+                  );
+                  const abonado = Number(cuenta?.abonado || 0);
+                  const minimo = minimoAbono(cotizacion);
+                  const emitidaHoy = cotizacion.fechaEmision === fechaISO();
+
+                  return (
+                    <tr
+                      key={cotizacion.id}
+                      className={claseFilaEstado(cotizacion.estadoCotizacion, 'cotizacion')}
+                    >
+                      <td className="is-nowrap">
+                        <Badge tone="yellow">{cotizacion.id}</Badge>
+                      </td>
+                      <td>
+                        <div className="is-primary">{cotizacion.cliente}</div>
+                        <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
+                          {cotizacion.proyecto}
+                        </div>
+                      </td>
+                      <td className="is-muted is-nowrap">
+                        {formatearFecha(cotizacion.fechaEmision)}
+                        {emitidaHoy && (
+                          <div className="mca-soft" style={{ fontSize: 10 }}>Hoy</div>
                         )}
-                      </div>
-                    </td>
-                    <td className="is-number">{cotizacion.items.length}</td>
-                    <td className="is-number mca-strong">
-                      {formatearMoneda(cotizacion.total, 'COP')}
-                    </td>
-                    <td>
-                      <EstadoToggle
-                        estado={cotizacion.estadoCotizacion}
-                        estados={ESTADOS.cotizacion}
-                        width={112}
-                        onClick={() => handleCambiarEstado(cotizacion)}
-                      />
-                    </td>
-                    <td className="mca-center">
-                      <AccionesFila
-                        onVer={() => setCotizacionDetalle(cotizacion)}
-                        onEditar={() => abrirEditar(cotizacion)}
-                        onPdf={() => handlePdf(cotizacion)}
-                        onEliminar={() => setCotizacionEliminar(cotizacion)}
-                      />
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="is-nowrap">
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                          <span className="is-muted">{formatearFecha(fechaVencimiento(cotizacion))}</span>
+                          {cotizacionVencida(cotizacion) && (
+                            <Badge tone="danger">Vencida</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="is-number">{cotizacion.items.length}</td>
+                      <td className="is-number mca-strong">
+                        {formatearMoneda(cotizacion.total, 'COP')}
+                      </td>
+                      <td className="is-number">
+                        {formatearMoneda(abonado, 'COP')}
+                        {cotizacion.estadoCotizacion === 'Pendiente' && abonado < minimo && (
+                          <div className="mca-soft" style={{ fontSize: 10, color: 'var(--warning-text)' }}>
+                            Mínimo {formatearMoneda(minimo, 'COP')}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <EstadoToggle
+                          estado={cotizacion.estadoCotizacion}
+                          estados={ESTADOS.cotizacion}
+                          width={112}
+                          onClick={() => handleCambiarEstado(cotizacion)}
+                        />
+                      </td>
+                      <td className="mca-center">
+                        <AccionesFila
+                          onVer={() => {
+                            setCotizacionDetalle(cotizacion);
+                            setAbono(ABONO_VACIO());
+                          }}
+                          onEditar={() => abrirEditar(cotizacion)}
+                          onPdf={() => handlePdf(cotizacion)}
+                          onCorreo={() => handleEnviarCorreo(cotizacion)}
+                          onAbono={() => {
+                            setCotizacionDetalle(cotizacion);
+                            setAbono({
+                              ...ABONO_VACIO(),
+                              monto: String(minimo > abonado ? minimo : ''),
+                            });
+                          }}
+                          onEliminar={() => setCotizacionEliminar(cotizacion)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -551,6 +834,11 @@ export function Cotizacion() {
         size="xl"
         footer={
           <>
+            {/* El total siempre visible mientras se baja a rellenar el resto de la información. */}
+            <div className="mca-total-resumen">
+              <span>Total</span>
+              <strong>{formatearMoneda(totalesFormulario.total, 'COP')}</strong>
+            </div>
             <Button onClick={cerrarFormulario}>Cancelar</Button>
             <Button variant="primary" type="submit" form="form-cotizacion">
               {cotizacionEditando ? 'Guardar cambios' : 'Crear cotización'}
@@ -650,14 +938,21 @@ export function Cotizacion() {
                 />
               </Field>
 
-              <Field label="Fecha de emisión">
+              <Field
+                label="Fecha de emisión"
+                hint={
+                  cotizacionEditando
+                    ? 'Quema la fecha del día en que se registró; no se puede modificar.'
+                    : 'Se quema automáticamente con la fecha de hoy.'
+                }
+              >
                 <input
                   className="mca-input"
                   type="date"
                   value={formulario.fechaEmision}
-                  onChange={(event) =>
-                    setFormulario((actual) => ({ ...actual, fechaEmision: event.target.value }))
-                  }
+                  max={fechaISO()}
+                  disabled
+                  readOnly
                 />
               </Field>
 
@@ -674,6 +969,36 @@ export function Cotizacion() {
                 />
               </Field>
             </div>
+
+            {cotizacionesCliente.length > 0 && (
+              <div className="mca-field mca-field--full">
+                <span className="mca-label">Cotizaciones disponibles del cliente</span>
+                <div className="mca-stack" style={{ gap: 6 }}>
+                  {cotizacionesCliente.map((cotizacion) => (
+                    <div key={cotizacion.id} className="mca-row" style={{ justifyContent: 'space-between' }}>
+                      <span className="is-nowrap">
+                        <Badge tone="yellow">{cotizacion.id}</Badge>
+                        <strong style={{ marginLeft: 8 }}>{cotizacion.proyecto}</strong>
+                        <span className="mca-soft" style={{ marginLeft: 8, fontSize: 12 }}>
+                          {formatearMoneda(cotizacion.total, 'COP')} · {formatearFecha(cotizacion.fechaEmision)}
+                        </span>
+                      </span>
+                      <span className="mca-row" style={{ gap: 8 }}>
+                        <Badge tone={tonoEstado(cotizacion.estadoCotizacion, ESTADOS.cotizacion)}>
+                          {cotizacion.estadoCotizacion}
+                        </Badge>
+                        <Button size="sm" onClick={() => reutilizarCotizacion(cotizacion)}>
+                          Seleccionar y copiar ítems
+                        </Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <span className="mca-hint">
+                  Selecciona una cotización disponible para reutilizar sus ítems; la nueva conserva la fecha de hoy.
+                </span>
+              </div>
+            )}
 
             <div className="mca-field mca-field--full">
               <span className="mca-label">Agregar ítems</span>
@@ -733,61 +1058,79 @@ export function Cotizacion() {
                       </td>
                     </tr>
                   ) : (
-                    formulario.items.map((item) => (
-                      <tr key={item.id}>
-                        <td>
-                          <div className="is-primary">{item.descripcion}</div>
-                          {item.monedaServicio && item.monedaServicio !== MONEDA_COTIZACION && (
-                            <div className="mca-soft" style={{ fontSize: 10, marginTop: 2 }}>
-                              Tarifa original en {item.monedaServicio}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <Badge tone={item.tipo === 'servicio' ? 'info' : 'neutral'}>
-                            {item.tipo === 'servicio' ? 'Servicio' : 'Material'}
-                          </Badge>
-                        </td>
-                        <td className="is-muted">{item.unidad}</td>
-                        <td>
-                          <input
-                            className="mca-input"
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            style={{ height: 32, padding: '0 8px' }}
-                            value={item.cantidad}
-                            onChange={(event) => actualizarItem(item.id, 'cantidad', event.target.value)}
-                            aria-label={`Cantidad de ${item.descripcion}`}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="mca-input"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            style={{ height: 32, padding: '0 8px' }}
-                            value={item.precioUnit}
-                            onChange={(event) => actualizarItem(item.id, 'precioUnit', event.target.value)}
-                            aria-label={`Precio unitario de ${item.descripcion}`}
-                          />
-                        </td>
-                        <td className="is-number mca-strong">
-                          {formatearMoneda(item.cantidad * item.precioUnit, 'COP')}
-                        </td>
-                        <td className="mca-center">
-                          <button
-                            type="button"
-                            className="mca-icon-btn mca-icon-btn--danger"
-                            onClick={() => quitarItem(item.id)}
-                            title="Quitar ítem"
-                          >
-                            <Trash2 size={15} strokeWidth={1.9} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    formulario.items.map((item) => {
+                      const inventario = item.tipo === 'material'
+                        ? materiales.find((material) => String(material.id) === String(item.refId))
+                        : null;
+                      const sobreStock = inventario && Number(item.cantidad) > inventario.stock;
+
+                      return (
+                        <tr key={item.id} className={sobreStock ? 'mca-row--critico' : ''}>
+                          <td>
+                            <div className="is-primary">{item.descripcion}</div>
+                            {item.monedaServicio && item.monedaServicio !== MONEDA_COTIZACION && (
+                              <div className="mca-soft" style={{ fontSize: 10, marginTop: 2 }}>
+                                Tarifa original en {item.monedaServicio}
+                              </div>
+                            )}
+                            {inventario && (
+                              <div className="mca-soft" style={{ fontSize: 10, marginTop: 2 }}>
+                                Inventario: {inventario.stock} {inventario.unidad.toLowerCase()} · {inventario.estado}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <Badge tone={item.tipo === 'servicio' ? 'info' : 'neutral'}>
+                              {item.tipo === 'servicio' ? 'Servicio' : 'Material'}
+                            </Badge>
+                          </td>
+                          <td className="is-muted">{item.unidad}</td>
+                          <td>
+                            <input
+                              className="mca-input"
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              style={{ height: 32, padding: '0 8px' }}
+                              value={item.cantidad}
+                              onChange={(event) => actualizarItem(item.id, 'cantidad', event.target.value)}
+                              aria-label={`Cantidad de ${item.descripcion}`}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="mca-input"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              style={{ height: 32, padding: '0 8px' }}
+                              value={item.precioUnit}
+                              disabled={Boolean(inventario)}
+                              onChange={(event) => actualizarItem(item.id, 'precioUnit', event.target.value)}
+                              title={
+                                inventario
+                                  ? 'El valor unitario del material no se puede editar, se toma de Materiales'
+                                  : undefined
+                              }
+                              aria-label={`Precio unitario de ${item.descripcion}`}
+                            />
+                          </td>
+                          <td className="is-number mca-strong">
+                            {formatearMoneda(item.cantidad * item.precioUnit, 'COP')}
+                          </td>
+                          <td className="mca-center">
+                            <button
+                              type="button"
+                              className="mca-icon-btn mca-icon-btn--danger"
+                              onClick={() => quitarItem(item.id)}
+                              title="Quitar ítem"
+                            >
+                              <Trash2 size={15} strokeWidth={1.9} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -824,53 +1167,72 @@ export function Cotizacion() {
                 <Field label="Notas" full>
                   <textarea
                     className="mca-textarea"
-                    placeholder="Condiciones, garantía, observaciones..."
+                    placeholder="Observaciones generales de la cotización..."
                     value={formulario.notas}
                     onChange={(event) =>
                       setFormulario((actual) => ({ ...actual, notas: event.target.value }))
                     }
                   />
                 </Field>
+                <Field label="Términos y condiciones" full hint="Se imprimen en el PDF y se muestran en el detalle.">
+                  <textarea
+                    className="mca-textarea"
+                    placeholder="Forma de pago, tiempos de ejecución, validez de la oferta..."
+                    value={formulario.terminos}
+                    onChange={(event) =>
+                      setFormulario((actual) => ({ ...actual, terminos: event.target.value }))
+                    }
+                  />
+                </Field>
+                <Field label="Garantías" full hint="Qué se garantiza y por cuánto tiempo.">
+                  <textarea
+                    className="mca-textarea"
+                    placeholder="Garantía sobre la mano de obra y los materiales instalados..."
+                    value={formulario.garantias}
+                    onChange={(event) =>
+                      setFormulario((actual) => ({ ...actual, garantias: event.target.value }))
+                    }
+                  />
+                </Field>
               </div>
 
-              <div
-                style={{
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: 16,
-                }}
-              >
-                <div className="mca-row" style={{ justifyContent: 'space-between' }}>
-                  <span className="mca-muted">Subtotal</span>
-                  <span className="mca-strong">{formatearMoneda(totalesFormulario.subtotal, 'COP')}</span>
-                </div>
-                {totalesFormulario.montoDescuento > 0 && (
+              <div className="mca-total-col">
+                <div className="mca-total-fijo">
+                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                    <span className="mca-muted">Subtotal</span>
+                    <span className="mca-strong">{formatearMoneda(totalesFormulario.subtotal, 'COP')}</span>
+                  </div>
+                  {totalesFormulario.montoDescuento > 0 && (
+                    <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
+                      <span className="mca-muted">
+                        Descuento ({Number(formulario.descuento) || 0}%)
+                      </span>
+                      <span className="mca-danger">
+                        − {formatearMoneda(totalesFormulario.montoDescuento, 'COP')}
+                      </span>
+                    </div>
+                  )}
                   <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
                     <span className="mca-muted">
-                      Descuento ({Number(formulario.descuento) || 0}%)
+                      IVA ({Number(formulario.ivaPorcentaje) || 0}%)
                     </span>
-                    <span className="mca-danger">
-                      − {formatearMoneda(totalesFormulario.montoDescuento, 'COP')}
+                    <span className="mca-strong">
+                      {formatearMoneda(totalesFormulario.montoImpuesto, 'COP')}
                     </span>
                   </div>
-                )}
-                <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-                  <span className="mca-muted">
-                    IVA ({Number(formulario.ivaPorcentaje) || 0}%)
-                  </span>
-                  <span className="mca-strong">
-                    {formatearMoneda(totalesFormulario.montoImpuesto, 'COP')}
-                  </span>
-                </div>
-                <hr className="mca-divider" style={{ margin: '12px 0' }} />
-                <div className="mca-row" style={{ justifyContent: 'space-between' }}>
-                  <span className="mca-strong">Total</span>
-                  <span className="mca-yellow mca-strong" style={{ fontSize: 18 }}>
-                    {formatearMoneda(totalesFormulario.total, 'COP')}
+                  <hr className="mca-divider" style={{ margin: '12px 0' }} />
+                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                    <span className="mca-strong">Total</span>
+                    <span className="mca-total-fijo__monto">
+                      {formatearMoneda(totalesFormulario.total, 'COP')}
+                    </span>
+                  </div>
+                  <span className="mca-hint">Todos los valores se expresan en {MONEDA_COTIZACION}.</span>
+                  <span className="mca-hint" style={{ display: 'block', marginTop: 4 }}>
+                    Abono mínimo ({ABONO_MINIMO_PORCENTAJE}%):{' '}
+                    {formatearMoneda(Math.round(totalesFormulario.total * ABONO_MINIMO_PORCENTAJE / 100), 'COP')}
                   </span>
                 </div>
-                <span className="mca-hint">Todos los valores se expresan en {MONEDA_COTIZACION}.</span>
               </div>
             </div>
           </div>
@@ -886,6 +1248,12 @@ export function Cotizacion() {
         size="lg"
         footer={
           <>
+            {cotizacionDetalle && (
+              <div className="mca-total-resumen">
+                <span>Total</span>
+                <strong>{formatearMoneda(cotizacionDetalle.total, 'COP')}</strong>
+              </div>
+            )}
             <Button onClick={() => setCotizacionDetalle(null)}>Cerrar</Button>
             <Button
               icon={FileText}
@@ -1016,11 +1384,121 @@ export function Cotizacion() {
               </div>
             )}
 
+            {cotizacionDetalle.estadoCotizacion !== 'Rechazado' && (
+              <form
+                className="mca-abono-box"
+                onSubmit={(event) => handleAbonar(event, cotizacionDetalle)}
+              >
+                <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                  <span className="mca-strong">Registrar abono en esta cotización</span>
+                  <Badge tone={abonadoDetalle >= minimoDetalle ? 'success' : 'yellow'}>
+                    Mínimo {formatearMoneda(minimoDetalle, 'COP')} ({ABONO_MINIMO_PORCENTAJE}%)
+                  </Badge>
+                </div>
+                <div className="mca-form-grid">
+                  <Field
+                    label="Monto del abono"
+                    required
+                    hint={
+                      abonadoDetalle <= 0
+                        ? `Primer abono: no puede ser inferior a ${formatearMoneda(minimoDetalle, 'COP')}.`
+                        : `Saldo pendiente: ${formatearMoneda(
+                            Math.max(0, cotizacionDetalle.total - abonadoDetalle),
+                            'COP',
+                          )}.`
+                    }
+                  >
+                    <input
+                      className="mca-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                      value={abono.monto}
+                      onChange={(event) => setAbono((actual) => ({ ...actual, monto: event.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Fecha del abono" hint="Se escribe sola con la fecha de hoy; solo se acepta hoy o fechas anteriores.">
+                    <input
+                      className="mca-input"
+                      type="date"
+                      max={fechaISO()}
+                      value={abono.fecha}
+                      onChange={(event) => setAbono((actual) => ({ ...actual, fecha: event.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Hora del abono" hint="Se escribe sola con la hora actual del pago.">
+                    <input
+                      className="mca-input"
+                      type="time"
+                      value={abono.hora}
+                      onChange={(event) => setAbono((actual) => ({ ...actual, hora: event.target.value }))}
+                    />
+                  </Field>
+                  <Field label="Método de pago">
+                    <select
+                      className="mca-select"
+                      value={abono.metodo}
+                      onChange={(event) => setAbono((actual) => ({ ...actual, metodo: event.target.value }))}
+                    >
+                      {METODOS_PAGO.map((metodo) => (
+                        <option key={metodo} value={metodo}>
+                          {metodo}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Referencia" hint="Número de transacción, konsolidado o recibo.">
+                    <input
+                      className="mca-input"
+                      placeholder="Opcional"
+                      value={abono.referencia}
+                      onChange={(event) =>
+                        setAbono((actual) => ({ ...actual, referencia: event.target.value }))
+                      }
+                    />
+                  </Field>
+                </div>
+                <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                  <span className="mca-hint">
+                    Primero se recibe el pago; con el mínimo cubierto la cotización ya puede aprobarse.
+                  </span>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    icon={CircleDollarSign}
+                    disabled={abonando}
+                  >
+                    {abonando ? 'Registrando...' : 'Abonar'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
             {cotizacionDetalle.notas && (
               <div className="mca-notice">
                 <FileText size={15} strokeWidth={2} />
                 <span>
                   <strong>Observaciones:</strong> {cotizacionDetalle.notas}
+                </span>
+              </div>
+            )}
+
+            {cotizacionDetalle.terminos && (
+              <div className="mca-notice is-info">
+                <FileText size={15} strokeWidth={2} />
+                <span>
+                  <strong>Términos y condiciones:</strong> {cotizacionDetalle.terminos}
+                </span>
+              </div>
+            )}
+
+            {cotizacionDetalle.garantias && (
+              <div className="mca-notice is-success">
+                <CheckCircle2 size={15} strokeWidth={2} />
+                <span>
+                  <strong>Garantías:</strong> {cotizacionDetalle.garantias}
                 </span>
               </div>
             )}

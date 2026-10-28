@@ -21,6 +21,20 @@ export function manejarErrores(error, req, res, next) {
     return res.status(400).json({ mensaje: 'Uno o más datos no tienen un valor permitido.' });
   }
 
+  // La base de datos es remota: estos fallos de red/timeout deben explicarse, no quedar en 500 genérico.
+  const erroresDeConexion = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', '53300', '57P01'];
+  if (erroresDeConexion.includes(error.code)) {
+    return res.status(503).json({
+      mensaje: 'La base de datos no respondió a tiempo. Espera unos segundos e inténtalo de nuevo.',
+    });
+  }
+
+  if (error.code === '57014') {
+    return res.status(504).json({
+      mensaje: 'La consulta superó el tiempo permitido. Reduce los datos buscados e inténtalo de nuevo.',
+    });
+  }
+
   console.error(error);
   return res.status(500).json({ mensaje: 'Ocurrió un error en el servidor.' });
 }

@@ -80,11 +80,14 @@ export function Button({
   className = '',
   ...rest
 }) {
-  const classes = [
+  // Todo botón que dice «Cerrar» recibe su propio color, en claro y en oscuro.
+  const esCerrar = typeof children === 'string' && children.trim().toLowerCase() === 'cerrar';
+  const clases = [
     'mca-btn',
     variant === 'primary' ? 'mca-btn--primary' : '',
     variant === 'ghost' ? 'mca-btn--ghost' : '',
     variant === 'danger' ? 'mca-btn--danger' : '',
+    variant === 'cerrar' || esCerrar ? 'mca-btn--cerrar' : '',
     size === 'sm' ? 'mca-btn--sm' : '',
     className,
   ]
@@ -92,8 +95,12 @@ export function Button({
     .join(' ');
 
   return (
-    <button type={type} className={classes} {...rest}>
-      {Icon && <Icon size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />}
+    <button type={type} className={clases} {...rest}>
+      {Icon ? (
+        <Icon size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />
+      ) : esCerrar ? (
+        <X size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />
+      ) : null}
       {children}
     </button>
   );
@@ -115,13 +122,118 @@ export function SearchInput({ value, onChange, placeholder = 'Buscar...', disabl
   );
 }
 
-export function Field({ label, required, hint, error, full = false, children }) {
+// Mensaje flotante por defecto: explica qué se escribe en cada campo del formulario.
+const DESCRIPCIONES_CAMPO = {
+  'nombre': 'Nombre completo tal como aparece en el documento de identidad.',
+  'nombre completo': 'Nombre y apellidos completos de la persona.',
+  'nombre del material': 'Referencia comercial del elemento con su calibre o medida.',
+  'nombre del rol': 'Nombre legible del rol dentro del sistema.',
+  'nombre del servicio': 'Nombre del servicio tal como se mostrará en la cotización.',
+  'nombre de la categoría': 'Nombre con el que se agrupan los materiales o servicios.',
+  'tipo de documento': 'Tipo de identificación: C.C., C.E., T.I.T. o NIT.',
+  'documento': 'Número de identificación sin dígitos de más.',
+  'documento / nit': 'Número de identificación tributaria o personal.',
+  'número de documento': 'Número único de identificación, no debe repetirse.',
+  'nit': 'Número de identificación tributaria de la empresa.',
+  'razón social / nombre': 'Nombre registrado tal como aparece en el RUT o la cédula.',
+  'razón social / nombre del tercero': 'Nombre o razón social del técnico externo.',
+  'tipo de cliente': 'Si el cliente es persona natural o jurídica.',
+  'tipo de propiedad': 'Clase de inmueble donde se presta el servicio: residencial, comercial o industrial.',
+  'persona de contacto': 'Nombre de la persona que autoriza y recibe el servicio.',
+  'número de la persona de contacto': 'Celular directo del contacto para la visita.',
+  'teléfono': 'Número fijo o celular para coordinar la visita.',
+  'teléfono del cliente': 'Línea principal de contacto del cliente.',
+  'correo electrónico': 'Buzón donde se enviará la cotización y los soportes.',
+  'correo': 'Buzón electrónico de contacto.',
+  'departamento': 'Departamento donde se encuentra la propiedad; limita la lista de municipios.',
+  'municipio': 'Municipio o ciudad de la propiedad.',
+  'municipio donde reside': 'Municipio de residencia del tercero, se usa para asignar técnicos cercanos.',
+  'dirección': 'Dirección completa del predio: calle, número y barrio.',
+  'dirección de residencia': 'Dirección del tercero: calle, número y barrio.',
+  'dirección del servicio': 'Lugar físico donde se realizará el trabajo.',
+  'zona': 'Zona de atención dentro del municipio para la ruta del técnico.',
+  'cliente': 'Cliente al que pertenece el documento.',
+  'proyecto': 'Nombre interno del trabajo para identificarlo en el listado.',
+  'descripcion': 'Explicación breve del alcance del servicio o del material.',
+  'descripción del trabajo': 'Qué se va a hacer, paso a paso, en el sitio.',
+  'categoria': 'Familia a la que pertenece el elemento.',
+  'categoría': 'Familia a la que pertenece el elemento.',
+  'unidad de medida': 'Cómo se cuenta el material: metro, unidad, kilogramo, galón.',
+  'unidad de cobro': 'Base sobre la cual se cobra el servicio.',
+  'unidad por defecto': 'Unidad que se sugiere al crear materiales en esta categoría.',
+  'moneda': 'Moneda en la que se registra el precio.',
+  'precio': 'Valor unitario del servicio en la moneda seleccionada.',
+  'precio unitario': 'Valor de una unidad del material.',
+  'precio unitario (cop)': 'Valor de una unidad del material en pesos colombianos.',
+  'cantidad': 'Número de unidades del material.',
+  'cantidad del material': 'Unidades del material que llevará el técnico.',
+  'stock': 'Unidades disponibles en bodega.',
+  'stock mínimo': 'Cantidad a partir de la cual el material se considera bajo stock.',
+  'stock crítico': 'Cantidad por debajo de la cual no se puede despachar el material.',
+  'bajo stock': 'Cantidad con la que el material empieza a marcar alerta amarilla.',
+  'horas estimadas': 'Jornadas de trabajo que requiere la actividad.',
+  'tiempo estimado': 'Duración total prevista para agendar la actividad.',
+  'duración': 'Tiempo que toma ejecutar la actividad.',
+  'duración estimada': 'Tiempo previsto de ejecución.',
+  'días de vigencia': 'Cuántos días permanece válida la oferta antes de vencer.',
+  'vigencia': 'Fecha hasta la cual el cliente puede aceptar la cotización.',
+  'vence': 'Fecha límite de la oferta.',
+  'iva (%)': 'Porcentaje de impuesto aplicado al total.',
+  'descuento (%)': 'Reducción porcentual sobre el subtotal.',
+  'emisión': 'Fecha en que se crea la cotización.',
+  'fecha de emisión': 'Día en que se expide el documento.',
+  'fecha': 'Fecha del registro.',
+  'fecha del servicio': 'Día programado para la visita.',
+  'fecha programada': 'Día en que se realizará la actividad.',
+  'fecha del abono': 'Día en que entró el dinero; se escribe solo.',
+  'fecha del pago': 'Día en que se recibió el pago.',
+  'hora': 'Hora del registro.',
+  'hora de inicio': 'Hora en que arranca la actividad; no puede ser anterior a la hora actual.',
+  'hora de finalización': 'Hora en que termina la actividad.',
+  'hora del abono': 'Hora en que se recibió el abono; se completa sola.',
+  'hora del pago': 'Hora en que se recibió el pago.',
+  'horario': 'Franja de atención del día.',
+  'método de pago': 'Cómo se realizó la transferencia, efectivo o tarjeta.',
+  'monto del abono': 'Valor que el cliente entrega como anticipo.',
+  'referencia': 'Número del comprobantes bancario o de la transacción.',
+  'referencias': 'Datos de respaldo del pago.',
+  'prioridad': 'Qué tan rápido se atiende el servicio: Baja, Media o Alta.',
+  'responsable': 'Persona que responde por la actividad.',
+  'técnico': 'Técnico externo asignado al trabajo.',
+  'técnico responsable': 'Técnico que ejecuta la actividad.',
+  'usuario': 'Nombre de acceso de la cuenta.',
+  'usuario de acceso': 'Identificador con el que la persona inicia sesión.',
+  'contraseña': 'Clave secreta de la cuenta.',
+  'confirmar contraseña': 'Repita la misma clave para verificarla.',
+  'rol': 'Perfil de permisos asignado a la cuenta.',
+  'estado': 'Situación actual del registro.',
+  'estado del servicio': 'Si el servicio está activo, pausado o inactivo.',
+  'estado de la cotización': 'Momento del flujo en que se encuentra la cotización.',
+  'estado de la cuenta': 'Si la cuenta puede iniciar sesión o está bloqueada.',
+  'nota': 'Comentario libre sobre el registro.',
+  'notas': 'Aclaraciones para el técnico o el cliente.',
+  'términos y condiciones': 'Condiciones comerciales que acepta el cliente.',
+  'garantías': 'Cobertura y tiempo de garantía ofrecida.',
+};
+
+export function Field({ label, required, hint, error, full = false, tooltip, children }) {
+  // El mensaje flotante muestra la explicación completa al pasar el mouse sobre el campo.
+  const descripcionPorEtiqueta = label
+    ? DESCRIPCIONES_CAMPO[String(label).trim().toLowerCase()]
+    : undefined;
+  const mensajeFlotante = tooltip || hint || descripcionPorEtiqueta;
+
   return (
     <div className={`mca-field ${full ? 'mca-field--full' : ''} ${error ? 'has-error' : ''}`.trim()}>
       {label && (
         <span className="mca-label">
           {label}
           {required && <span className="mca-required">*</span>}
+        </span>
+      )}
+      {mensajeFlotante && (
+        <span className="mca-field-tip" role="tooltip">
+          {mensajeFlotante}
         </span>
       )}
       {children}
@@ -317,6 +429,14 @@ export function useToast() {
   }, []);
 
   return { toast, notify, close };
+}
+
+// Une los mensajes de validación pendientes para el toast flotante de cada formulario.
+export function resumenErroresFormulario(errores = {}) {
+  const pendientes = Object.values(errores).flat().filter(Boolean);
+  return pendientes.length
+    ? `Completa los mensajes obligatorios: ${pendientes.join(' ')}`
+    : '';
 }
 
 export function Combobox({

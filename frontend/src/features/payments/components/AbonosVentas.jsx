@@ -15,6 +15,7 @@ import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 import {
   Badge,
   Button,
@@ -31,6 +32,7 @@ import {
   Panel,
   SearchInput,
   Toast,
+  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -41,7 +43,10 @@ import {
 import { formatearHora12 } from '../../../shared/services/catalogos.js';
 import {
   METODOS_PAGO,
+  ABONO_MINIMO_PORCENTAJE,
   buscarCuentas,
+  fechaPagoFutura,
+  minimoAbonoInicial,
   resumenPagos,
 } from '../../../shared/services/pagosService.js';
 
@@ -154,6 +159,10 @@ export default function AbonosVentas() {
     return cuentaFormulario?.saldo || 0;
   }, [modoPago, pagoEditando, cuentaFormulario]);
 
+  // El abono inicial exige el 30% del total; después se puede abonar cualquier monto hasta el saldo.
+  const minimoInicial = minimoAbonoInicial(cuentaFormulario);
+  const primerAbono = modoPago === 'crear' && Number(cuentaFormulario?.abonado || 0) <= 0;
+
   const abrirRegistrar = (cuenta = null) => {
     if (cuenta && cuenta.saldo <= 0) {
       notify('info', 'Cuenta liquidada', `${cuenta.cotizacionId} no tiene saldo pendiente.`);
@@ -166,6 +175,10 @@ export default function AbonosVentas() {
     setFormPago({
       ...FORMULARIO_PAGO(),
       cotizacionId: cuenta ? String(cuenta.cotizacionId) : '',
+      // En el primer abono se sugiere directamente el mínimo del 30%.
+      monto: cuenta && Number(cuenta.abonado) <= 0
+        ? String(minimoAbonoInicial(cuenta))
+        : '',
     });
     setDetalleClave(null);
     setModalPago(true);
@@ -206,13 +219,21 @@ export default function AbonosVentas() {
       nuevosErrores.monto = 'Ingresa un monto mayor que cero.';
     } else if (monto > disponibleFormulario + 0.01) {
       nuevosErrores.monto = `El monto supera el disponible (${formatearMoneda(disponibleFormulario, 'COP')}).`;
+    } else if (primerAbono && monto + 0.01 < minimoInicial) {
+      nuevosErrores.monto = `El primer abono debe ser mínimo ${formatearMoneda(minimoInicial, 'COP')} (${ABONO_MINIMO_PORCENTAJE}% del total).`;
     }
     if (!formPago.metodo) nuevosErrores.metodo = 'Selecciona el método de pago.';
     if (!formPago.fecha) nuevosErrores.fecha = 'Selecciona la fecha del pago.';
+    if (formPago.fecha && fechaPagoFutura(formPago.fecha)) {
+      nuevosErrores.fecha = 'La fecha del pago debe ser hoy o anterior.';
+    }
     if (!formPago.hora) nuevosErrores.hora = 'Indica la hora del pago.';
 
     setErroresPago(nuevosErrores);
-    if (Object.keys(nuevosErrores).length > 0) return;
+    if (Object.keys(nuevosErrores).length > 0) {
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
+      return;
+    }
 
     try {
       if (modoPago === 'editar') {
@@ -464,7 +485,10 @@ export default function AbonosVentas() {
                 </tr>
               ) : (
                 filtradas.map((cuenta) => (
-                  <tr key={cuenta.clave}>
+                  <tr
+                    key={cuenta.clave}
+                    className={claseFilaEstado(cuenta.estado, 'pago')}
+                  >
                     <td className="is-nowrap">
                       <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                         <Badge tone="yellow">{cuenta.cotizacionId}</Badge>
@@ -712,7 +736,11 @@ export default function AbonosVentas() {
             label="Monto del abono"
             required
             error={erroresPago.monto}
-            hint={`Disponible para aplicar: ${formatearMoneda(disponibleFormulario, 'COP')}`}
+            hint={
+              primerAbono
+                ? `Abono inicial: mínimo ${formatearMoneda(minimoInicial, 'COP')} (${ABONO_MINIMO_PORCENTAJE}% del total). Disponible ${formatearMoneda(disponibleFormulario, 'COP')}.`
+                : `Disponible para aplicar: ${formatearMoneda(disponibleFormulario, 'COP')}`
+            }
           >
             <input
               className="mca-input"
@@ -727,9 +755,11 @@ export default function AbonosVentas() {
               placeholder="0"
             />
             <div className="mca-row" style={{ gap: 6, marginTop: 6 }}>
-              <Button size="sm" variant="ghost" onClick={() => aplicarPorcentaje(0.5)}>
-                50%
-              </Button>
+              {primerAbono && (
+                <Button size="sm" variant="ghost" onClick={() => aplicarPorcentaje(0.5)}>
+                  Mínimo {ABONO_MINIMO_PORCENTAJE}%
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => aplicarPorcentaje(1)}>
                 Saldo total
               </Button>
@@ -750,10 +780,16 @@ export default function AbonosVentas() {
             </select>
           </Field>
 
-          <Field label="Fecha del pago" required error={erroresPago.fecha}>
+          <Field
+            label="Fecha del pago"
+            required
+            error={erroresPago.fecha}
+            hint="Se registra el día en que se recibió el dinero: hoy o una fecha anterior."
+          >
             <input
               className="mca-input"
               type="date"
+              max={fechaISO()}
               value={formPago.fecha}
               onChange={(event) => {
                 setFormPago((prev) => ({ ...prev, fecha: event.target.value }));
@@ -797,8 +833,9 @@ export default function AbonosVentas() {
           <div className="mca-field mca-field--full">
             <div className="mca-notice is-info">
               <div>
-                El estado de la cuenta (Pendiente, Abono parcial o Liquidado) se calcula
-                automáticamente con la suma de los abonos registrados.
+                Primero se recibe la plata: la cotización solo se aprueba cuando el abono alcanza el{' '}
+                {ABONO_MINIMO_PORCENTAJE}% del total. El estado de la cuenta (Pendiente, Abono parcial
+                o Liquidado) se calcula automáticamente con la suma de los abonos registrados.
               </div>
             </div>
           </div>

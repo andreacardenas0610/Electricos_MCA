@@ -24,12 +24,14 @@ export const ESTADOS = {
   ],
   inventario: [
     { nombre: 'Óptimo', ...PALETA.verde },
+    { nombre: 'Medio', ...PALETA.amarillo },
     { nombre: 'Bajo Stock', ...PALETA.amarillo },
     { nombre: 'Crítico', ...PALETA.rojo },
   ],
   servicio: [
     { nombre: 'Activo', ...PALETA.verde },
     { nombre: 'Pausado', ...PALETA.amarillo },
+    { nombre: 'Inactivo', ...PALETA.rojo },
   ],
   usuario: [
     { nombre: 'Activo', ...PALETA.verde },
@@ -78,19 +80,13 @@ export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width
   const config = estados[indice] || estados[0];
   if (!config) return null;
 
-  const total = estados.length;
   const ancho = Math.max(width, 58 + config.nombre.length * 6.3);
-  const izquierda = total === 1 ? (ancho - 24) / 2 : 4 + (indice * (ancho - 32)) / (total - 1);
-  const padding = indice === 0
-    ? '0 12px 0 29px'
-    : indice === total - 1
-      ? '0 29px 0 12px'
-      : '0 18px';
 
   const clave = Object.keys(PALETA).find(
     (color) => PALETA[color].bg === config.bg && PALETA[color].border === config.border,
   );
 
+  // El estado se muestra como pastilla de color, sin el indicador deslizante.
   return (
     <button
       type="button"
@@ -100,17 +96,10 @@ export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width
       className={`mca-estado mca-estado--${TONO[clave] || 'info'}`}
       style={{
         width: ancho,
-        padding,
         cursor: onClick ? 'pointer' : 'default',
       }}
     >
-      <span
-        className="mca-estado__thumb"
-        style={{
-          left: `${izquierda}px`,
-        }}
-      />
-      <span style={{ position: 'relative', zIndex: 1 }}>{config.nombre}</span>
+      {config.nombre}
     </button>
   );
 }

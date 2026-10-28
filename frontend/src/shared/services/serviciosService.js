@@ -75,6 +75,7 @@ const SERVICIOS_INICIALES = [
 export function normalizarServicio(servicio) {
   const moneda = MONEDAS_SERVICIO.includes(servicio.moneda) ? servicio.moneda : 'COP';
   const regla = reglaTiempoMoneda(moneda);
+  const horas = numero(servicio.horas) > 0 ? numero(servicio.horas) : regla.horas;
 
   return {
     ...servicio,
@@ -86,10 +87,12 @@ export function normalizarServicio(servicio) {
     precioNumerico: numero(servicio.precioNumerico ?? servicio.precio),
     moneda,
     subPrecio: moneda,
-    tiempo: regla.texto,
-    horas: regla.horas,
+    tiempo: servicio.tiempo || (horas === regla.horas ? regla.texto : `${horas} Horas`),
+    horas,
     categoria: servicio.categoria || 'Instalación',
-    estado: servicio.estado === 'Pausado' ? 'Pausado' : 'Activo',
+    categoriaId: servicio.categoriaId ?? servicio.categoria_id ?? null,
+    estado: ['Activo', 'Pausado', 'Inactivo'].includes(servicio.estado) ? servicio.estado : 'Activo',
+    materiales: Array.isArray(servicio.materiales) ? servicio.materiales : [],
   };
 }
 

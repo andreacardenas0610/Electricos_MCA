@@ -8,6 +8,8 @@ export const TIPOS_PROPIEDAD = [
   { id: 3, nombre: 'Industrial' },
 ];
 
+export const TIPOS_DOCUMENTO = ['Cédula', 'Cédula de extranjería', 'NIT', 'Pasaporte'];
+
 const CLIENTES_INICIALES = [
   {
     id: 1,
@@ -141,8 +143,14 @@ export function normalizarCliente(cliente) {
     id: cliente.id,
     nombre: cliente.nombre_razon_social || cliente.nombre || '',
     documento: cliente.documento_nit || cliente.documento || '',
+    tipoDocumento: cliente.tipo_documento || cliente.tipoDocumento
+      || (tipoPropiedad === 'Residencial' ? 'Cédula' : 'NIT'),
     tipoCliente: cliente.tipo_cliente || (tipoPropiedad === 'Residencial' ? 'Natural' : 'Jurídico'),
     tipoPropiedad,
+    // Un empleado (tercero activo) también puede registrar ventas como cliente.
+    esEmpleado: cliente.es_empleado === true || cliente.esEmpleado === true,
+    terceroId: cliente.tercero_id ?? cliente.terceroId ?? null,
+    empleadoNombre: cliente.empleado_nombre || cliente.empleadoNombre || '',
     contacto: cliente.contacto || '',
     telefono: cliente.telefono || '',
     correo: cliente.correo_electronico || cliente.correo || '',
@@ -217,8 +225,12 @@ export function guardarCliente(datos, idOriginal = null) {
     nombre_razon_social: nombre,
     documento_nit: documento,
     tipo_cliente: tipoPropiedad.nombre === 'Residencial' ? 'Natural' : 'Jurídico',
+    tipo_documento: String(datos.tipoDocumento || '').trim()
+      || (tipoPropiedad.nombre === 'Residencial' ? 'Cédula' : 'NIT'),
     tipo_propiedad_id: tipoPropiedad.id,
     tipo_propiedad: tipoPropiedad.nombre,
+    tercero_id: Number(datos.terceroId) > 0 ? Number(datos.terceroId) : null,
+    es_empleado: datos.esEmpleado === true || Number(datos.terceroId) > 0,
     contacto: String(datos.contacto || '').trim(),
     telefono,
     correo_electronico: correo,

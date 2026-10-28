@@ -266,6 +266,19 @@
   color: #ffffff;
 }
 
+/* El botón Cerrar lleva color propio (ámbar) para que se vea en modo claro y oscuro. */
+.mca-btn--cerrar {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning-text);
+}
+
+.mca-btn--cerrar:hover {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #1c1917;
+}
+
 .mca-btn--sm {
   height: 32px;
   padding: 0 12px;
@@ -416,6 +429,33 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  position: relative;
+}
+
+/* Mensaje flotante: al pasar el mouse sobre el campo explica qué se debe diligenciar. */
+.mca-field-tip {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: none;
+  padding: 8px 11px;
+  border: 1px solid var(--accent-yellow-border);
+  border-left: 4px solid var(--accent-yellow);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  color: var(--text-main);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.mca-field:hover > .mca-field-tip,
+.mca-field:focus-within > .mca-field-tip {
+  display: block;
 }
 
 .mca-field--full {
@@ -534,7 +574,36 @@
 /* ---------- Tablas ---------- */
 .mca-table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow: auto;
+  /* Scroll fijo: la tabla conserva su altura y solo se desplaza el cuerpo. */
+  max-height: min(62vh, 620px);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.mca-table-wrap--compact {
+  max-height: min(38vh, 320px);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.mca-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.mca-table-wrap::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+}
+
+.mca-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 8px;
+  border: 2px solid var(--bg-elevated);
+}
+
+.mca-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--text-soft);
 }
 
 .mca-table {
@@ -544,6 +613,9 @@
 }
 
 .mca-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   text-align: left;
   padding: 11px 18px;
   font-size: 9.5px;
@@ -569,6 +641,75 @@
 
 .mca-table tbody tr:hover {
   background: var(--row-hover);
+}
+
+/* Fila completa según el estado del registro (stock crítico o bajo). */
+.mca-table tbody tr.mca-row--critico td {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.mca-table tbody tr.mca-row--critico:hover td {
+  background: var(--danger-border);
+}
+
+.mca-table tbody tr.mca-row--bajo td {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.mca-table tbody tr.mca-row--bajo:hover td {
+  background: var(--warning-border);
+}
+
+.mca-table tbody tr.mca-row--inactivo td {
+  background: var(--bg-elevated);
+  color: var(--text-soft);
+  opacity: 0.72;
+}
+
+/* Fila expandable con los materiales asignados a un servicio. */
+.mca-table tbody tr.mca-row--detalle:hover {
+  background: transparent;
+}
+
+.mca-table tbody tr.mca-row--detalle > td {
+  padding: 14px 18px 18px;
+  background: var(--bg-elevated);
+}
+
+.mca-subtabla {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mca-subtabla__titulo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.mca-table--sub {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  font-size: 12.5px;
+}
+
+.mca-table--sub th {
+  position: static;
+  padding: 9px 14px;
+  background: var(--bg-main);
+}
+
+.mca-table--sub td {
+  padding: 9px 14px;
 }
 
 .mca-table tbody tr:last-child td {
@@ -638,6 +779,49 @@
   border-color: var(--border-color);
   color: var(--text-muted);
 }
+
+.mca-badge--inline {
+  margin-top: 5px;
+}
+
+/* ---------- Total fijo de la cotización ---------- */
+/* La columna del total se estira y la tarjeta queda pegada arriba mientras se baja. */
+.mca-total-col {
+  align-self: stretch;
+  min-width: 0;
+}
+
+.mca-total-fijo {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent-yellow-border);
+  border-left: 4px solid var(--accent-yellow);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.mca-total-fijo__monto {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent-yellow);
+}
+
+.mca-modal__foot .mca-total-resumen {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mca-modal__foot .mca-total-resumen strong {
+  font-size: 16px;
+  color: var(--accent-yellow);
+}
 .mca-badge.is-success {
   background: var(--success-bg);
   border-color: var(--success-border);
@@ -683,14 +867,14 @@
   white-space: nowrap;
 }
 
-/* ---------- Estado tipo interruptor ---------- */
+/* ---------- Estado tipo pastilla ---------- */
 .mca-estado {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 14px 0 30px;
+  padding: 0 14px;
   border-radius: 16px;
   border: 1px solid var(--estado-border, var(--border-color));
   background: var(--estado-bg, var(--bg-elevated));
@@ -707,17 +891,6 @@
 
 .mca-estado:disabled {
   cursor: default;
-}
-
-.mca-estado__thumb {
-  position: absolute;
-  top: 3px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--estado-thumb);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
-  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mca-estado--success {
@@ -829,7 +1002,23 @@
 .mca-modal__body {
   padding: 20px 22px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   flex: 1;
+}
+
+.mca-modal__body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.mca-modal__body::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+}
+
+.mca-modal__body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 8px;
+  border: 2px solid var(--bg-card);
 }
 
 .mca-modal__foot {
@@ -920,6 +1109,17 @@
   background: var(--success-bg);
   border-color: var(--success-border);
   color: var(--success-text);
+}
+
+/* ---------- Abono dentro de la cotización ---------- */
+.mca-abono-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
 }
 
 /* ---------- Vacíos ---------- */
@@ -1042,14 +1242,14 @@
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: 90;
   max-height: 240px;
   overflow-y: auto;
   padding: 5px;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--accent-yellow-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-modal);
+  box-shadow: 0 0 0 3px var(--accent-yellow-soft), var(--shadow-modal);
 }
 
 .mca-combobox__option {
@@ -1082,8 +1282,12 @@
 .mca-combobox__empty {
   padding: 12px 10px;
   font-size: 11.5px;
-  color: var(--text-muted);
+  font-weight: 700;
   text-align: center;
+  color: var(--text-main);
+  background: var(--accent-yellow-soft);
+  border: 1px dashed var(--accent-yellow-border);
+  border-radius: var(--radius-sm);
 }
 
 .mca-combobox__selected {

@@ -13,8 +13,22 @@ const metodos = [
   'PSE',
 ];
 
+// El primer abono debe cubrir como mínimo el 30% del valor de la cotización.
+const ABONO_MINIMO_PORCENTAJE = 30;
+
 function redondear(valor) {
   return Math.round((Number(valor) + Number.EPSILON) * 100) / 100;
+}
+
+function hoy() {
+  const ahora = new Date();
+  return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+}
+
+// Si el formulario no envía hora, el abono se quema con la hora en que llega el dinero.
+function ahoraHora() {
+  const ahora = new Date();
+  return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 }
 
 function estadoPago(total, abonado) {
@@ -51,6 +65,9 @@ function validarPago(datos, crear = false) {
   }
   if (datos.metodo && !metodos.includes(datos.metodo)) errores.push('metodo no es válido.');
   if (datos.fecha && !fechaValida(datos.fecha)) errores.push('fecha debe tener formato AAAA-MM-DD.');
+  if (fechaValida(datos.fecha) && datos.fecha > hoy()) {
+    errores.push('la fecha del abono no puede ser futura, debe ser hoy o anterior.');
+  }
   if (datos.hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(datos.hora)) {
     errores.push('hora debe tener formato HH:MM.');
   }
@@ -84,7 +101,7 @@ router.get('/cuentas', async (req, res, next) => {
          FROM cotizaciones c
          LEFT JOIN pagos p ON p.cotizacion_codigo = c.codigo
          GROUP BY c.codigo
-         HAVING c.estado = 'Aprobado' OR COUNT(p.id) > 0
+         HAVING c.estado <> 'Rechazado' OR COUNT(p.id) > 0
          ORDER BY c.fecha_emision DESC, c.codigo DESC`,
       ),
       pool.query(
@@ -201,32 +218,44 @@ router.post('/', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ mensaje: 'Cotización no encontrada.' });
     }
-    if (cotizacion.estado !== 'Aprobado') {
+    // El abono se recibe antes de aprobar la cotización, por eso Pendiente también paga.
+    if (cotizacion.estado === 'Rechazado') {
       await client.query('ROLLBACK');
-      return res.status(400).json({ mensaje: 'Solo se pueden registrar abonos para cotizaciones aprobadas.' });
+      return res.status(400).json({ mensaje: 'La cotización está rechazada y no admite abonos.' });
     }
     const { rows: sumaRows } = await client.query(
       'SELECT COALESCE(SUM(monto), 0) AS abonado FROM pagos WHERE cotizacion_codigo = $1',
       [cotizacion.codigo],
     );
     const monto = redondear(datos.monto);
-    const saldo = redondear(Number(cotizacion.total) - Number(sumaRows[0].abonado));
+    const abonadoPrevio = redondear(sumaRows[0].abonado);
+    const saldo = redondear(Number(cotizacion.total) - abonadoPrevio);
     if (monto > saldo) {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: `El abono supera el saldo pendiente (${saldo}).` });
+    }
+    if (abonadoPrevio <= 0) {
+      const minimo = redondear(Number(cotizacion.total) * (ABONO_MINIMO_PORCENTAJE / 100));
+      if (monto < minimo - 0.01) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          mensaje: `El abono inicial debe ser mínimo ${minimo} (${ABONO_MINIMO_PORCENTAJE}% del total).`,
+          minimo,
+        });
+      }
     }
     const { rows } = await client.query(
       `INSERT INTO pagos
          (cotizacion_codigo, cotizacion_referencia, cliente_nombre, documento,
           proyecto, monto_total, monto, fecha, hora, metodo, referencia, nota)
        VALUES ($1, $1, $2, $3, $4, $5, $6, COALESCE($7::date, CURRENT_DATE),
-               COALESCE($8::time, '09:00'), $9, $10, $11)
+               COALESCE($8::time, $12::time), $9, $10, $11)
        RETURNING id`,
       [
         cotizacion.codigo, cotizacion.cliente_nombre, cotizacion.documento,
         cotizacion.proyecto, cotizacion.total, monto, datos.fecha || null,
-        datos.hora || '09:00', datos.metodo || 'Efectivo',
-        datos.referencia || '', datos.nota || '',
+        datos.hora || ahoraHora(), datos.metodo || 'Efectivo',
+        datos.referencia || '', datos.nota || '', ahoraHora(),
       ],
     );
     const codigo = await crearCodigo(client, rows[0].id);

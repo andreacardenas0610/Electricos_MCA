@@ -104,6 +104,22 @@ Clientes utiliza las tablas `clientes`, `tipos_propiedad`, `contactos_cliente` y
 3. Haz respaldo de la DB y revisa `database/002_tecnicos_movil_y_evidencias.sql`. Crea `terceros` si no existe. Si ya existe con otros nombres de columnas, compara y respalda primero: la migración agrega los campos que espera la API, pero no puede copiar los datos existentes automáticamente.
 4. Ejecuta la migración una vez: agrega credenciales a `terceros`, la asignación `tercero_id` y fecha/servicio a órdenes, y las columnas para seguimiento y evidencias de terceros. Conserva la antigua relación a `usuarios`.
 5. Después de crear el registro de un técnico externo, ejecuta `npm run configurar-tecnico`. Pide su documento, el nombre de usuario móvil y contraseña, y guarda el hash bcrypt.
+6. Ejecuta una sola vez `database/004_ajustes_gestion.sql`. También es aditiva: crea `categorias_servicio` y `servicios_materiales`, agrega `estado` y `stock_minimo` a `materiales`, `terminos`, `garantias`, `stock_descontado` y `aprobado_en` a `cotizaciones`, `tipo_documento`, `tercero_id` y `es_empleado` a `clientes`, y los datos de residencia (`tipo_documento`, `direccion`, `municipio`, `departamento`) a `terceros`. Impide repetir el mismo material dentro de una misma cotización.
+
+## Envío de cotizaciones por correo
+
+`POST /cotizaciones/:codigo/enviar-correo` usa el contacto registrado en la cotización. Si defines estas variables en `.env`, el envío es automático (requiere `npm install nodemailer`):
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=usuario@example.com
+SMTP_PASS=clave-o-token
+SMTP_FROM="Electricos MCA <usuario@example.com>"
+```
+
+Sin `SMTP_HOST` el endpoint devuelve un enlace `mailto:` ya redactado y el navegador abre el cliente de correo del usuario.
 
 Las migraciones no se ejecutan automáticamente. No vuelvas a correr el esquema inicial si contiene `DROP TABLE`. El seed compartido usa un hash de relleno inválido para el admin; el comando interactivo configura una contraseña que conozcan.
 

@@ -108,7 +108,7 @@ export function Dashboard() {
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", overflowX: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: "'Inter', system-ui, -apple-system, sans-serif", overflow: 'hidden' }}>
       
       {/* Inyección de estilos dinámicos para la barra de scroll personalizada */}
       <style>{`
@@ -124,7 +124,39 @@ export function Dashboard() {
           border-radius: 4px;
         }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-          background: #facc15;
+          background: var(--accent-yellow);
+        }
+        /* Scroll fijo: la barra lateral y el contenido tienen su propia barra de scroll */
+        .app-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-color) transparent;
+        }
+        .app-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .app-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .app-scroll::-webkit-scrollbar-thumb {
+          background: var(--border-color);
+          border-radius: 6px;
+        }
+        .app-scroll::-webkit-scrollbar-thumb:hover {
+          background: var(--accent-yellow);
+        }
+        /* Hover del menú: color amarillo visible en modo claro y en modo oscuro */
+        .sidebar-item {
+          transition: background-color 0.18s ease, color 0.18s ease,
+            border-left-color 0.18s ease, transform 0.18s ease;
+        }
+        .sidebar-item:not(.is-active):hover {
+          background-color: var(--sidebar-hover) !important;
+          color: var(--sidebar-hover-text) !important;
+          border-left-color: var(--sidebar-hover-border) !important;
+          transform: translateX(2px);
+        }
+        .sidebar-item:not(.is-active):hover svg {
+          color: var(--sidebar-hover-text);
         }
       `}</style>
 
@@ -132,14 +164,16 @@ export function Dashboard() {
       <aside style={{ 
         width: '270px', 
         minWidth: '270px',
+        height: '100vh',
         backgroundColor: 'var(--bg-sidebar)', 
         borderRight: '1px solid var(--sidebar-border)', 
         padding: '24px 16px', 
         display: 'flex', 
         flexDirection: 'column', 
-        justify: 'space-between',
+        justifyContent: 'space-between',
         boxSizing: 'border-box',
         boxShadow: '4px 0 20px rgba(0,0,0,0.2)',
+        overflow: 'hidden',
         zIndex: 10
       }}>
         <div>
@@ -148,7 +182,7 @@ export function Dashboard() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '20px' }}>⚡</span>
-                <h1 style={{ color: '#facc15', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+                <h1 style={{ color: 'var(--accent-yellow)', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
                   Eléctricos MCA
                 </h1>
               </div>
@@ -168,6 +202,7 @@ export function Dashboard() {
               gap: '20px', 
               maxHeight: 'calc(100vh - 270px)', 
               overflowY: 'auto',
+              overscrollBehavior: 'contain',
               paddingRight: '6px'
             }}
           >
@@ -192,6 +227,7 @@ export function Dashboard() {
                       <button
                         key={item.id}
                         onClick={() => setSeccionActual(item.id)}
+                        className={`sidebar-item ${activo ? 'is-active' : ''}`.trim()}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -201,26 +237,13 @@ export function Dashboard() {
                           borderRadius: '8px',
                           border: 'none',
                           backgroundColor: activo ? 'var(--sidebar-active)' : 'transparent',
-                          color: activo ? '#facc15' : 'var(--sidebar-text)',
+                          color: activo ? 'var(--accent-yellow)' : 'var(--sidebar-text)',
                           fontWeight: activo ? '700' : '500',
                           cursor: 'pointer',
                           textAlign: 'left',
                           fontSize: '13px',
-                          transition: 'all 0.2s ease',
-                          borderLeft: activo ? '4px solid #facc15' : '4px solid transparent',
+                          borderLeft: activo ? '4px solid var(--accent-yellow)' : '4px solid transparent',
                           boxShadow: activo ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!activo) {
-                            e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)';
-                            e.currentTarget.style.color = '#ffffff';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!activo) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = 'var(--sidebar-text)';
-                          }
                         }}
                       >
                         <span style={{ width: '24px', display: 'flex', justifyContent: 'center', opacity: activo ? 1 : 0.8 }}>
@@ -276,7 +299,7 @@ export function Dashboard() {
                 width: '32px', 
                 height: '32px', 
                 borderRadius: '50%', 
-                backgroundColor: '#facc15', 
+                backgroundColor: 'var(--accent-yellow)', 
                 color: '#0f172a', 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -325,7 +348,7 @@ export function Dashboard() {
       </aside>
 
       {/* ÁREA DE CONTENIDO DINÁMICO */}
-      <main style={{ flex: 1, backgroundColor: 'var(--bg-main)', overflowY: 'auto', width: '100%', boxSizing: 'border-box' }}>
+      <main className="app-scroll" style={{ flex: 1, minWidth: 0, height: '100vh', backgroundColor: 'var(--bg-main)', overflowY: 'auto', overscrollBehavior: 'contain', width: '100%', boxSizing: 'border-box' }}>
         {seccionActual === 'panel' && <PanelControl onNavegar={setSeccionActual} />}
         {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
         {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}

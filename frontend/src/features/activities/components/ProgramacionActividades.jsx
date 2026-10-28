@@ -32,6 +32,7 @@ import {
   Panel,
   SearchInput,
   Toast,
+  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -63,6 +64,7 @@ import {
 } from '../../../shared/services/agendaService.js';
 import { normalizarServicio } from '../../../shared/services/serviciosService.js';
 import { normalizarTecnico } from '../../../shared/services/tercerosService.js';
+import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 
 const FORMULARIO_VACIO = () => ({
   clienteId: '',
@@ -103,6 +105,9 @@ function fechaSugerida() {
   }
   return fechaISO();
 }
+
+// Al Completarse, la actividad se quema: solo se puede consultar.
+const actividadQuemada = (actividad) => actividad?.estado === 'Completada';
 
 export function ProgramacionActividades() {
   const {
@@ -147,9 +152,9 @@ export function ProgramacionActividades() {
   const opcionesClientes = useMemo(
     () => clientes.map((cliente) => ({
       value: String(cliente.id),
-      label: cliente.nombre,
-      meta: cliente.documento,
-      search: `${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.municipio} ${cliente.departamento}`,
+      label: `${cliente.tipoDocumento || ''} ${cliente.documento || ''} · ${cliente.nombre}`.trim(),
+      meta: [cliente.departamento, cliente.municipio].filter(Boolean).join(' · ') || 'Sin ubicación',
+      search: `${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.departamento} ${cliente.municipio}`,
     })),
     [clientes],
   );
@@ -205,6 +210,11 @@ export function ProgramacionActividades() {
 
   const horarioFormulario = horarioDelDia(formulario.fecha);
 
+  // Hora más temprana permitida: la apertura del día, o la hora actual si se agenda hoy.
+  const horaMinimaFormulario = formulario.fecha === hoy
+    ? horaSugerida(formulario.fecha) || horarioFormulario?.apertura || ''
+    : horarioFormulario?.apertura || '';
+
   const validacionViva = useMemo(() => {
     if (
       !formulario.clienteId
@@ -236,6 +246,14 @@ export function ProgramacionActividades() {
   };
 
   const abrirEditar = (actividad) => {
+    if (actividadQuemada(actividad)) {
+      notify(
+        'warning',
+        'Servicio completado',
+        `${actividad.codigo} quedó quemado al completarse; solo puedes consultarlo o descargar su evidencia.`,
+      );
+      return;
+    }
     setActividadEditando(actividad);
     setErrores({});
     setFormulario({
@@ -307,9 +325,19 @@ export function ProgramacionActividades() {
     if (!formulario.tecnicoId) nuevosErrores.tecnicoId = ['Selecciona el técnico responsable.'];
     if (!formulario.fecha) nuevosErrores.fecha = ['Selecciona la fecha del servicio.'];
     if (!formulario.horaInicio) nuevosErrores.horaInicio = ['Selecciona la hora de inicio.'];
+    if (
+      formulario.horaInicio &&
+      horaMinimaFormulario &&
+      formulario.horaInicio < horaMinimaFormulario
+    ) {
+      nuevosErrores.horaInicio = [
+        `La hora de inicio no puede ser anterior a ${horaMinimaFormulario}.`,
+      ];
+    }
 
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -348,6 +376,14 @@ export function ProgramacionActividades() {
   };
 
   const handleCambiarEstado = async (actividad) => {
+    if (actividadQuemada(actividad)) {
+      notify(
+        'warning',
+        'Servicio quemado',
+        `${actividad.codigo} está Completada y queda bloqueada; solo se puede consultar.`,
+      );
+      return;
+    }
     try {
       const actualizada = await apiRequest(`/agenda/${encodeURIComponent(actividad.id)}/estado`, {
         method: 'PATCH',
@@ -355,9 +391,11 @@ export function ProgramacionActividades() {
       });
       await cargarDatos();
       notify(
-        'info',
+        actualizada.estado === 'Completada' ? 'success' : 'info',
         'Estado actualizado',
-        `${actualizada.codigo} pasó a ${actualizada.estado}.`,
+        actualizada.estado === 'Completada'
+          ? `${actualizada.codigo} quedó Finalizada y quemada: ya no se puede editar ni eliminar.`
+          : `${actualizada.codigo} pasó a ${actualizada.estado}.`,
       );
     } catch (error) {
       notify('error', 'No se pudo cambiar el estado', error.message);
@@ -537,7 +575,15 @@ export function ProgramacionActividades() {
                 </tr>
               ) : (
                 filtradas.map((actividad) => (
-                  <tr key={actividad.id}>
+                  <tr
+                    key={actividad.id}
+                    className={[
+                      claseFilaEstado(actividad.estado, 'actividad'),
+                      actividadQuemada(actividad) ? 'mca-row--inactivo' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
                     <td className="is-nowrap">
                       <Badge tone="yellow">{actividad.codigo}</Badge>
                     </td>
@@ -574,18 +620,29 @@ export function ProgramacionActividades() {
                       </div>
                     </td>
                     <td>
-                      <EstadoToggle
-                        estado={actividad.estado}
-                        estados={ESTADOS.actividad}
-                        width={118}
-                        onClick={() => handleCambiarEstado(actividad)}
-                      />
+                      <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        <EstadoToggle
+                          estado={actividad.estado}
+                          estados={ESTADOS.actividad}
+                          width={118}
+                          onClick={
+                            actividadQuemada(actividad)
+                              ? undefined
+                              : () => handleCambiarEstado(actividad)
+                          }
+                        />
+                        {actividadQuemada(actividad) && <Badge tone="neutral">Quemada</Badge>}
+                      </div>
                     </td>
                     <td className="mca-center">
                       <AccionesFila
                         onVer={() => setActividadDetalle(actividad)}
-                        onEditar={() => abrirEditar(actividad)}
-                        onEliminar={() => setActividadEliminar(actividad)}
+                        onEditar={
+                          actividadQuemada(actividad) ? undefined : () => abrirEditar(actividad)
+                        }
+                        onEliminar={
+                          actividadQuemada(actividad) ? undefined : () => setActividadEliminar(actividad)
+                        }
                       />
                     </td>
                   </tr>
@@ -721,12 +778,14 @@ export function ProgramacionActividades() {
             label="Hora de inicio"
             required
             error={errorCampo('horaInicio')}
+            tooltip={`Hora en que arranca el servicio. No se ofrecen las horas que ya pasaron: el mínimo disponible es ${horaMinimaFormulario || 'el cierre del día'}.`}
             hint={`Agenda con al menos ${MARGEN_MINIMO_AGENDA_MINUTOS} min de anticipación.`}
           >
             <input
               className="mca-input"
               type="time"
               step="900"
+              min={horaMinimaFormulario || undefined}
               value={formulario.horaInicio}
               onChange={(event) => {
                 setFormulario((prev) => ({ ...prev, horaInicio: event.target.value }));
@@ -745,7 +804,10 @@ export function ProgramacionActividades() {
             />
           </Field>
 
-          <Field label="Prioridad">
+          <Field
+            label="Prioridad"
+            tooltip="Qué tan rápido se atiende el servicio: Baja, Media o Alta."
+          >
             <select
               className="mca-select"
               value={formulario.prioridad}
@@ -926,7 +988,12 @@ export function ProgramacionActividades() {
                   </thead>
                   <tbody>
                     {incidencias.map((incidencia, indice) => (
-                      <tr key={`${incidencia.id}-${indice}`}>
+                      <tr
+                        key={`${incidencia.id}-${indice}`}
+                        className={
+                          incidencia.severidad === 'error' ? 'mca-row--critico' : 'mca-row--bajo'
+                        }
+                      >
                         <td className="is-nowrap">
                           <Badge tone={incidencia.severidad === 'error' ? 'danger' : 'warning'}>
                             {incidencia.codigo}

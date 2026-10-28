@@ -88,6 +88,12 @@ export function normalizarCotizacion(cotizacion) {
       ? cotizacion.estadoCotizacion
       : 'Pendiente',
     notas: cotizacion.notas || '',
+    terminos: cotizacion.terminos || '',
+    garantias: cotizacion.garantias || '',
+    fechaLlegada: cotizacion.fechaLlegada || cotizacion.creadoEn || cotizacion.fechaEmision,
+    aprobadoEn: cotizacion.aprobadoEn ?? null,
+    stockDescontado: cotizacion.stockDescontado === true,
+    abonado: numero(cotizacion.abonado),
     moneda: MONEDA_COTIZACION,
     items,
   };
@@ -427,6 +433,26 @@ export function fechaVencimiento(cotizacion) {
 
 export function cotizacionVencida(cotizacion) {
   return fechaVencimiento(cotizacion) < fechaISO();
+}
+
+// El abono mínimo para poder aprobar una cotización pendiente.
+export const ABONO_MINIMO_PORCENTAJE = 30;
+
+export function minimoAbono(cotizacion) {
+  return redondear(Math.max(0, numero(cotizacion?.total)) * (ABONO_MINIMO_PORCENTAJE / 100));
+}
+
+// Orden de llegada: primero lo pendiente, luego aprobado y por último rechazado.
+const ORDEN_ESTADO = { Pendiente: 0, Aprobado: 1, Rechazado: 2 };
+
+export function ordenarPorLlegada(cotizaciones) {
+  return [...cotizaciones].sort((a, b) => {
+    const porEstado = (ORDEN_ESTADO[a.estadoCotizacion] ?? 3) - (ORDEN_ESTADO[b.estadoCotizacion] ?? 3);
+    if (porEstado !== 0) return porEstado;
+    return String(a.fechaLlegada || a.fechaEmision || '').localeCompare(
+      String(b.fechaLlegada || b.fechaEmision || ''),
+    ) || String(a.id).localeCompare(String(b.id));
+  });
 }
 
 export function resumenCotizaciones(cotizaciones) {

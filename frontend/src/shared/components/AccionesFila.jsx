@@ -1,10 +1,12 @@
 import React from 'react';
-import { Eye, FileText, Pencil, Trash2 } from 'lucide-react';
+import { CircleDollarSign, Eye, FileText, Mail, Pencil, Trash2 } from 'lucide-react';
 
 export function AccionesFila({
   onVer,
   onEditar,
   onPdf,
+  onCorreo,
+  onAbono,
   onEliminar,
   color,
   alineacion = 'center',
@@ -32,6 +34,18 @@ export function AccionesFila({
       {onPdf && (
         <button type="button" className="mca-icon-btn" onClick={onPdf} title="Generar PDF">
           <FileText {...iconProps} />
+        </button>
+      )}
+
+      {onCorreo && (
+        <button type="button" className="mca-icon-btn" onClick={onCorreo} title="Enviar cotización al correo">
+          <Mail {...iconProps} />
+        </button>
+      )}
+
+      {onAbono && (
+        <button type="button" className="mca-icon-btn" onClick={onAbono} title="Registrar abono">
+          <CircleDollarSign {...iconProps} />
         </button>
       )}
 
