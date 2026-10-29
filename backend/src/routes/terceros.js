@@ -26,7 +26,8 @@ function validarTercero(datos) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(`SELECT ${columnasPublicas} FROM terceros ORDER BY id`);
+    // Lo último registrado aparece primero en el listado.
+    const { rows } = await pool.query(`SELECT ${columnasPublicas} FROM terceros ORDER BY id DESC`);
     return res.json(rows);
   } catch (error) {
     return next(error);

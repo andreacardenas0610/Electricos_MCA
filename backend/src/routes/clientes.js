@@ -51,7 +51,8 @@ function validarCliente(datos) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(`${consultaClientes} ORDER BY c.id`);
+    // Lo último registrado aparece primero en el listado.
+    const { rows } = await pool.query(`${consultaClientes} ORDER BY c.id DESC`);
     return res.json(rows);
   } catch (error) {
     return next(error);

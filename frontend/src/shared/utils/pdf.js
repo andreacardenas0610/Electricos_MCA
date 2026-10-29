@@ -1,5 +1,8 @@
 import { formatearFecha, formatearMoneda } from '../services/base.js';
-import { fechaVencimiento } from '../services/cotizacionesService.js';
+import {
+  ABONO_MINIMO_PORCENTAJE,
+  fechaVencimiento,
+} from '../services/cotizacionesService.js';
 
 const EMPRESA = {
   nombre: 'Eléctricos MCA',
@@ -60,6 +63,10 @@ export function generarPdfCotizacion(cotizacion) {
   const saldo = Math.max(0, total - abonado);
   const estado = cotizacion.estadoCotizacion || 'Pendiente';
   const colorEstado = COLOR_ESTADO[estado] || '#334155';
+
+  // La cotización solo se aprueba después de recibir el abono inicial del 30%.
+  const minimoAbono = Math.round(total * (ABONO_MINIMO_PORCENTAJE / 100));
+  const abonoCubierto = abonado >= minimoAbono - 0.5;
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -278,6 +285,12 @@ export function generarPdfCotizacion(cotizacion) {
       border-left-color: #15803d;
       background: #f0fdf4;
     }
+    .notes--abono {
+      border-left-color: #d97706;
+      background: #fef3c7;
+      color: #45300b;
+    }
+    .notes--abono strong { color: #7c2d12; }
     .signs {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -393,6 +406,14 @@ export function generarPdfCotizacion(cotizacion) {
           <tr><td class="label saldo">Saldo pendiente</td><td class="value saldo">${formatearMoneda(saldo, 'COP')}</td></tr>
         ` : ''}
       </table>
+    </div>
+
+    <div class="notes notes--abono">
+      <strong>Para aprobar esta cotización</strong> debe abonar el ${ABONO_MINIMO_PORCENTAJE}% del total,
+      es decir ${formatearMoneda(minimoAbono, 'COP')}. Al confirmar ese abono la cotización
+      queda aprobada automáticamente y se apartan los materiales.${abonoCubierto
+        ? ' <strong>Abono ya registrado:</strong> cotización lista para aprobar.'
+        : ' <strong>Abono pendiente.</strong>'}
     </div>
 
     ${abonado > 0 ? `

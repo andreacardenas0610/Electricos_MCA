@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Clock,
   FolderPlus,
   Package,
@@ -86,17 +84,6 @@ function FragmentRow({ servicio, desplegado, onToggle, onVer, onEditar, onElimin
   return (
     <>
       <tr className={claseFilaServicio(servicio)}>
-        <td className="mca-center">
-          <button
-            type="button"
-            className="mca-icon-btn"
-            onClick={onToggle}
-            disabled={!materiales.length}
-            title={materiales.length ? 'Ver los materiales del servicio' : 'Sin materiales asignados'}
-          >
-            {desplegado ? <ChevronDown size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
-          </button>
-        </td>
         <td>
           <div className="mca-cell-title">
             <span className="mca-cell-icon">
@@ -135,7 +122,21 @@ function FragmentRow({ servicio, desplegado, onToggle, onVer, onEditar, onElimin
             </span>
           </div>
         </td>
-        <td className="is-number">{materiales.length}</td>
+        <td className="is-number">
+          {materiales.length ? (
+            <button
+              type="button"
+              className="mca-material-toggle"
+              onClick={onToggle}
+              title={desplegado ? 'Ocultar los materiales del servicio' : 'Ver los materiales del servicio'}
+            >
+              <Package size={13} strokeWidth={2} />
+              {materiales.length}
+            </button>
+          ) : (
+            <span className="is-muted">0</span>
+          )}
+        </td>
         <td>
           <EstadoToggle
             estado={servicio.estado}
@@ -151,7 +152,7 @@ function FragmentRow({ servicio, desplegado, onToggle, onVer, onEditar, onElimin
 
       {desplegado && materiales.length > 0 && (
         <tr className="mca-row--detalle">
-          <td colSpan={9}>
+          <td colSpan={8}>
             <div className="mca-subtabla">
               <div className="mca-subtabla__titulo">
                 <Package size={14} strokeWidth={1.9} />
@@ -666,7 +667,6 @@ export function CatalogoServicios() {
           <table className="mca-table">
             <thead>
               <tr>
-                <th className="mca-center">Detalle</th>
                 <th>Servicio</th>
                 <th>Categoría</th>
                 <th>Unidad</th>
@@ -680,7 +680,7 @@ export function CatalogoServicios() {
             <tbody>
               {filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="mca-table__empty">
+                  <td colSpan={8} className="mca-table__empty">
                     <EmptyState
                       icon={Wrench}
                       title="Sin servicios para mostrar"

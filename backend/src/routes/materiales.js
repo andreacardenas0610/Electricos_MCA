@@ -121,7 +121,7 @@ router.get('/', async (req, res, next) => {
       `SELECT ${columnasMaterial(conMedio)}
        FROM materiales m
        JOIN categorias_materiales c ON c.id = m.categoria_id
-       ORDER BY m.nombre`,
+       ORDER BY m.creado_en DESC NULLS LAST, m.nombre`,
     );
     return res.json(rows.map(conEstado));
   } catch (error) {

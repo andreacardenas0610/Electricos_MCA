@@ -318,6 +318,30 @@
   color: var(--danger-text);
 }
 
+/* Contador de materiales del servicio: reemplaza la antigua columna del «>». */
+.mca-material-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mca-material-toggle:hover {
+  background: var(--accent-yellow);
+  border-color: var(--accent-yellow);
+  color: #0f172a;
+}
+
 /* ---------- Toolbar / búsqueda ---------- */
 .mca-toolbar {
   display: flex;
@@ -785,15 +809,56 @@
 }
 
 /* ---------- Total fijo de la cotización ---------- */
-/* La columna del total se estira y la tarjeta queda pegada arriba mientras se baja. */
+/* El total sube: va en la columna derecha, alineado con la tabla de ítems, y se queda
+   pegado arriba mientras se baja para llenar el resto de la información. */
+.mca-cotizacion-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.mca-cotizacion-cuerpo {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .mca-total-col {
+  grid-column: 2;
+  grid-row: 1;
   align-self: stretch;
   min-width: 0;
 }
 
+@media (max-width: 980px) {
+  .mca-cotizacion-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mca-total-col {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: auto;
+  }
+
+  .mca-cotizacion-cuerpo {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+/* Columna de control (desplegar materiales del servicio): sin encabezado y angosta. */
+.mca-th--control {
+  width: 42px;
+}
+
 .mca-total-fijo {
   position: sticky;
-  top: 8px;
+  top: 0;
   z-index: 20;
   background: var(--bg-elevated);
   border: 1px solid var(--accent-yellow-border);
@@ -891,6 +956,18 @@
 
 .mca-estado:disabled {
   cursor: default;
+}
+
+/* Estado "quemado": se muestra pero no se puede tocar a mano. */
+.mca-estado--bloqueado {
+  border-style: dashed;
+  opacity: 0.78;
+  filter: saturate(0.75);
+}
+
+.mca-estado__candado {
+  margin-right: 6px;
+  flex: 0 0 auto;
 }
 
 .mca-estado--success {
@@ -1019,6 +1096,37 @@
   background: var(--border-color);
   border-radius: 8px;
   border: 2px solid var(--bg-card);
+}
+
+/* El bloque de ítems + total: tabla y formulario a la izquierda, total fijo a la derecha. */
+.mca-cotizacion-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  grid-column: 1;
+}
+
+.mca-cotizacion-grid .mca-total-col {
+  grid-column: 2;
+}
+
+.mca-cotizacion-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1180px) {
+  .mca-cotizacion-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mca-cotizacion-grid .mca-total-col,
+  .mca-cotizacion-cuerpo {
+    grid-column: 1;
+  }
 }
 
 .mca-modal__foot {
@@ -1617,6 +1725,63 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ---------- Barra lateral: colapsada a iconos, se despliega sin tapar el listado ---------- */
+/* Va siempre dentro del flex del layout (sin position fixed y sin margin-right negativo):
+   al crecer, el área de contenido se ajusta en lugar de quedar cubierta. */
+.mca-sidebar {
+  flex: 0 0 auto;
+  width: 84px;
+  min-width: 84px;
+  padding: 24px 10px;
+  transition: width 0.22s ease, min-width 0.22s ease, padding 0.22s ease;
+}
+
+.mca-sidebar:hover,
+.mca-sidebar:focus-within {
+  width: 270px;
+  min-width: 270px;
+  padding: 24px 16px;
+}
+
+.mca-sidebar__label {
+  /* inline-block para que max-width sí colapse el texto (un span inline lo ignora). */
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.22s ease, opacity 0.14s ease;
+}
+
+.mca-sidebar:hover .mca-sidebar__label,
+.mca-sidebar:focus-within .mca-sidebar__label {
+  max-width: 230px;
+  opacity: 1;
+}
+
+/* Colapsada no hay sitio para la tarjeta de usuario: queda el avatar y el salir
+   reaparece al desplegar (inline style, por eso el !important). */
+.mca-sidebar:not(:hover):not(:focus-within) .mca-sidebar__logout {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  /* En pantallas estrechas la barra se queda siempre en modo iconos: no se despliega
+     con el cursor para que ningún listado se encoja ni quede tapado. */
+  .mca-sidebar,
+  .mca-sidebar:hover,
+  .mca-sidebar:focus-within {
+    width: 64px;
+    min-width: 64px;
+    padding: 18px 6px;
+  }
+
+  /* Sin hover que la abra, el botón Salir no puede quedar oculto. */
+  .mca-sidebar .mca-sidebar__logout {
+    display: flex !important;
   }
 }
 

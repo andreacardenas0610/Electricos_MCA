@@ -1,4 +1,5 @@
 import React from 'react';
+import { Lock } from 'lucide-react';
 
 const PALETA = {
   verde: { bg: '#e8f8ed', border: '#c2ebd0', textColor: '#1e5e3a' },
@@ -75,7 +76,7 @@ export const tonoEstado = (estado, estados = []) => {
   return TONO[clave] || 'neutral';
 };
 
-export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width = 125 }) {
+export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width = 125, bloqueado, motivo }) {
   const indice = Math.max(0, estados.findIndex((item) => item.nombre === estado));
   const config = estados[indice] || estados[0];
   if (!config) return null;
@@ -87,18 +88,20 @@ export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width
   );
 
   // El estado se muestra como pastilla de color, sin el indicador deslizante.
+  // Con «bloqueado» la pastilla se ve quemada: nadie la mueve a mano, solo la lógica del módulo.
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={!onClick}
-      title={onClick ? 'Haz clic para cambiar el estado' : undefined}
-      className={`mca-estado mca-estado--${TONO[clave] || 'info'}`}
+      disabled={!onClick || bloqueado}
+      title={motivo || (onClick && !bloqueado ? 'Haz clic para cambiar el estado' : undefined)}
+      className={`mca-estado mca-estado--${TONO[clave] || 'info'}${bloqueado ? ' mca-estado--bloqueado' : ''}`}
       style={{
         width: ancho,
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: onClick && !bloqueado ? 'pointer' : 'default',
       }}
     >
+      {bloqueado && <Lock size={11} strokeWidth={2.4} className="mca-estado__candado" />}
       {config.nombre}
     </button>
   );

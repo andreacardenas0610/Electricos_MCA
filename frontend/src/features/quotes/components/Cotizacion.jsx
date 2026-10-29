@@ -16,7 +16,6 @@ import { useApiData } from '../../../shared/useApiData.js';
 import {
   EstadoToggle,
   ESTADOS,
-  estadoSiguiente,
   tonoEstado,
 } from '../../../shared/components/EstadoToggle.jsx';
 import {
@@ -133,6 +132,7 @@ export function Cotizacion() {
   const [cotizacionesCliente, setCotizacionesCliente] = useState([]);
   const [abono, setAbono] = useState(ABONO_VACIO);
   const [abonando, setAbonando] = useState(false);
+  const [correoEnvio, setCorreoEnvio] = useState(null);
 
   const { toast, notify, close } = useToast();
 
@@ -333,8 +333,8 @@ export function Cotizacion() {
     if (servicio.materiales?.length) {
       notify(
         'success',
-        'Materiales agregados',
-        `${servicio.nombre} añadió ${servicio.materiales.length} material(es) del catálogo. Puedes seguir agregando más.`,
+        'Materiales del servicio agregados',
+        `${servicio.nombre} trayajo ${materialesDeServicio(servicio).length} material(es) del catálogo. Ajusta las cantidades en la tabla o sigue agregando materiales con «Buscar y agregar material».`,
       );
     }
   };
@@ -462,47 +462,27 @@ export function Cotizacion() {
     }
   };
 
-  const handleCambiarEstado = async (cotizacion) => {
-    const siguiente = estadoSiguiente(ESTADOS.cotizacion, cotizacion.estadoCotizacion);
-    const cuenta = cuentas.find((item) => String(item.cotizacionId) === String(cotizacion.id));
-
-    if (siguiente === 'Aprobado') {
-      const minimo = minimoAbono(cotizacion);
-      if (Number(cuenta?.abonado || 0) < minimo) {
-        notify(
-          'warning',
-          'Primero se recibe la plata',
-          `Registra un abono de al menos ${formatearMoneda(minimo, 'COP')} (${ABONO_MINIMO_PORCENTAJE}% del total) antes de aprobar ${cotizacion.id}.`,
-        );
-        setAbono(ABONO_VACIO());
-        setCotizacionDetalle(cotizacion);
-        return;
-      }
-    }
-
+  // El estado ya no se mueve con un clic: aprobarlo lo hace únicamente el abono del 30%.
+  // Rechazar sí sigue siendo una decisión del asesor, por eso queda como acción explícita.
+  const handleRechazar = async (cotizacion) => {
+    if (!cotizacion) return;
     try {
       const actualizada = await apiRequest(`/cotizaciones/${encodeURIComponent(cotizacion.id)}/estado`, {
         method: 'PATCH',
-        body: { estadoCotizacion: siguiente },
+        body: { estadoCotizacion: 'Rechazado' },
       });
       await cargarDatos();
+      setCotizacionDetalle(null);
       notify(
         'info',
-        'Estado actualizado',
-        `${cotizacion.id} ahora está ${siguiente.toLowerCase()}.`,
+        'Cotización rechazada',
+        `${cotizacion.id} quedó rechazada y no admite abonos.`,
       );
-      if (siguiente === 'Aprobado') {
-        notify(
-          'success',
-          'Stock descontado',
-          `Los materiales de ${cotizacion.id} se descontaron del inventario. Si falta material, Materiales mostrará la fila en Bajo Stock o Crítico.`,
-        );
-      }
       if (actualizada?.advertencias?.length) {
-        notify('warning', 'Advertencia de inventario', actualizada.advertencias.join(' '));
+        notify('warning', 'Aviso de inventario', actualizada.advertencias.join(' '));
       }
     } catch (requestError) {
-      notify('error', 'No se pudo cambiar el estado', requestError.message);
+      notify('error', 'No se pudo rechazar la cotización', requestError.message);
     }
   };
 
@@ -543,7 +523,22 @@ export function Cotizacion() {
         'Abono registrado',
         `${pago.id} · ${formatearMoneda(pago.monto, 'COP')} recibido el ${formatearFecha(pago.fecha)}.`,
       );
-      if (previo <= 0 && cotizacion.estadoCotizacion !== 'Aprobado') {
+      if (pago?.aprobacion?.aprobada) {
+        notify(
+          'success',
+          'Cotización aprobada automáticamente',
+          `Se cubrió el ${ABONO_MINIMO_PORCENTAJE}% del total (${formatearMoneda(
+            pago.aprobacion.minimo,
+            'COP',
+          )}) y ${cotizacion.id} quedó Aprobada con sus materiales descontados.`,
+        );
+      } else if (pago?.aprobacion?.bloqueadas?.length) {
+        notify(
+          'warning',
+          'El abono sí se guardó, pero no se pudo aprobar',
+          `${cotizacion.id} sigue Pendiente por inventario: ${pago.aprobacion.bloqueadas.join('; ')}.`,
+        );
+      } else if (previo <= 0 && cotizacion.estadoCotizacion !== 'Aprobado') {
         notify(
           'info',
           'Ya puedes aprobar',
@@ -557,32 +552,98 @@ export function Cotizacion() {
     }
   };
 
-  const handleEnviarCorreo = async (cotizacion) => {
+  // Asignar location.href a un mailto queda mudo en varios navegadores; el ancla temporal
+  // sí dispara el cliente de correo asociado sin recargar la aplicación.
+  const abrirClienteCorreo = (mailto) => {
+    if (!mailto) return false;
+    const ancla = document.createElement('a');
+    ancla.href = mailto;
+    ancla.rel = 'noopener';
+    document.body.appendChild(ancla);
+    ancla.click();
+    ancla.remove();
+    return true;
+  };
+
+  const abrirEnvioCorreo = (cotizacion) => {
     if (!cotizacion) return;
+    setCorreoEnvio({
+      cotizacion,
+      destinatario: cotizacion.correo || '',
+      error: '',
+      enviando: false,
+      resultado: null,
+    });
+  };
+
+  const cerrarEnvioCorreo = () => {
+    // Si el envío quedó preparado, el correo capturado ya vive en la BD: la lista se refresca.
+    if (correoEnvio?.resultado) cargarDatos();
+    setCorreoEnvio(null);
+  };
+
+  const copiarCorreo = async (resultado) => {
+    const contenido = [resultado?.asunto, '', resultado?.texto].filter((linea) => linea !== undefined).join('\n');
+    try {
+      await navigator.clipboard.writeText(contenido);
+      notify('success', 'Contenido copiado', 'Pégalo en el correo de tu cliente o en WhatsApp si el equipo no tiene correo asociado.');
+    } catch {
+      notify('warning', 'No se pudo copiar', 'Tu navegador bloqueó el portapapeles; usa el botón «Abrir correo».');
+    }
+  };
+
+  const confirmarEnvioCorreo = async () => {
+    if (!correoEnvio?.cotizacion) return;
+    const destinatario = String(correoEnvio.destinatario || '').trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+      setCorreoEnvio((actual) => ({ ...actual, error: 'Escribe un correo válido, por ejemplo cliente@correo.com.' }));
+      return;
+    }
+
+    setCorreoEnvio((actual) => ({ ...actual, enviando: true, error: '' }));
+
     try {
       const resultado = await apiRequest(
-        `/cotizaciones/${encodeURIComponent(cotizacion.id)}/enviar-correo`,
-        { method: 'POST', body: {} },
+        `/cotizaciones/${encodeURIComponent(correoEnvio.cotizacion.id)}/enviar-correo`,
+        { method: 'POST', body: { correo: destinatario } },
       );
 
       if (resultado.enviado) {
-        notify('success', 'Cotización enviada', `El correo ${resultado.correo} recibió la cotización ${cotizacion.id}.`);
+        notify('success', 'Cotización enviada', `El correo ${resultado.correo} recibió la cotización ${correoEnvio.cotizacion.id}.`);
+        setCorreoEnvio(null);
+        cargarDatos();
         return;
       }
 
-      if (resultado.mailto) {
-        window.location.href = resultado.mailto;
-        notify(
-          'info',
-          'Cliente de correo abierto',
-          `${resultado.correo} · ${resultado.mensaje || 'Confirma el envío desde tu cliente de correo.'}`,
-        );
-        return;
-      }
-
-      notify('info', 'Cotización lista para enviar', resultado.mensaje || '');
+      abrirClienteCorreo(resultado.mailto);
+      setCorreoEnvio((actual) => actual && {
+        ...actual,
+        enviando: false,
+        resultado,
+        error: resultado.mailto ? '' : (resultado.mensaje || 'No se pudo preparar el correo.'),
+      });
+      notify(
+        resultado.mailto ? 'success' : 'warning',
+        resultado.mailto ? 'Correo abierto para enviar' : 'Cotización preparada',
+        resultado.mailto
+          ? `${resultado.correo} · ${resultado.mensaje || 'Termina el envío en la ventana de correo.'}`
+          : (resultado.mensaje || ''),
+      );
     } catch (requestError) {
-      if (requestError.datos?.mailto) window.location.href = requestError.datos.mailto;
+      const datos = requestError.datos;
+      if (datos?.mailto) {
+        abrirClienteCorreo(datos.mailto);
+        setCorreoEnvio((actual) => actual && { ...actual, enviando: false, resultado: datos, error: '' });
+        notify('warning', 'El envío automático falló', `${requestError.message} Se abrió tu cliente de correo.`);
+        return;
+      }
+      setCorreoEnvio((actual) => actual && {
+        ...actual,
+        enviando: false,
+        destinatario: datos?.requiereCorreo ? destinatario : actual.destinatario,
+        error: requestError.message,
+      });
       notify('error', 'No se pudo enviar la cotización', requestError.message);
     }
   };
@@ -790,7 +851,8 @@ export function Cotizacion() {
                           estado={cotizacion.estadoCotizacion}
                           estados={ESTADOS.cotizacion}
                           width={112}
-                          onClick={() => handleCambiarEstado(cotizacion)}
+                          bloqueado
+                          motivo="Estado bloqueado: se aprueba solo al registrar el abono del 30%."
                         />
                       </td>
                       <td className="mca-center">
@@ -801,7 +863,7 @@ export function Cotizacion() {
                           }}
                           onEditar={() => abrirEditar(cotizacion)}
                           onPdf={() => handlePdf(cotizacion)}
-                          onCorreo={() => handleEnviarCorreo(cotizacion)}
+                          onCorreo={() => abrirEnvioCorreo(cotizacion)}
                           onAbono={() => {
                             setCotizacionDetalle(cotizacion);
                             setAbono({
@@ -1031,6 +1093,47 @@ export function Cotizacion() {
               {errores.items && <span className="mca-error">{errores.items}</span>}
             </div>
 
+            <div className="mca-cotizacion-grid">
+              <div className="mca-total-col">
+                <div className="mca-total-fijo">
+                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                    <span className="mca-muted">Subtotal</span>
+                    <span className="mca-strong">{formatearMoneda(totalesFormulario.subtotal, 'COP')}</span>
+                  </div>
+                  {totalesFormulario.montoDescuento > 0 && (
+                    <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
+                      <span className="mca-muted">
+                        Descuento ({Number(formulario.descuento) || 0}%)
+                      </span>
+                      <span className="mca-danger">
+                        − {formatearMoneda(totalesFormulario.montoDescuento, 'COP')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
+                    <span className="mca-muted">
+                      IVA ({Number(formulario.ivaPorcentaje) || 0}%)
+                    </span>
+                    <span className="mca-strong">
+                      {formatearMoneda(totalesFormulario.montoImpuesto, 'COP')}
+                    </span>
+                  </div>
+                  <hr className="mca-divider" style={{ margin: '12px 0' }} />
+                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+                    <span className="mca-strong">Total</span>
+                    <span className="mca-total-fijo__monto">
+                      {formatearMoneda(totalesFormulario.total, 'COP')}
+                    </span>
+                  </div>
+                  <span className="mca-hint">Todos los valores se expresan en {MONEDA_COTIZACION}.</span>
+                  <span className="mca-hint" style={{ display: 'block', marginTop: 4 }}>
+                    Abono mínimo ({ABONO_MINIMO_PORCENTAJE}%):{' '}
+                    {formatearMoneda(Math.round(totalesFormulario.total * ABONO_MINIMO_PORCENTAJE / 100), 'COP')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mca-cotizacion-cuerpo">
             <div
               className="mca-table-wrap"
               style={{
@@ -1136,7 +1239,6 @@ export function Cotizacion() {
               </table>
             </div>
 
-            <div className="mca-grid-2" style={{ alignItems: 'start' }}>
               <div className="mca-form-grid">
                 <Field label="Descuento (%)">
                   <input
@@ -1195,48 +1297,96 @@ export function Cotizacion() {
                   />
                 </Field>
               </div>
-
-              <div className="mca-total-col">
-                <div className="mca-total-fijo">
-                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
-                    <span className="mca-muted">Subtotal</span>
-                    <span className="mca-strong">{formatearMoneda(totalesFormulario.subtotal, 'COP')}</span>
-                  </div>
-                  {totalesFormulario.montoDescuento > 0 && (
-                    <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-                      <span className="mca-muted">
-                        Descuento ({Number(formulario.descuento) || 0}%)
-                      </span>
-                      <span className="mca-danger">
-                        − {formatearMoneda(totalesFormulario.montoDescuento, 'COP')}
-                      </span>
-                    </div>
-                  )}
-                  <div className="mca-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-                    <span className="mca-muted">
-                      IVA ({Number(formulario.ivaPorcentaje) || 0}%)
-                    </span>
-                    <span className="mca-strong">
-                      {formatearMoneda(totalesFormulario.montoImpuesto, 'COP')}
-                    </span>
-                  </div>
-                  <hr className="mca-divider" style={{ margin: '12px 0' }} />
-                  <div className="mca-row" style={{ justifyContent: 'space-between' }}>
-                    <span className="mca-strong">Total</span>
-                    <span className="mca-total-fijo__monto">
-                      {formatearMoneda(totalesFormulario.total, 'COP')}
-                    </span>
-                  </div>
-                  <span className="mca-hint">Todos los valores se expresan en {MONEDA_COTIZACION}.</span>
-                  <span className="mca-hint" style={{ display: 'block', marginTop: 4 }}>
-                    Abono mínimo ({ABONO_MINIMO_PORCENTAJE}%):{' '}
-                    {formatearMoneda(Math.round(totalesFormulario.total * ABONO_MINIMO_PORCENTAJE / 100), 'COP')}
-                  </span>
-                </div>
               </div>
             </div>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(correoEnvio)}
+        onClose={cerrarEnvioCorreo}
+        title={correoEnvio ? `Enviar cotización ${correoEnvio.cotizacion.id}` : 'Enviar cotización'}
+        subtitle={correoEnvio?.cotizacion?.proyecto}
+        icon={Mail}
+        size="sm"
+        footer={
+          <>
+            <Button variant="cerrar" onClick={cerrarEnvioCorreo}>Cerrar</Button>
+            {correoEnvio?.resultado?.texto && (
+              <Button icon={FileText} onClick={() => copiarCorreo(correoEnvio.resultado)}>
+                Copiar contenido
+              </Button>
+            )}
+            {correoEnvio?.resultado?.mailto && (
+              <Button
+                icon={Mail}
+                onClick={() => abrirClienteCorreo(correoEnvio.resultado.mailto)}
+              >
+                Abrir correo de nuevo
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              icon={Mail}
+              disabled={correoEnvio?.enviando}
+              onClick={confirmarEnvioCorreo}
+            >
+              {correoEnvio?.resultado?.mailto ? 'Reintentar envío' : 'Enviar por correo'}
+            </Button>
+          </>
+        }
+      >
+        {correoEnvio && (
+          <div className="mca-stack">
+            <Field
+              label="Correo del contacto"
+              required
+              error={correoEnvio.error}
+              hint={correoEnvio.cotizacion.correo
+                ? 'Puedes corregirlo: el correo que envíes queda guardado en la cotización.'
+                : 'Esta cotización no tiene correo capturado. Escribe el del contacto para poder enviarla.'}
+            >
+              <input
+                type="email"
+                className="mca-input"
+                value={correoEnvio.destinatario}
+                placeholder="cliente@correo.com"
+                onChange={(event) => setCorreoEnvio((actual) => ({
+                  ...actual,
+                  destinatario: event.target.value,
+                  error: '',
+                }))}
+              />
+            </Field>
+
+            <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+              <span className="mca-muted">Total de la cotización</span>
+              <strong>{formatearMoneda(correoEnvio.cotizacion.total, 'COP')}</strong>
+            </div>
+            <div className="mca-row" style={{ justifyContent: 'space-between' }}>
+              <span className="mca-muted">Abono mínimo para aprobar ({ABONO_MINIMO_PORCENTAJE}%)</span>
+              <strong>
+                {formatearMoneda(
+                  Math.round(Number(correoEnvio.cotizacion.total || 0) * (ABONO_MINIMO_PORCENTAJE / 100)),
+                  'COP',
+                )}
+              </strong>
+            </div>
+
+            {correoEnvio.resultado?.asunto && (
+              <div className="mca-hint">
+                <strong>Asunto:</strong> {correoEnvio.resultado.asunto}
+              </div>
+            )}
+
+            <p className="mca-hint">
+              {correoEnvio.resultado?.smtp
+                ? 'El backend envía por SMTP; si falla se abre tu cliente de correo como respaldo.'
+                : 'Sin SMTP configurado en el backend, se abre tu cliente de correo (Outlook, Gmail de escritorio) con la cotización ya escrita: solo confirma el envío.'}
+            </p>
+          </div>
+        )}
       </Modal>
 
       <Modal
@@ -1262,6 +1412,16 @@ export function Cotizacion() {
               Generar PDF
             </Button>
             <Button
+              icon={Mail}
+              onClick={() => {
+                const cotizacion = cotizacionDetalle;
+                setCotizacionDetalle(null);
+                abrirEnvioCorreo(cotizacion);
+              }}
+            >
+              Enviar por correo
+            </Button>
+            <Button
               variant="primary"
               onClick={() => {
                 const cotizacion = cotizacionDetalle;
@@ -1271,6 +1431,11 @@ export function Cotizacion() {
             >
               Editar cotización
             </Button>
+            {cotizacionDetalle?.estadoCotizacion !== 'Rechazado' && (
+              <Button variant="danger" onClick={() => handleRechazar(cotizacionDetalle)}>
+                Rechazar
+              </Button>
+            )}
           </>
         }
       >
@@ -1281,6 +1446,8 @@ export function Cotizacion() {
                 estado={cotizacionDetalle.estadoCotizacion}
                 estados={ESTADOS.cotizacion}
                 width={118}
+                bloqueado
+                motivo="Estado bloqueado: se aprueba solo al registrar el abono del 30%."
               />
               {cotizacionVencida(cotizacionDetalle) && (
                 <Badge tone="danger">Vencida</Badge>

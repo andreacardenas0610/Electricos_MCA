@@ -169,7 +169,8 @@ router.patch('/categorias/:id/estado', async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(`${consultaServicio} ORDER BY id`);
+    // Lo último registrado aparece primero en el catálogo.
+    const { rows } = await pool.query(`${consultaServicio} ORDER BY id DESC`);
     return res.json(rows);
   } catch (error) {
     return next(error);

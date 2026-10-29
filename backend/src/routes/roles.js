@@ -67,7 +67,7 @@ function validar(datos) {
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, codigo, descripcion, plataformas, estado, permisos FROM roles ORDER BY id',
+      'SELECT id, nombre, codigo, descripcion, plataformas, estado, permisos FROM roles ORDER BY id DESC',
     );
     return res.json(rows.map(normalizarRol));
   } catch (error) {

@@ -160,14 +160,11 @@ export function Dashboard() {
         }
       `}</style>
 
-      {/* BARRA LATERAL */}
-      <aside style={{ 
-        width: '270px', 
-        minWidth: '270px',
+      {/* BARRA LATERAL: colapsada a iconos, se expande al pasar el cursor encima */}
+      <aside className="mca-sidebar" style={{ 
         height: '100vh',
         backgroundColor: 'var(--bg-sidebar)', 
         borderRight: '1px solid var(--sidebar-border)', 
-        padding: '24px 16px', 
         display: 'flex', 
         flexDirection: 'column', 
         justifyContent: 'space-between',
@@ -182,11 +179,11 @@ export function Dashboard() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '20px' }}>⚡</span>
-                <h1 style={{ color: 'var(--accent-yellow)', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+                <h1 className="mca-sidebar__label" style={{ color: 'var(--accent-yellow)', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
                   Eléctricos MCA
                 </h1>
               </div>
-              <span style={{ fontSize: '10px', color: 'var(--sidebar-muted)', letterSpacing: '1.2px', fontWeight: '700', display: 'block', marginTop: '4px', textTransform: 'uppercase' }}>
+              <span className="mca-sidebar__label" style={{ fontSize: '10px', color: 'var(--sidebar-muted)', letterSpacing: '1.2px', fontWeight: '700', display: 'block', marginTop: '4px', textTransform: 'uppercase' }}>
                 Gestión Industrial
               </span>
             </div>
@@ -208,7 +205,7 @@ export function Dashboard() {
           >
             {menuGrupos.map((grupo, index) => (
               <div key={index}>
-                <span style={{ 
+                <span className="mca-sidebar__label" style={{ 
                   fontSize: '10px', 
                   fontWeight: '700', 
                   color: 'var(--sidebar-muted)',
@@ -228,6 +225,7 @@ export function Dashboard() {
                         key={item.id}
                         onClick={() => setSeccionActual(item.id)}
                         className={`sidebar-item ${activo ? 'is-active' : ''}`.trim()}
+                        title={item.label}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -246,10 +244,10 @@ export function Dashboard() {
                           boxShadow: activo ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none'
                         }}
                       >
-                        <span style={{ width: '24px', display: 'flex', justifyContent: 'center', opacity: activo ? 1 : 0.8 }}>
+                        <span style={{ width: '24px', display: 'flex', justifyContent: 'center', opacity: activo ? 1 : 0.8, flex: '0 0 auto' }}>
                           <Icono size={24} strokeWidth={1.7} />
                         </span>
-                        {item.label}
+                        <span className="mca-sidebar__label">{item.label}</span>
                       </button>
                     );
                   })}
@@ -281,11 +279,11 @@ export function Dashboard() {
             }}
           >
             {tema === 'dark' ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
-            {tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            <span className="mca-sidebar__label">{tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}</span>
           </button>
 
           {/* Tarjeta de Usuario Conectado */}
-          <div style={{ 
+          <div className="mca-sidebar__user" style={{ 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
@@ -309,14 +307,15 @@ export function Dashboard() {
               }}>
                 {(sesion?.usuario?.nombre || 'Administrador').slice(0, 2).toUpperCase()}
               </div>
-              <div>
+              <div className="mca-sidebar__label">
                 <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>{sesion?.usuario?.nombre || sesion?.usuario?.usuario}</span>
                 <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>{sesion?.usuario?.rol || 'Administrador'}</span>
               </div>
             </div>
 
             {/* Botón Salir */}
-            <button 
+            <button
+              className="mca-sidebar__logout"
               onClick={handleLogout}
               title="Cerrar Sesión"
               style={{ 

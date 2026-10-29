@@ -46,7 +46,7 @@ router.get('/', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT ${columnasUsuario} FROM usuarios u
        JOIN roles r ON r.id = u.rol_id
-       ORDER BY u.id`,
+       ORDER BY u.id DESC`,
     );
     return res.json(rows.map((row) => ({ ...row, ultimoAcceso: 'Sin registro' })));
   } catch (error) {

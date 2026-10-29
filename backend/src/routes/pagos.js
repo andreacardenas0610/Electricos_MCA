@@ -201,11 +201,88 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Al cubrir el 30% del total la cotización pasa a Aprobada sin pasos manuales.
+async function aprobarPorAbono(client, cotizacion) {
+  if (!cotizacion || cotizacion.estado !== 'Pendiente') return null;
+
+  const { rows: suma } = await client.query(
+    'SELECT COALESCE(SUM(monto), 0) AS abonado FROM pagos WHERE cotizacion_codigo = $1',
+    [cotizacion.codigo],
+  );
+  const abonado = redondear(suma[0].abonado);
+  const minimo = redondear(Number(cotizacion.total) * (ABONO_MINIMO_PORCENTAJE / 100));
+  if (abonado + 0.01 < minimo) return null;
+
+  const bloqueadas = [];
+
+  if (!cotizacion.stock_descontado) {
+    const { rows: items } = await client.query(
+      `SELECT referencia_id, cantidad
+       FROM cotizacion_items
+       WHERE cotizacion_codigo = $1 AND tipo = 'material' AND referencia_id IS NOT NULL`,
+      [cotizacion.codigo],
+    );
+
+    if (items.length) {
+      const codigos = [...new Set(items.map((item) => String(item.referencia_id)))];
+      const { rows: materiales } = await client.query(
+        `SELECT codigo, nombre, stock, unidad, estado
+         FROM materiales WHERE codigo = ANY($1::varchar[])`,
+        [codigos],
+      );
+      const catalogo = new Map(materiales.map((row) => [row.codigo, row]));
+      const demandados = new Map();
+
+      for (const item of items) {
+        const codigo = String(item.referencia_id);
+        const material = catalogo.get(codigo);
+        if (!material) {
+          bloqueadas.push(`el material ${codigo} ya no está en inventario`);
+          continue;
+        }
+        if (material.estado === 'Inactivo') {
+          bloqueadas.push(`${material.nombre} (${codigo}) está inactivo`);
+          continue;
+        }
+        const demanda = redondear(Number(demandados.get(codigo) || 0) + Number(item.cantidad));
+        demandados.set(codigo, demanda);
+        if (demanda > Number(material.stock)) {
+          bloqueadas.push(
+            `${material.nombre}: se piden ${demanda} ${material.unidad} y solo hay ${material.stock}`,
+          );
+        }
+      }
+
+      if (bloqueadas.length) return { aprobada: false, abonado, minimo, bloqueadas };
+
+      for (const [codigo, cantidad] of demandados) {
+        await client.query(
+          `UPDATE materiales
+           SET stock = GREATEST(0, stock - $2), actualizado_en = now()
+           WHERE codigo = $1::varchar`,
+          [codigo, cantidad],
+        );
+      }
+    }
+  }
+
+  await client.query(
+    `UPDATE cotizaciones
+     SET estado = 'Aprobado',
+         stock_descontado = TRUE,
+         aprobado_en = COALESCE(aprobado_en, now()),
+         actualizado_en = now()
+     WHERE codigo = $1`,
+    [cotizacion.codigo],
+  );
+
+  return { aprobada: true, abonado, minimo, bloqueadas: [] };
+}
+
 router.post('/', async (req, res, next) => {
   const datos = req.body || {};
   const errores = validarPago(datos, true);
   if (errores.length) return res.status(400).json({ mensaje: errores.join(' ') });
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -260,8 +337,10 @@ router.post('/', async (req, res, next) => {
     );
     const codigo = await crearCodigo(client, rows[0].id);
     const pago = await obtenerPago(client, codigo);
+    // Con el 30% cubierto la cotización se aprueba sola, sin que el usuario dé otro paso.
+    const aprobacion = await aprobarPorAbono(client, cotizacion);
     await client.query('COMMIT');
-    return res.status(201).json(pago);
+    return res.status(201).json({ ...pago, aprobacion });
   } catch (error) {
     await client.query('ROLLBACK');
     return next(error);
@@ -287,8 +366,13 @@ router.put('/:codigo', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ mensaje: 'Abono no encontrado.' });
     }
+    let cotizacionVinculada = null;
     if (pagoExistente.cotizacion_codigo) {
-      await client.query('SELECT codigo FROM cotizaciones WHERE codigo = $1 FOR UPDATE', [pagoExistente.cotizacion_codigo]);
+      const { rows: filaCotizacion } = await client.query(
+        'SELECT * FROM cotizaciones WHERE codigo = $1 FOR UPDATE',
+        [pagoExistente.cotizacion_codigo],
+      );
+      cotizacionVinculada = filaCotizacion[0] || null;
     }
     const { rows: sumaRows } = await client.query(
       `SELECT COALESCE(SUM(monto), 0) AS otros
@@ -314,8 +398,10 @@ router.put('/:codigo', async (req, res, next) => {
       ],
     );
     const actualizado = await obtenerPago(client, req.params.codigo);
+    //editar un abono también puede completar el 30% y aprobar la cotización
+    const aprobacion = await aprobarPorAbono(client, cotizacionVinculada);
     await client.query('COMMIT');
-    return res.json(actualizado);
+    return res.json({ ...actualizado, aprobacion });
   } catch (error) {
     await client.query('ROLLBACK');
     return next(error);

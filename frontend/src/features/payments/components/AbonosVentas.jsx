@@ -175,9 +175,9 @@ export default function AbonosVentas() {
     setFormPago({
       ...FORMULARIO_PAGO(),
       cotizacionId: cuenta ? String(cuenta.cotizacionId) : '',
-      // En el primer abono se sugiere directamente el mínimo del 30%.
-      monto: cuenta && Number(cuenta.abonado) <= 0
-        ? String(minimoAbonoInicial(cuenta))
+      // Siempre se ofrece el 30% del total, sin pasar del saldo pendiente.
+      monto: cuenta
+        ? String(Math.min(minimoAbonoInicial(cuenta), Number(cuenta.saldo) || 0))
         : '',
     });
     setDetalleClave(null);
@@ -204,6 +204,29 @@ export default function AbonosVentas() {
     setModalPago(false);
     setPagoEditando(null);
     setErroresPago({});
+  };
+
+  // El backend aprueba la cotización sola al cubrir el 30%; aquí se informa el resultado.
+  const avisarAprobacion = (aprobacion, cotizacionId) => {
+    if (!aprobacion) return;
+    if (aprobacion.aprobada) {
+      notify(
+        'success',
+        'Cotización aprobada automáticamente',
+        `Se cubrió el ${ABONO_MINIMO_PORCENTAJE}% del total (${formatearMoneda(
+          aprobacion.minimo,
+          'COP',
+        )}) en ${cotizacionId}. Quedó Aprobada y se descontaron sus materiales.`,
+      );
+      return;
+    }
+    if (aprobacion.bloqueadas?.length) {
+      notify(
+        'warning',
+        'El abono sí se guardó, pero no se pudo aprobar',
+        `${cotizacionId} sigue Pendiente por inventario: ${aprobacion.bloqueadas.join('; ')}.`,
+      );
+    }
   };
 
   const handleGuardarPago = async (event) => {
@@ -237,7 +260,7 @@ export default function AbonosVentas() {
 
     try {
       if (modoPago === 'editar') {
-        await apiRequest(`/pagos/${encodeURIComponent(pagoEditando.id)}`, {
+        const pagoEditado = await apiRequest(`/pagos/${encodeURIComponent(pagoEditando.id)}`, {
           method: 'PUT',
           body: {
             monto,
@@ -253,6 +276,7 @@ export default function AbonosVentas() {
           'Abono actualizado',
           `${pagoEditando.id} · ${formatearMoneda(monto, 'COP')} en ${pagoEditando.cotizacionId}.`,
         );
+        avisarAprobacion(pagoEditado?.aprobacion, pagoEditando.cotizacionId);
       } else {
         const pago = await apiRequest('/pagos', {
           method: 'POST',
@@ -271,6 +295,7 @@ export default function AbonosVentas() {
           'Abono registrado',
           `${pago.id} · ${formatearMoneda(monto, 'COP')} aplicado a ${pago.cotizacionId}.`,
         );
+        avisarAprobacion(pago?.aprobacion, pago.cotizacionId);
       }
       await cargarCuentas();
       cerrarModalPago();
@@ -371,6 +396,14 @@ export default function AbonosVentas() {
       ? disponibleFormulario
       : Math.round(disponibleFormulario * porcentaje);
     setFormPago((prev) => ({ ...prev, monto: String(valor) }));
+    setErroresPago((prev) => ({ ...prev, monto: undefined }));
+  };
+
+  // El 30% del total se ofrece siempre, topado al saldo que quede disponible.
+  const montoSugerido = Math.min(minimoInicial, disponibleFormulario);
+
+  const aplicarMinimoInicial = () => {
+    setFormPago((prev) => ({ ...prev, monto: String(montoSugerido) }));
     setErroresPago((prev) => ({ ...prev, monto: undefined }));
   };
 
@@ -512,7 +545,13 @@ export default function AbonosVentas() {
                       </span>
                     </td>
                     <td>
-                      <EstadoToggle estado={cuenta.estado} estados={ESTADOS.pago} width={118} />
+                      <EstadoToggle
+                        estado={cuenta.estado}
+                        estados={ESTADOS.pago}
+                        width={118}
+                        bloqueado
+                        motivo="Depende solo de los abonos: se recalcula al registrar o eliminar un pago."
+                      />
                     </td>
                     <td className="is-nowrap">
                       {cuenta.ultimoPago ? (
@@ -739,7 +778,7 @@ export default function AbonosVentas() {
             hint={
               primerAbono
                 ? `Abono inicial: mínimo ${formatearMoneda(minimoInicial, 'COP')} (${ABONO_MINIMO_PORCENTAJE}% del total). Disponible ${formatearMoneda(disponibleFormulario, 'COP')}.`
-                : `Disponible para aplicar: ${formatearMoneda(disponibleFormulario, 'COP')}`
+                : `Disponible para aplicar: ${formatearMoneda(disponibleFormulario, 'COP')}. Referencia del ${ABONO_MINIMO_PORCENTAJE}% del total: ${formatearMoneda(minimoInicial, 'COP')}.`
             }
           >
             <input
@@ -752,16 +791,14 @@ export default function AbonosVentas() {
                 setFormPago((prev) => ({ ...prev, monto: event.target.value }));
                 setErroresPago((prev) => ({ ...prev, monto: undefined }));
               }}
-              placeholder="0"
+              placeholder={String(montoSugerido)}
             />
             <div className="mca-row" style={{ gap: 6, marginTop: 6 }}>
-              {primerAbono && (
-                <Button size="sm" variant="ghost" onClick={() => aplicarPorcentaje(0.5)}>
-                  Mínimo {ABONO_MINIMO_PORCENTAJE}%
-                </Button>
-              )}
+              <Button size="sm" variant="ghost" onClick={aplicarMinimoInicial}>
+                {ABONO_MINIMO_PORCENTAJE}% del total ({formatearMoneda(montoSugerido, 'COP')})
+              </Button>
               <Button size="sm" variant="ghost" onClick={() => aplicarPorcentaje(1)}>
-                Saldo total
+                Saldo total ({formatearMoneda(disponibleFormulario, 'COP')})
               </Button>
             </div>
           </Field>

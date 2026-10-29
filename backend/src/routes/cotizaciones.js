@@ -265,11 +265,12 @@ router.get('/', async (req, res, next) => {
     if (req.query.cliente && !clienteId) return res.status(400).json({ mensaje: 'cliente no es válido.' });
 
     // Listado por orden de llegada, agrupando Pendiente → Aprobado → Rechazado.
+    // Dentro de cada grupo, la cotización más reciente va primero.
     const { rows } = await pool.query(
       `SELECT * FROM cotizaciones
        ${clienteId ? 'WHERE cliente_id = $1' : ''}
        ORDER BY CASE estado WHEN 'Pendiente' THEN 0 WHEN 'Aprobado' THEN 1 ELSE 2 END,
-                creado_en ASC, codigo ASC`,
+                creado_en DESC, codigo DESC`,
       clienteId ? [clienteId] : [],
     );
     const items = await consultarItems(pool, rows.map((row) => row.codigo));
@@ -562,7 +563,7 @@ router.patch('/:codigo/estado', async (req, res, next) => {
       `UPDATE cotizaciones
        SET estado = $1,
            stock_descontado = $2,
-           aprobado_en = CASE WHEN $1 = 'Aprobado' THEN COALESCE(aprobado_en, now()) ELSE NULL END,
+           aprobado_en = CASE WHEN $1::varchar = 'Aprobado' THEN COALESCE(aprobado_en, now()) ELSE NULL END,
            actualizado_en = now()
        WHERE codigo = $3`,
       [
@@ -594,6 +595,8 @@ function construirCorreoCotizacion(cotizacion) {
     + `${dinero(item.precioUnit)} = ${dinero(item.cantidad * item.precioUnit)}`
   )).join('\n');
 
+  const minimoAbono = Math.round(Number(cotizacion.total || 0) * (ABONO_MINIMO_PORCENTAJE / 100));
+
   const texto = [
     `Cotización ${cotizacion.id} · ${cotizacion.proyecto}`,
     `Fecha de emisión: ${cotizacion.fechaEmision}`,
@@ -606,6 +609,10 @@ function construirCorreoCotizacion(cotizacion) {
     `Descuento (${cotizacion.descuento}%): ${dinero(cotizacion.montoDescuento)}`,
     `IVA (${cotizacion.ivaPorcentaje}%): ${dinero(cotizacion.montoImpuesto)}`,
     `TOTAL: ${dinero(cotizacion.total)} COP`,
+    '',
+    `Para aprobar la cotización debe abonar el ${ABONO_MINIMO_PORCENTAJE}% del total `
+    + `(${dinero(minimoAbono)} COP). Al confirmarse ese abono la cotización queda aprobada `
+    + 'y se apartan los materiales.',
     '',
     'Términos y condiciones:',
     cotizacion.terminos || 'Sin términos adicionales.',
@@ -627,53 +634,84 @@ router.post('/:codigo/enviar-correo', async (req, res, next) => {
 
     const destinatario = (req.body?.correo || cotizacion.correo || '').trim();
     if (!destinatario) {
-      return res.status(400).json({ mensaje: 'La cotización no tiene correo del contacto. Capture el correo de la persona de contacto.' });
+      return res.status(400).json({
+        requiereCorreo: true,
+        mensaje: 'La cotización no tiene correo del contacto. Capture el correo de la persona de contacto.',
+      });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destinatario)) {
+      return res.status(400).json({
+        requiereCorreo: true,
+        mensaje: `"${destinatario}" no tiene un formato de correo válido.`,
+      });
+    }
+
+    // El correo capturado en el envío queda guardado en la cotización para la próxima ocasión.
+    if (req.body?.correo && destinatario !== (cotizacion.correo || '').trim()) {
+      await pool.query(
+        'UPDATE cotizaciones SET correo = $1, actualizado_en = now() WHERE codigo = $2',
+        [destinatario, req.params.codigo],
+      );
     }
 
     const { subject, text } = construirCorreoCotizacion(cotizacion);
     const asunto = encodeURIComponent(subject);
     const cuerpo = encodeURIComponent(text);
+    const enlaces = {
+      asunto: subject,
+      texto: text,
+      mailto: `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`,
+    };
 
-    // Si el servidor tiene SMTP configurado (SMTP_HOST/USER/PASS) intenta enviar;
-    // si no, devuelve el enlace mailto para que el navegador abra el cliente de correo.
-    if (process.env.SMTP_HOST) {
+    // Con SMTP_HOST o SMTP_SERVICE configurados el backend envía directo;
+    // sin credenciales devuelve el enlace mailto para el cliente de correo del navegador.
+    if (process.env.SMTP_HOST || process.env.SMTP_SERVICE) {
       try {
         const mailModule = await import('nodemailer');
         const mailer = mailModule.default ?? mailModule;
-        const transporte = mailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT || 587),
-          secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        });
+        const transporte = mailer.createTransport(
+          process.env.SMTP_SERVICE
+            ? { service: process.env.SMTP_SERVICE, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }
+            : {
+              host: process.env.SMTP_HOST,
+              port: Number(process.env.SMTP_PORT || 587),
+              secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+              auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+              },
+            },
+        );
         await transporte.sendMail({
           from: process.env.SMTP_FROM || process.env.SMTP_USER,
           to: destinatario,
           subject,
           text,
         });
-        return res.json({ enviado: true, correo: destinatario, asunto });
+        return res.json({ ...enlaces, enviado: true, correo: destinatario, smtp: true });
       } catch (error) {
+        const faltaPaquete = error?.code === 'ERR_MODULE_NOT_FOUND'
+          || /nodemailer/i.test(String(error?.message));
         return res.status(502).json({
+          ...enlaces,
           enviado: false,
           correo: destinatario,
-          asunto,
-          mensaje: `No se pudo enviar el correo (${error.message}). Usa el enlace de correo del navegador.`,
-          mailto: `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`,
+          smtp: true,
+          requierePaquete: faltaPaquete,
+          mensaje: faltaPaquete
+            ? 'El backend tiene SMTP configurado pero falta la librería de envío. Ejecuta "npm install nodemailer" en backend/ y reinicia el servidor.'
+            : `No se pudo enviar el correo (${error.message}). Se abre tu cliente de correo con la cotización lista.`,
         });
       }
     }
 
     return res.json({
+      ...enlaces,
       enviado: false,
       pendiente: true,
       correo: destinatario,
-      asunto,
-      mailto: `mailto:${destinatario}?subject=${asunto}&body=${cuerpo}`,
-      mensaje: 'Configure SMTP en el backend para el envío automático, o envía desde el cliente de correo.',
+      smtp: false,
+      mensaje: 'El backend no tiene SMTP configurado: se abre tu cliente de correo con la cotización lista para enviar.',
     });
   } catch (error) {
     return next(error);

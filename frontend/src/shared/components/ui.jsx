@@ -81,7 +81,9 @@ export function Button({
   ...rest
 }) {
   // Todo botón que dice «Cerrar» recibe su propio color, en claro y en oscuro.
-  const esCerrar = typeof children === 'string' && children.trim().toLowerCase() === 'cerrar';
+  const texto = typeof children === 'string' ? children.trim().toLowerCase() : '';
+  const esCerrar = texto === 'cerrar';
+  const esCancelar = texto === 'cancelar';
   const clases = [
     'mca-btn',
     variant === 'primary' ? 'mca-btn--primary' : '',
@@ -99,6 +101,8 @@ export function Button({
       {Icon ? (
         <Icon size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />
       ) : esCerrar ? (
+        <XCircle size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />
+      ) : esCancelar ? (
         <X size={size === 'sm' ? 13 : 15} strokeWidth={2.2} />
       ) : null}
       {children}

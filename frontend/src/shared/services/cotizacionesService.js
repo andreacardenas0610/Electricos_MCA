@@ -449,9 +449,10 @@ export function ordenarPorLlegada(cotizaciones) {
   return [...cotizaciones].sort((a, b) => {
     const porEstado = (ORDEN_ESTADO[a.estadoCotizacion] ?? 3) - (ORDEN_ESTADO[b.estadoCotizacion] ?? 3);
     if (porEstado !== 0) return porEstado;
-    return String(a.fechaLlegada || a.fechaEmision || '').localeCompare(
-      String(b.fechaLlegada || b.fechaEmision || ''),
-    ) || String(a.id).localeCompare(String(b.id));
+    // Dentro del mismo estado, la más reciente va primero: lo nuevo aparece de primeras.
+    return String(b.fechaLlegada || b.fechaEmision || '').localeCompare(
+      String(a.fechaLlegada || a.fechaEmision || ''),
+    ) || String(b.id).localeCompare(String(a.id));
   });
 }
 
