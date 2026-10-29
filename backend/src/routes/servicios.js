@@ -28,6 +28,16 @@ const consultaServicio = `
   FROM servicios s
 `;
 
+// El estado «Pausado» depende de la restricción servicios_estado_check.
+const MENSAJE_ESTADO_RECHAZADO =
+  'La base de datos todavía no acepta el estado «Pausado». Aplica la migración 007_estado_pausado_servicios.sql y vuelve a guardar.';
+
+const rechazoEstado = (error, res) => {
+  if (error.code !== '23514') return false;
+  res.status(400).json({ mensaje: MENSAJE_ESTADO_RECHAZADO });
+  return true;
+};
+
 function validar(datos) {
   const errores = [];
   if (!textoValido(datos.nombre)) errores.push('nombre es obligatorio.');
@@ -62,17 +72,64 @@ async function resolverCategoria(client, datos) {
     if (rows[0]) return { nombre: rows[0].nombre, id: Number(datos.categoriaId) };
   }
 
+  // $1 se usa como valor de una columna varchar y dentro de lower(): sin los casts
+  // PostgreSQL deduce dos tipos y rechaza la sentencia (42P08).
   await client.query(
     `INSERT INTO categorias_servicio (nombre)
-     SELECT $1
-     WHERE NOT EXISTS (SELECT 1 FROM categorias_servicio WHERE lower(nombre) = lower($1))`,
+     SELECT $1::varchar
+     WHERE NOT EXISTS (
+       SELECT 1 FROM categorias_servicio WHERE lower(nombre) = lower($1::text)
+     )
+     ON CONFLICT DO NOTHING`,
     [nombre],
   );
   const { rows } = await client.query(
-    'SELECT id FROM categorias_servicio WHERE lower(nombre) = lower($1)',
+    'SELECT id, nombre FROM categorias_servicio WHERE lower(nombre) = lower($1::text)',
     [nombre],
   );
-  return { nombre, id: rows[0]?.id ?? null };
+  return { nombre: rows[0]?.nombre ?? nombre, id: rows[0]?.id ?? null };
+}
+
+// servicios.unidad_medida_id es obligatorio y apunta al catálogo unidades_medida.
+const EQUIVALENCIAS_UNIDAD = {
+  Hora: 'Hora Servicio',
+  Horas: 'Hora Servicio',
+  'Hora Servicio': 'Hora Servicio',
+  H: 'Hora Servicio',
+  Hrs: 'Hora Servicio',
+  Metro: 'Metro',
+  M: 'Metro',
+  Kilogramo: 'Kilogramo',
+  Kg: 'Kilogramo',
+};
+
+async function resolverUnidadMedida(client, datos) {
+  const solicitada = textoValido(datos.unidad) ? datos.unidad.trim() : 'Unidad';
+
+  const coincidencia = await client.query(
+    `SELECT id FROM unidades_medida
+     WHERE lower(nombre) = lower($1::text) OR lower(abreviatura) = lower($1::text)
+     ORDER BY id LIMIT 1`,
+    [solicitada],
+  );
+  if (coincidencia.rows[0]) return coincidencia.rows[0].id;
+
+  const equivalencia = EQUIVALENCIAS_UNIDAD[solicitada];
+  if (equivalencia) {
+    const alias = await client.query(
+      'SELECT id FROM unidades_medida WHERE lower(nombre) = lower($1::text) LIMIT 1',
+      [equivalencia],
+    );
+    if (alias.rows[0]) return alias.rows[0].id;
+  }
+
+  // Proyecto, Punto, Servicio y Día se cobran por unidad en este catálogo.
+  const base = await client.query(
+    `SELECT id FROM unidades_medida
+     ORDER BY CASE WHEN lower(nombre) = 'unidad' THEN 0 ELSE 1 END, id
+     LIMIT 1`,
+  );
+  return base.rows[0]?.id ?? null;
 }
 
 async function guardarMaterialesServicio(client, servicioId, lista) {
@@ -228,23 +285,29 @@ router.post('/', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const categoria = await resolverCategoria(client, datos);
+    const unidadMedidaId = await resolverUnidadMedida(client, datos);
+    const horas = horasServicio(datos);
+    const precio = Number(datos.precioNumerico);
     const codigo = await generarCodigo(client);
     const { rows } = await client.query(
       `INSERT INTO servicios
-         (codigo, nombre, descripcion, unidad, precio_numerico, moneda, categoria, categoria_id, estado, horas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (codigo, nombre, descripcion, unidad, unidad_medida_id, precio_numerico,
+          precio_base, tiempo_estimado_minutos, moneda, categoria, categoria_id, estado, horas)
+       VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         codigo,
         datos.nombre.trim(),
         datos.desc || '',
         datos.unidad || 'Servicio',
-        Number(datos.precioNumerico),
+        unidadMedidaId,
+        precio,
+        Math.round(horas * 60),
         datos.moneda || 'COP',
         categoria.nombre,
         categoria.id,
         datos.estado || 'Activo',
-        horasServicio(datos),
+        horas,
       ],
     );
     await guardarMaterialesServicio(client, rows[0].id, datos.materiales);
@@ -253,6 +316,7 @@ router.post('/', async (req, res, next) => {
     return res.status(201).json(servicio.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
+    if (rechazoEstado(error, res)) return undefined;
     return next(error);
   } finally {
     client.release();
@@ -268,23 +332,28 @@ router.put('/:id', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const categoria = await resolverCategoria(client, datos);
+    const unidadMedidaId = await resolverUnidadMedida(client, datos);
+    const horas = horasServicio(datos);
     const { rows } = await client.query(
       `UPDATE servicios
-       SET nombre = $1, descripcion = $2, unidad = $3, precio_numerico = $4,
-           moneda = $5, categoria = $6, categoria_id = $7, estado = $8, horas = $9,
+       SET nombre = $1, descripcion = $2, unidad = $3, unidad_medida_id = $4,
+           precio_numerico = $5, precio_base = $5, tiempo_estimado_minutos = $6,
+           moneda = $7, categoria = $8, categoria_id = $9, estado = $10, horas = $11,
            actualizado_en = now()
-       WHERE id = $10
+       WHERE id = $12
        RETURNING id`,
       [
         datos.nombre.trim(),
         datos.desc || '',
         datos.unidad || 'Servicio',
+        unidadMedidaId,
         Number(datos.precioNumerico),
+        Math.round(horas * 60),
         datos.moneda || 'COP',
         categoria.nombre,
         categoria.id,
         datos.estado || 'Activo',
-        horasServicio(datos),
+        horas,
         req.params.id,
       ],
     );
@@ -298,6 +367,7 @@ router.put('/:id', async (req, res, next) => {
     return res.json(servicio.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
+    if (rechazoEstado(error, res)) return undefined;
     return next(error);
   } finally {
     client.release();
@@ -313,13 +383,15 @@ router.patch('/:id/estado', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `UPDATE servicios SET estado = $1, actualizado_en = now()
-       WHERE id = $2`,
+       WHERE id = $2
+       RETURNING id`,
       [estado, req.params.id],
     );
     if (!rows[0]) return res.status(404).json({ mensaje: 'Servicio no encontrado.' });
     const servicio = await pool.query(`${consultaServicio} WHERE s.id = $1`, [req.params.id]);
     return res.json(servicio.rows[0]);
   } catch (error) {
+    if (rechazoEstado(error, res)) return undefined;
     return next(error);
   }
 });

@@ -159,6 +159,34 @@ async function validarOrden(client, datos, idActual = null) {
   return {};
 }
 
+// Solo se agenda un servicio que el cliente tenga cotizado y aprobado.
+async function validarCotizacion(client, datos) {
+  const { rows } = await client.query(
+    `SELECT DISTINCT c.codigo, c.estado
+     FROM cotizaciones c
+     JOIN cotizacion_items ci
+       ON ci.cotizacion_codigo = c.codigo AND ci.tipo = 'servicio'
+     JOIN servicios s ON s.id = $2
+     WHERE c.cliente_id = $1
+       AND (ci.referencia_id = s.id::text OR ci.referencia_id = s.codigo)`,
+    [datos.clienteId, datos.servicioId],
+  );
+
+  if (!rows.length) {
+    return { error: 'El servicio no está cotizado a este cliente. Primero registra la cotización.' };
+  }
+
+  const aprobada = rows.find((cotizacion) => cotizacion.estado === 'Aprobado');
+  if (!aprobada) {
+    const pendiente = rows[0];
+    return {
+      error: `La cotización ${pendiente.codigo} está ${pendiente.estado.toLowerCase()}: el servicio solo se agenda cuando la cotización está aprobada.`,
+    };
+  }
+
+  return {};
+}
+
 async function validarHorario(client, datos, horas, idExcluir = null) {
   const hoy = fechaActualBogota();
   const diasDesdeHoy = Math.floor(
@@ -267,6 +295,55 @@ router.get('/ordenes-pendientes', async (req, res, next) => {
   }
 });
 
+// Servicios que el cliente ya cotizó: la agenda solo programa lo que viene de una
+// cotización. Se devuelve el estado de la cotización para avisar cuando no está aprobada.
+const consultaServiciosCotizados = `
+  SELECT DISTINCT ON (s.id)
+         s.id AS "servicioId", s.nombre AS servicio, s.horas, s.categoria,
+         c.codigo AS "cotizacionCodigo", c.estado AS "cotizacionEstado",
+         to_char(c.fecha_emision, 'YYYY-MM-DD') AS "cotizacionFecha",
+         ci.descripcion AS "descripcionItem",
+         o.id AS "ordenId", o.codigo AS "ordenCodigo", o.estado AS "ordenEstado",
+         a.id AS "agendaId", a.codigo AS "agendaCodigo"
+  FROM cotizaciones c
+  JOIN cotizacion_items ci
+    ON ci.cotizacion_codigo = c.codigo AND ci.tipo = 'servicio'
+  JOIN servicios s
+    ON s.id::text = ci.referencia_id OR s.codigo = ci.referencia_id
+  LEFT JOIN LATERAL (
+    SELECT os.id, os.codigo, oe.nombre AS estado
+    FROM ordenes_servicio os
+    JOIN estados_orden_servicio oe ON oe.id = os.estado_id
+    WHERE os.cliente_id = c.cliente_id AND os.servicio_id = s.id
+    ORDER BY CASE WHEN oe.nombre = ANY($2::varchar[]) THEN 0 ELSE 1 END, os.id DESC
+    LIMIT 1
+  ) o ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT ag.id, ag.codigo
+    FROM agenda_actividades ag
+    WHERE ag.cliente_id = c.cliente_id AND ag.servicio_id = s.id
+      AND ag.estado IN ('Programada', 'En proceso')
+    ORDER BY ag.fecha DESC, ag.hora_inicio DESC
+    LIMIT 1
+  ) a ON TRUE
+  WHERE c.cliente_id = $1
+  ORDER BY s.id,
+           CASE WHEN c.estado = 'Aprobado' THEN 0 ELSE 1 END,
+           c.fecha_emision DESC
+`;
+
+router.get('/servicios-cotizados', async (req, res, next) => {
+  const clienteId = idValido(req.query.clienteId);
+  if (!clienteId) return res.status(400).json({ mensaje: 'clienteId no es válido.' });
+
+  try {
+    const { rows } = await pool.query(consultaServiciosCotizados, [clienteId, estadosAgendables]);
+    return res.json(rows);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   const id = idValido(req.params.id);
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
@@ -306,6 +383,11 @@ router.post('/', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: orden.error });
     }
+    const cotizacion = await validarCotizacion(client, datos);
+    if (cotizacion.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: cotizacion.error });
+    }
     const horaFin = `${String(Math.floor((minutos(datos.horaInicio) + referencia.horas * 60) / 60)).padStart(2, '0')}:${String((minutos(datos.horaInicio) + referencia.horas * 60) % 60).padStart(2, '0')}`;
     const codigo = await generarCodigo(client);
     const { rows } = await client.query(
@@ -342,7 +424,7 @@ router.put('/:id', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const actual = await client.query(
-      'SELECT id, estado FROM agenda_actividades WHERE id = $1 FOR UPDATE',
+      'SELECT id, estado, cliente_id, servicio_id FROM agenda_actividades WHERE id = $1 FOR UPDATE',
       [id],
     );
     if (!actual.rows[0]) {
@@ -374,6 +456,17 @@ router.put('/:id', async (req, res, next) => {
     if (orden.error) {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: orden.error });
+    }
+    // Las agendas históricas sin cotización se pueden seguir editando (fecha, técnico,
+    // horario); si se cambia el servicio o el cliente, sí exige cotización aprobada.
+    const cambiaServicio = String(actual.rows[0].cliente_id) !== String(datos.clienteId)
+      || String(actual.rows[0].servicio_id) !== String(datos.servicioId);
+    if (cambiaServicio) {
+      const cotizacion = await validarCotizacion(client, datos);
+      if (cotizacion.error) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ mensaje: cotizacion.error });
+      }
     }
     const minutosFin = minutos(datos.horaInicio) + referencia.horas * 60;
     const horaFin = `${String(Math.floor(minutosFin / 60)).padStart(2, '0')}:${String(minutosFin % 60).padStart(2, '0')}`;

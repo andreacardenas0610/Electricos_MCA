@@ -111,6 +111,9 @@ function fechaSugerida() {
 // Al Completarse, la actividad se quema: solo se puede consultar.
 const actividadQuemada = (actividad) => actividad?.estado === 'Completada';
 
+// Estados de la orden que todavía se pueden agendar.
+const ORDENES_AGENDABLES = ['Pendiente', 'En Espera de Repuestos'];
+
 export function ProgramacionActividades() {
   const {
     data,
@@ -145,9 +148,9 @@ export function ProgramacionActividades() {
   const [actividadDetalle, setActividadDetalle] = useState(null);
   const [actividadEliminar, setActividadEliminar] = useState(null);
   const [modalValidacion, setModalValidacion] = useState(false);
-  // Órdenes pendientes del cliente: de ahí llega el servicio a la agenda.
-  const [ordenesPendientes, setOrdenesPendientes] = useState([]);
-  const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
+  // Servicios que el cliente tiene cotizados: la agenda solo programa desde ahí.
+  const [serviciosCotizados, setServiciosCotizados] = useState([]);
+  const [cargandoCotizaciones, setCargandoCotizaciones] = useState(false);
 
   const { toast, notify, close } = useToast();
 
@@ -174,20 +177,39 @@ export function ProgramacionActividades() {
     [servicios],
   );
 
-  const opcionesOrdenes = useMemo(
-    () => ordenesPendientes.map((orden) => ({
-      value: String(orden.id),
-      label: `${orden.codigo} · ${orden.servicio}`,
-      meta: [
-        orden.estado,
-        orden.fechaProgramada ? `programada ${formatearFecha(orden.fechaProgramada)}` : null,
-        orden.agendaCodigo ? `ya agendada en ${orden.agendaCodigo}` : null,
-      ].filter(Boolean).join(' · '),
-      search: `${orden.codigo} ${orden.servicio} ${orden.estado}`,
-      disabled: Boolean(orden.agendaCodigo),
-    })),
-    [ordenesPendientes],
-  );
+  // Una cotización sin aprobar no se puede agendar: la opción se ve, pero avisa.
+  const cotizacionAprobada = (fila) => fila?.cotizacionEstado === 'Aprobado';
+
+  const opcionesServiciosCotizados = useMemo(() => {
+    const opciones = serviciosCotizados.map((fila) => {
+      const ajena = Boolean(fila.agendaCodigo)
+        && String(fila.agendaId) !== String(actividadEditando?.id ?? '');
+      return {
+        value: String(fila.servicioId),
+        label: fila.servicio,
+        meta: [
+          `${fila.cotizacionCodigo} · ${fila.cotizacionEstado}`,
+          fila.cotizacionFecha ? formatearFecha(fila.cotizacionFecha) : null,
+          fila.ordenCodigo ? `orden ${fila.ordenCodigo}` : null,
+          ajena ? `ya agendada en ${fila.agendaCodigo}` : null,
+        ].filter(Boolean).join(' · '),
+        search: `${fila.cotizacionCodigo} ${fila.cotizacionEstado} ${fila.servicio} ${fila.categoria || ''}`,
+      };
+    });
+
+    // Al editar una actividad cuyo servicio no está entre las cotizaciones del cliente.
+    const actual = opcionesServicios.find(
+      (opcion) => opcion.value === String(formulario.servicioId),
+    );
+    if (actual && !serviciosCotizados.some((fila) => String(fila.servicioId) === actual.value)) {
+      opciones.unshift({
+        ...actual,
+        meta: `Servicio agendado actualmente · ${actual.meta}`,
+      });
+    }
+
+    return opciones;
+  }, [serviciosCotizados, opcionesServicios, formulario.servicioId, actividadEditando]);
 
   const filtradas = useMemo(() => {
     let base = buscarActividades(busqueda, actividades);
@@ -253,28 +275,20 @@ export function ProgramacionActividades() {
     );
   }, [formulario, horasFormulario, actividadEditando, actividades, servicios]);
 
-  // Fecha de la orden solo sirve como sugerencia si sigue dentro de la ventana de agenda.
-  const fechaSugeridaPorOrden = (orden) => {
-    if (!orden?.fechaProgramada) return '';
-    if (orden.fechaProgramada < fechaISO()) return '';
-    if (orden.fechaProgramada > sumarDias(DIAS_MAXIMOS_AGENDA)) return '';
-    return horarioDelDia(orden.fechaProgramada) ? orden.fechaProgramada : '';
-  };
-
-  const cargarOrdenesPendientes = async (clienteId) => {
+  const cargarServiciosCotizados = async (clienteId) => {
     if (!clienteId) {
-      setOrdenesPendientes([]);
+      setServiciosCotizados([]);
       return;
     }
-    setCargandoOrdenes(true);
+    setCargandoCotizaciones(true);
     try {
-      setOrdenesPendientes(
-        await apiRequest(`/agenda/ordenes-pendientes?clienteId=${encodeURIComponent(clienteId)}`),
+      setServiciosCotizados(
+        await apiRequest(`/agenda/servicios-cotizados?clienteId=${encodeURIComponent(clienteId)}`),
       );
     } catch {
-      setOrdenesPendientes([]);
+      setServiciosCotizados([]);
     } finally {
-      setCargandoOrdenes(false);
+      setCargandoCotizaciones(false);
     }
   };
 
@@ -282,7 +296,7 @@ export function ProgramacionActividades() {
     const fecha = fechaSugerida();
     setActividadEditando(null);
     setErrores({});
-    setOrdenesPendientes([]);
+    setServiciosCotizados([]);
     setFormulario({
       ...FORMULARIO_VACIO(),
       fecha,
@@ -319,7 +333,8 @@ export function ProgramacionActividades() {
       descripcion: actividad.descripcion || '',
     });
     setActividadDetalle(null);
-    cargarOrdenesPendientes(actividad.clienteId);
+    setServiciosCotizados([]);
+    cargarServiciosCotizados(actividad.clienteId);
     setModalFormulario(true);
   };
 
@@ -332,7 +347,7 @@ export function ProgramacionActividades() {
   const seleccionarCliente = (valor) => {
     const cliente = clientes.find((item) => String(item.id) === String(valor));
     if (!cliente) {
-      setOrdenesPendientes([]);
+      setServiciosCotizados([]);
       setFormulario((prev) => ({
         ...prev,
         clienteId: '',
@@ -345,8 +360,8 @@ export function ProgramacionActividades() {
       return;
     }
 
-    // Cambiar de cliente invalida la orden y el servicio elegidos: llegan del cliente nuevo.
-    setOrdenesPendientes([]);
+    // Cambiar de cliente invalida la cotización elegida: el servicio llega del cliente nuevo.
+    setServiciosCotizados([]);
     setFormulario((prev) => ({
       ...prev,
       clienteId: String(cliente.id),
@@ -355,43 +370,80 @@ export function ProgramacionActividades() {
       direccion: cliente.direccion || '',
       ordenId: '',
       ordenCodigo: '',
-      servicioId: prev.ordenId ? '' : prev.servicioId,
-      servicio: prev.ordenId ? '' : prev.servicio,
+      servicioId: '',
+      servicio: '',
     }));
-    setErrores((prev) => ({ ...prev, clienteId: undefined, ordenId: undefined }));
-    cargarOrdenesPendientes(cliente.id);
+    setErrores((prev) => ({ ...prev, clienteId: undefined, servicioId: undefined }));
+    cargarServiciosCotizados(cliente.id);
   };
 
-  const seleccionarOrden = (valor) => {
-    const orden = ordenesPendientes.find((item) => String(item.id) === String(valor));
-    if (!orden) {
-      setFormulario((prev) => ({ ...prev, ordenId: '', ordenCodigo: '' }));
+  // El servicio llega de una cotización del cliente. Si no está aprobada no se agenda.
+  const seleccionarServicioCliente = (valor) => {
+    const fila = serviciosCotizados.find((item) => String(item.servicioId) === String(valor));
+    if (!fila) {
+      // Actividades históricas: el servicio agendado puede no estar en las cotizaciones.
+      if (actividadEditando && String(actividadEditando.servicioId) === String(valor)) {
+        const servicio = servicios.find((item) => String(item.id) === String(valor));
+        setFormulario((prev) => ({
+          ...prev,
+          servicioId: String(valor),
+          servicio: servicio?.nombre || prev.servicio,
+        }));
+        setErrores((prev) => ({ ...prev, servicioId: undefined }));
+        return;
+      }
+      seleccionarServicio('');
       return;
     }
 
-    const tecnicoValido = tecnicos.some((tecnico) => String(tecnico.id) === String(orden.tecnicoId));
-    const fechaOrden = fechaSugeridaPorOrden(orden);
+    if (!cotizacionAprobada(fila)) {
+      notify(
+        'warning',
+        'No se puede agendar',
+        `El servicio «${fila.servicio}» está en la cotización ${fila.cotizacionCodigo}, que está ${String(fila.cotizacionEstado).toLowerCase()}. Solo se agenda cuando la cotización está aprobada.`,
+      );
+      setFormulario((prev) => ({
+        ...prev,
+        servicioId: '',
+        servicio: '',
+        ordenId: '',
+        ordenCodigo: '',
+      }));
+      setErrores((prev) => ({
+        ...prev,
+        servicioId: [`La cotización ${fila.cotizacionCodigo} no está aprobada.`],
+      }));
+      return;
+    }
+
+    const ajena = Boolean(fila.agendaCodigo)
+      && String(fila.agendaId) !== String(actividadEditando?.id ?? '');
+    if (ajena) {
+      notify(
+        'warning',
+        'Servicio ya agendado',
+        `«${fila.servicio}» ya está en la agenda del cliente en ${fila.agendaCodigo}.`,
+      );
+      return;
+    }
+
+    // Si el cliente tiene la orden de servicio pendiente, se adjunta para cerrarla al agendar.
+    const ordenPendiente = ORDENES_AGENDABLES.includes(fila.ordenEstado);
 
     setFormulario((prev) => ({
       ...prev,
-      ordenId: String(orden.id),
-      ordenCodigo: orden.codigo,
-      servicioId: orden.servicioId ? String(orden.servicioId) : prev.servicioId,
-      servicio: orden.servicio || prev.servicio,
-      tecnicoId: prev.tecnicoId || (tecnicoValido ? String(orden.tecnicoId) : ''),
-      prioridad: PRIORIDADES_AGENDA.includes(orden.prioridad) ? orden.prioridad : prev.prioridad,
-      fecha: fechaOrden || prev.fecha,
-      horaInicio: fechaOrden && fechaOrden !== prev.fecha
-        ? horaSugerida(fechaOrden) || ''
-        : prev.horaInicio,
-      descripcion: prev.descripcion || orden.descripcion || '',
+      ordenId: ordenPendiente ? String(fila.ordenId) : '',
+      ordenCodigo: ordenPendiente ? fila.ordenCodigo : '',
+      servicioId: String(fila.servicioId),
+      servicio: fila.servicio,
+      descripcion: prev.descripcion || fila.descripcionItem || '',
     }));
-    setErrores((prev) => ({ ...prev, ordenId: undefined, servicioId: undefined }));
+    setErrores((prev) => ({ ...prev, servicioId: undefined }));
   };
 
+  // Catálogo del sistema: se usa cuando el cliente todavía no tiene órdenes.
   const seleccionarServicio = (valor) => {
     const servicio = servicios.find((item) => String(item.id) === String(valor));
-    // Elegir el servicio a mano desvincula la orden: el backend valida que coincidan.
     setFormulario((prev) => ({
       ...prev,
       ordenId: '',
@@ -416,10 +468,15 @@ export function ProgramacionActividades() {
 
     const nuevosErrores = {};
     if (!formulario.clienteId) nuevosErrores.clienteId = ['Selecciona el cliente.'];
-    if (ordenesPendientes.length > 0 && !formulario.ordenId) {
-      nuevosErrores.ordenId = ['Selecciona la orden de servicio pendiente del cliente.'];
+    if (!formulario.servicioId) {
+      nuevosErrores.servicioId = [
+        serviciosCotizados.length > 0
+          ? 'Selecciona uno de los servicios cotizados del cliente.'
+          : formulario.clienteId
+            ? 'El cliente no tiene servicios cotizados. Registra y aprueba la cotización antes de agendar.'
+            : 'Selecciona el servicio a agendar.',
+      ];
     }
-    if (!formulario.servicioId) nuevosErrores.servicioId = ['Selecciona el servicio a agendar.'];
     if (!formulario.tecnicoId) nuevosErrores.tecnicoId = ['Selecciona el técnico responsable.'];
     if (!formulario.fecha) nuevosErrores.fecha = ['Selecciona la fecha del servicio.'];
     if (!formulario.horaInicio) nuevosErrores.horaInicio = ['Selecciona la hora de inicio.'];
@@ -810,46 +867,49 @@ export function ProgramacionActividades() {
             />
           </Field>
 
-          {(ordenesPendientes.length > 0 || cargandoOrdenes) && (
+          {formulario.clienteId ? (
             <Field
-              label="Orden de servicio"
+              label="Servicio cotizado"
               required
               full
-              error={errorCampo('ordenId')}
-              hint={cargandoOrdenes
-                ? 'Consultando las órdenes pendientes del cliente...'
-                : 'Toma la orden pendiente del cliente y adjunta su servicio automáticamente.'}
+              error={errorCampo('servicioId')}
+              hint={cargandoCotizaciones
+                ? 'Consultando las cotizaciones del cliente...'
+                : serviciosCotizados.some(cotizacionAprobada)
+                  ? formulario.ordenId
+                    ? `Adjunta la orden ${formulario.ordenCodigo}; el técnico, la prioridad y la fecha llegan con ella.`
+                    : 'Solo se agenda lo que el cliente tiene cotizado y aprobado.'
+                  : 'El cliente no tiene servicios en cotizaciones aprobadas: registra y aprueba la cotización antes de agendar.'}
             >
               <Combobox
-                value={formulario.ordenId}
-                onChange={seleccionarOrden}
-                options={opcionesOrdenes}
-                placeholder="Buscar orden pendiente..."
-                emptyText="El cliente no tiene órdenes pendientes"
+                value={formulario.servicioId}
+                onChange={seleccionarServicioCliente}
+                options={opcionesServiciosCotizados}
+                placeholder={serviciosCotizados.length > 0
+                  ? 'Buscar servicio cotizado...'
+                  : 'Sin servicios cotizados'}
+                emptyText="El cliente no tiene servicios cotizados"
+                disabled={cargandoCotizaciones || serviciosCotizados.length === 0}
+              />
+            </Field>
+          ) : (
+            <Field
+              label="Servicio cotizado"
+              required
+              full
+              error={errorCampo('servicioId')}
+              hint="Selecciona el cliente para traer los servicios que tiene cotizados."
+            >
+              <Combobox
+                value=""
+                onChange={() => {}}
+                options={[]}
+                placeholder="Primero selecciona el cliente"
+                emptyText="Sin servicios cotizados"
+                disabled
               />
             </Field>
           )}
-
-          <Field
-            label="Servicio"
-            required
-            full
-            error={errorCampo('servicioId')}
-            hint={formulario.ordenId
-              ? `Adjuntado desde la orden ${formulario.ordenCodigo}; libera la orden para elegir otro servicio.`
-              : ordenesPendientes.length > 0
-                ? 'Selecciona la orden del cliente y el servicio llega solo.'
-                : 'El cliente no tiene órdenes pendientes: agenda el servicio manualmente.'}
-          >
-            <Combobox
-              value={formulario.servicioId}
-              onChange={seleccionarServicio}
-              options={opcionesServicios}
-              placeholder="Buscar servicio del catálogo..."
-              emptyText="No se encontraron servicios"
-              disabled={Boolean(formulario.ordenId)}
-            />
-          </Field>
 
           <Field label="Duración estimada" hint="Calculada desde el servicio seleccionado.">
             <input

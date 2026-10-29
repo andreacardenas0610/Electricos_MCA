@@ -549,6 +549,12 @@ export function CatalogoServicios() {
   const categoriasUsadas = new Set(servicios.map((servicio) => servicio.categoria)).size;
 
   const regla = reglaTiempoMoneda(formulario.moneda);
+  // Los servicios guardados pueden traer unidades del catálogo de la base
+  // ("Hora Servicio", "Metro"): se suman a la lista para no perder el valor al editar.
+  const unidadesFormulario = !formulario.unidad
+    || UNIDADES_SERVICIO.includes(formulario.unidad)
+    ? UNIDADES_SERVICIO
+    : [...UNIDADES_SERVICIO, formulario.unidad];
   const horasFormulario = Number(formulario.horas) > 0 ? Number(formulario.horas) : regla.horas;
   const diasEstimados = Math.max(1, Math.ceil(horasFormulario / 8));
   const costoServicioMateriales = costoMateriales(formulario.materiales);
@@ -797,7 +803,7 @@ export function CatalogoServicios() {
                   setFormulario((actual) => ({ ...actual, unidad: event.target.value }))
                 }
               >
-                {UNIDADES_SERVICIO.map((unidad) => (
+                {unidadesFormulario.map((unidad) => (
                   <option key={unidad} value={unidad}>
                     {unidad}
                   </option>
