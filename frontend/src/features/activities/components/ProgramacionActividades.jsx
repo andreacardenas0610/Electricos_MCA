@@ -71,6 +71,8 @@ const FORMULARIO_VACIO = () => ({
   cliente: '',
   telefono: '',
   direccion: '',
+  ordenId: '',
+  ordenCodigo: '',
   servicioId: '',
   servicio: '',
   tecnicoId: '',
@@ -143,6 +145,9 @@ export function ProgramacionActividades() {
   const [actividadDetalle, setActividadDetalle] = useState(null);
   const [actividadEliminar, setActividadEliminar] = useState(null);
   const [modalValidacion, setModalValidacion] = useState(false);
+  // Órdenes pendientes del cliente: de ahí llega el servicio a la agenda.
+  const [ordenesPendientes, setOrdenesPendientes] = useState([]);
+  const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
 
   const { toast, notify, close } = useToast();
 
@@ -167,6 +172,21 @@ export function ProgramacionActividades() {
       search: `${servicio.codigo} ${servicio.categoria} ${servicio.unidad}`,
     })),
     [servicios],
+  );
+
+  const opcionesOrdenes = useMemo(
+    () => ordenesPendientes.map((orden) => ({
+      value: String(orden.id),
+      label: `${orden.codigo} · ${orden.servicio}`,
+      meta: [
+        orden.estado,
+        orden.fechaProgramada ? `programada ${formatearFecha(orden.fechaProgramada)}` : null,
+        orden.agendaCodigo ? `ya agendada en ${orden.agendaCodigo}` : null,
+      ].filter(Boolean).join(' · '),
+      search: `${orden.codigo} ${orden.servicio} ${orden.estado}`,
+      disabled: Boolean(orden.agendaCodigo),
+    })),
+    [ordenesPendientes],
   );
 
   const filtradas = useMemo(() => {
@@ -233,10 +253,36 @@ export function ProgramacionActividades() {
     );
   }, [formulario, horasFormulario, actividadEditando, actividades, servicios]);
 
+  // Fecha de la orden solo sirve como sugerencia si sigue dentro de la ventana de agenda.
+  const fechaSugeridaPorOrden = (orden) => {
+    if (!orden?.fechaProgramada) return '';
+    if (orden.fechaProgramada < fechaISO()) return '';
+    if (orden.fechaProgramada > sumarDias(DIAS_MAXIMOS_AGENDA)) return '';
+    return horarioDelDia(orden.fechaProgramada) ? orden.fechaProgramada : '';
+  };
+
+  const cargarOrdenesPendientes = async (clienteId) => {
+    if (!clienteId) {
+      setOrdenesPendientes([]);
+      return;
+    }
+    setCargandoOrdenes(true);
+    try {
+      setOrdenesPendientes(
+        await apiRequest(`/agenda/ordenes-pendientes?clienteId=${encodeURIComponent(clienteId)}`),
+      );
+    } catch {
+      setOrdenesPendientes([]);
+    } finally {
+      setCargandoOrdenes(false);
+    }
+  };
+
   const abrirNuevo = () => {
     const fecha = fechaSugerida();
     setActividadEditando(null);
     setErrores({});
+    setOrdenesPendientes([]);
     setFormulario({
       ...FORMULARIO_VACIO(),
       fecha,
@@ -261,6 +307,8 @@ export function ProgramacionActividades() {
       cliente: actividad.cliente || '',
       telefono: actividad.telefono || '',
       direccion: actividad.direccion || '',
+      ordenId: actividad.ordenId ? String(actividad.ordenId) : '',
+      ordenCodigo: actividad.ordenCodigo || '',
       servicioId: String(actividad.servicioId || ''),
       servicio: actividad.servicio || '',
       tecnicoId: String(actividad.tecnicoId || ''),
@@ -271,6 +319,7 @@ export function ProgramacionActividades() {
       descripcion: actividad.descripcion || '',
     });
     setActividadDetalle(null);
+    cargarOrdenesPendientes(actividad.clienteId);
     setModalFormulario(true);
   };
 
@@ -283,24 +332,70 @@ export function ProgramacionActividades() {
   const seleccionarCliente = (valor) => {
     const cliente = clientes.find((item) => String(item.id) === String(valor));
     if (!cliente) {
-      setFormulario((prev) => ({ ...prev, clienteId: '', cliente: '', telefono: '', direccion: '' }));
+      setOrdenesPendientes([]);
+      setFormulario((prev) => ({
+        ...prev,
+        clienteId: '',
+        cliente: '',
+        telefono: '',
+        direccion: '',
+        ordenId: '',
+        ordenCodigo: '',
+      }));
       return;
     }
 
+    // Cambiar de cliente invalida la orden y el servicio elegidos: llegan del cliente nuevo.
+    setOrdenesPendientes([]);
     setFormulario((prev) => ({
       ...prev,
       clienteId: String(cliente.id),
       cliente: cliente.nombre,
       telefono: cliente.telefono || '',
       direccion: cliente.direccion || '',
+      ordenId: '',
+      ordenCodigo: '',
+      servicioId: prev.ordenId ? '' : prev.servicioId,
+      servicio: prev.ordenId ? '' : prev.servicio,
     }));
-    setErrores((prev) => ({ ...prev, clienteId: undefined }));
+    setErrores((prev) => ({ ...prev, clienteId: undefined, ordenId: undefined }));
+    cargarOrdenesPendientes(cliente.id);
+  };
+
+  const seleccionarOrden = (valor) => {
+    const orden = ordenesPendientes.find((item) => String(item.id) === String(valor));
+    if (!orden) {
+      setFormulario((prev) => ({ ...prev, ordenId: '', ordenCodigo: '' }));
+      return;
+    }
+
+    const tecnicoValido = tecnicos.some((tecnico) => String(tecnico.id) === String(orden.tecnicoId));
+    const fechaOrden = fechaSugeridaPorOrden(orden);
+
+    setFormulario((prev) => ({
+      ...prev,
+      ordenId: String(orden.id),
+      ordenCodigo: orden.codigo,
+      servicioId: orden.servicioId ? String(orden.servicioId) : prev.servicioId,
+      servicio: orden.servicio || prev.servicio,
+      tecnicoId: prev.tecnicoId || (tecnicoValido ? String(orden.tecnicoId) : ''),
+      prioridad: PRIORIDADES_AGENDA.includes(orden.prioridad) ? orden.prioridad : prev.prioridad,
+      fecha: fechaOrden || prev.fecha,
+      horaInicio: fechaOrden && fechaOrden !== prev.fecha
+        ? horaSugerida(fechaOrden) || ''
+        : prev.horaInicio,
+      descripcion: prev.descripcion || orden.descripcion || '',
+    }));
+    setErrores((prev) => ({ ...prev, ordenId: undefined, servicioId: undefined }));
   };
 
   const seleccionarServicio = (valor) => {
     const servicio = servicios.find((item) => String(item.id) === String(valor));
+    // Elegir el servicio a mano desvincula la orden: el backend valida que coincidan.
     setFormulario((prev) => ({
       ...prev,
+      ordenId: '',
+      ordenCodigo: '',
       servicioId: valor ? String(valor) : '',
       servicio: servicio?.nombre || '',
     }));
@@ -321,6 +416,9 @@ export function ProgramacionActividades() {
 
     const nuevosErrores = {};
     if (!formulario.clienteId) nuevosErrores.clienteId = ['Selecciona el cliente.'];
+    if (ordenesPendientes.length > 0 && !formulario.ordenId) {
+      nuevosErrores.ordenId = ['Selecciona la orden de servicio pendiente del cliente.'];
+    }
     if (!formulario.servicioId) nuevosErrores.servicioId = ['Selecciona el servicio a agendar.'];
     if (!formulario.tecnicoId) nuevosErrores.tecnicoId = ['Selecciona el técnico responsable.'];
     if (!formulario.fecha) nuevosErrores.fecha = ['Selecciona la fecha del servicio.'];
@@ -351,6 +449,7 @@ export function ProgramacionActividades() {
           body: {
             clienteId: formulario.clienteId,
             servicioId: formulario.servicioId,
+            ordenServicioId: formulario.ordenId || null,
             tecnicoId: formulario.tecnicoId,
             fecha: formulario.fecha,
             horaInicio: formulario.horaInicio,
@@ -599,6 +698,7 @@ export function ProgramacionActividades() {
                       </div>
                       <div className="mca-soft" style={{ fontSize: 11, marginTop: 2 }}>
                         {actividad.prioridad} prioridad
+                        {actividad.ordenCodigo ? ` · ${actividad.ordenCodigo}` : ''}
                       </div>
                     </td>
                     <td>{actividad.tecnico}</td>
@@ -710,12 +810,36 @@ export function ProgramacionActividades() {
             />
           </Field>
 
+          {(ordenesPendientes.length > 0 || cargandoOrdenes) && (
+            <Field
+              label="Orden de servicio"
+              required
+              full
+              error={errorCampo('ordenId')}
+              hint={cargandoOrdenes
+                ? 'Consultando las órdenes pendientes del cliente...'
+                : 'Toma la orden pendiente del cliente y adjunta su servicio automáticamente.'}
+            >
+              <Combobox
+                value={formulario.ordenId}
+                onChange={seleccionarOrden}
+                options={opcionesOrdenes}
+                placeholder="Buscar orden pendiente..."
+                emptyText="El cliente no tiene órdenes pendientes"
+              />
+            </Field>
+          )}
+
           <Field
             label="Servicio"
             required
             full
             error={errorCampo('servicioId')}
-            hint="La duración se toma automáticamente del tiempo estimado del servicio."
+            hint={formulario.ordenId
+              ? `Adjuntado desde la orden ${formulario.ordenCodigo}; libera la orden para elegir otro servicio.`
+              : ordenesPendientes.length > 0
+                ? 'Selecciona la orden del cliente y el servicio llega solo.'
+                : 'El cliente no tiene órdenes pendientes: agenda el servicio manualmente.'}
           >
             <Combobox
               value={formulario.servicioId}
@@ -723,6 +847,7 @@ export function ProgramacionActividades() {
               options={opcionesServicios}
               placeholder="Buscar servicio del catálogo..."
               emptyText="No se encontraron servicios"
+              disabled={Boolean(formulario.ordenId)}
             />
           </Field>
 
@@ -918,6 +1043,11 @@ export function ProgramacionActividades() {
               <DetailItem label="Teléfono">{actividadDetalle.telefono || '—'}</DetailItem>
               <DetailItem label="Dirección" full>{actividadDetalle.direccion || '—'}</DetailItem>
               <DetailItem label="Servicio">{actividadDetalle.servicio}</DetailItem>
+              <DetailItem label="Orden de servicio">
+                {actividadDetalle.ordenCodigo
+                  ? `${actividadDetalle.ordenCodigo}${actividadDetalle.ordenEstado ? ` · ${actividadDetalle.ordenEstado}` : ''}`
+                  : 'Agendada manualmente'}
+              </DetailItem>
               <DetailItem label="Técnico">{actividadDetalle.tecnico}</DetailItem>
               <DetailItem label="Fecha">
                 {formatearFecha(actividadDetalle.fecha)} · {nombreDia(actividadDetalle.fecha)}

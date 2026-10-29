@@ -541,6 +541,7 @@ export function Combobox({
               <button
                 key={option.value}
                 type="button"
+                disabled={Boolean(option.disabled)}
                 className={`mca-combobox__option ${String(option.value) === String(value) ? 'is-active' : ''}`.trim()}
                 onClick={() => select(option)}
               >

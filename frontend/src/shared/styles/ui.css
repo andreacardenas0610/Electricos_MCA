@@ -1381,6 +1381,16 @@
   background: var(--bg-elevated);
 }
 
+/* Opción bloqueada: se muestra para explicar por qué no se puede elegir. */
+.mca-combobox__option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mca-combobox__option:disabled:hover {
+  background: transparent;
+}
+
 .mca-combobox__option small {
   color: var(--text-soft);
   font-size: 10px;

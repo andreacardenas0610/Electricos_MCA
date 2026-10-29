@@ -35,6 +35,8 @@ const consultaActividades = `
          c.nombre_razon_social AS cliente, cc.telefono,
          dc.direccion, a.servicio_id AS "servicioId", s.nombre AS servicio,
          a.tercero_id AS "tecnicoId", t.nombre_completo AS tecnico,
+         a.orden_servicio_id AS "ordenId", o.codigo AS "ordenCodigo",
+         oe.nombre AS "ordenEstado",
          a.fecha, to_char(a.hora_inicio, 'HH24:MI') AS "horaInicio",
          to_char(a.hora_fin, 'HH24:MI') AS "horaFin", a.horas,
          a.estado, a.prioridad, a.descripcion
@@ -44,7 +46,12 @@ const consultaActividades = `
   LEFT JOIN direcciones_cliente dc ON dc.cliente_id = c.id AND dc.es_principal = TRUE
   JOIN servicios s ON s.id = a.servicio_id
   JOIN terceros t ON t.id = a.tercero_id
+  LEFT JOIN ordenes_servicio o ON o.id = a.orden_servicio_id
+  LEFT JOIN estados_orden_servicio oe ON oe.id = o.estado_id
 `;
+
+// Estados de orden que todavía no tienen fecha de servicio: los que la agenda debe programar.
+const estadosAgendables = ['Pendiente', 'En Espera de Repuestos'];
 
 function minutos(hora) {
   const [h, m] = hora.split(':').map(Number);
@@ -63,6 +70,9 @@ function validar(datos) {
   const errores = [];
   for (const campo of ['clienteId', 'servicioId', 'tecnicoId']) {
     if (!idValido(datos[campo])) errores.push(`${campo} debe ser un id válido.`);
+  }
+  if (datos.ordenServicioId != null && datos.ordenServicioId !== '' && !idValido(datos.ordenServicioId)) {
+    errores.push('ordenServicioId debe ser un id válido.');
   }
   if (!textoValido(datos.fecha) || !fechaValida(datos.fecha)) {
     errores.push('fecha debe tener formato AAAA-MM-DD.');
@@ -99,6 +109,38 @@ async function validarReferencias(client, datos) {
   if (referencia.servicio_estado === 'Pausado') return { error: 'El servicio seleccionado está pausado.' };
   const horas = Number(datos.horas) || Number(referencia.horas) || 8;
   return { horas };
+}
+
+// La agenda se alimenta de la orden de servicio: la orden define el cliente, el servicio
+// y no puede quedar agendada dos veces.
+async function validarOrden(client, datos, idActual = null) {
+  const ordenId = idValido(datos.ordenServicioId);
+  if (!ordenId) return {};
+
+  const { rows } = await client.query(
+    `SELECT os.id, os.codigo, os.cliente_id, os.servicio_id,
+            e.nombre AS estado, a.id AS agenda_id, a.codigo AS agenda_codigo
+     FROM ordenes_servicio os
+     JOIN estados_orden_servicio e ON e.id = os.estado_id
+     LEFT JOIN agenda_actividades a ON a.orden_servicio_id = os.id
+     WHERE os.id = $1`,
+    [ordenId],
+  );
+  const orden = rows[0];
+  if (!orden) return { error: 'La orden de servicio seleccionada no existe.' };
+  if (String(orden.cliente_id) !== String(datos.clienteId)) {
+    return { error: `La orden ${orden.codigo} no pertenece al cliente seleccionado.` };
+  }
+  if (!estadosAgendables.includes(orden.estado)) {
+    return { error: `La orden ${orden.codigo} está ${orden.estado}; solo se agendan las órdenes ${estadosAgendables.join(' o ')}.` };
+  }
+  if (String(orden.servicio_id) !== String(datos.servicioId)) {
+    return { error: `El servicio agendado no corresponde al de la orden ${orden.codigo}.` };
+  }
+  if (orden.agenda_id && String(orden.agenda_id) !== String(idActual ?? '')) {
+    return { error: `La orden ${orden.codigo} ya está agendada en ${orden.agenda_codigo}.` };
+  }
+  return { ordenServicioId: ordenId };
 }
 
 async function validarHorario(client, datos, horas, idExcluir = null) {
@@ -168,6 +210,39 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Órdenes pendientes del cliente: la agenda las llama directamente y adjunta su servicio.
+router.get('/ordenes-pendientes', async (req, res, next) => {
+  const clienteId = idValido(req.query.clienteId);
+  if (!clienteId) return res.status(400).json({ mensaje: 'clienteId no es válido.' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT os.id, os.codigo, os.cliente_id AS "clienteId",
+              os.servicio_id AS "servicioId", s.nombre AS servicio, s.horas,
+              os.prioridad_id AS "prioridadId", p.nombre AS prioridad,
+              os.tercero_id AS "tecnicoId", t.nombre_completo AS tecnico,
+              os.estado_id AS "estadoId", e.nombre AS estado,
+              to_char(os.fecha_programada, 'YYYY-MM-DD') AS "fechaProgramada",
+              os.descripcion,
+              a.id AS "agendaId", a.codigo AS "agendaCodigo"
+       FROM ordenes_servicio os
+       JOIN estados_orden_servicio e ON e.id = os.estado_id
+       LEFT JOIN servicios s ON s.id = os.servicio_id
+       LEFT JOIN prioridades p ON p.id = os.prioridad_id
+       LEFT JOIN terceros t ON t.id = os.tercero_id
+       LEFT JOIN agenda_actividades a ON a.orden_servicio_id = os.id
+       WHERE os.cliente_id = $1
+         AND os.servicio_id IS NOT NULL
+         AND e.nombre = ANY($2::varchar[])
+       ORDER BY os.id DESC`,
+      [clienteId, estadosAgendables],
+    );
+    return res.json(rows);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   const id = idValido(req.params.id);
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
@@ -202,18 +277,23 @@ router.post('/', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ mensaje: conflicto });
     }
+    const orden = await validarOrden(client, datos);
+    if (orden.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: orden.error });
+    }
     const horaFin = `${String(Math.floor((minutos(datos.horaInicio) + referencia.horas * 60) / 60)).padStart(2, '0')}:${String((minutos(datos.horaInicio) + referencia.horas * 60) % 60).padStart(2, '0')}`;
     const codigo = await generarCodigo(client);
     const { rows } = await client.query(
       `INSERT INTO agenda_actividades
          (codigo, cliente_id, servicio_id, tercero_id, fecha, hora_inicio, hora_fin,
-          horas, estado, prioridad, descripcion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          horas, estado, prioridad, descripcion, orden_servicio_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         codigo, datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
-        datos.prioridad || 'Media', datos.descripcion || '',
+        datos.prioridad || 'Media', datos.descripcion || '', orden.ordenServicioId ?? null,
       ],
     );
     const actividad = await obtenerActividad(client, rows[0].id);
@@ -266,18 +346,25 @@ router.put('/:id', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ mensaje: conflicto });
     }
+    const orden = await validarOrden(client, datos, id);
+    if (orden.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: orden.error });
+    }
     const minutosFin = minutos(datos.horaInicio) + referencia.horas * 60;
     const horaFin = `${String(Math.floor(minutosFin / 60)).padStart(2, '0')}:${String(minutosFin % 60).padStart(2, '0')}`;
     await client.query(
       `UPDATE agenda_actividades
        SET cliente_id = $1, servicio_id = $2, tercero_id = $3, fecha = $4,
            hora_inicio = $5, hora_fin = $6, horas = $7, estado = $8,
-           prioridad = $9, descripcion = $10, actualizado_en = now()
-       WHERE id = $11`,
+           prioridad = $9, descripcion = $10, orden_servicio_id = $11,
+           actualizado_en = now()
+       WHERE id = $12`,
       [
         datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
-        datos.prioridad || 'Media', datos.descripcion || '', id,
+        datos.prioridad || 'Media', datos.descripcion || '', orden.ordenServicioId ?? null,
+        id,
       ],
     );
     const actividad = await obtenerActividad(client, id);
