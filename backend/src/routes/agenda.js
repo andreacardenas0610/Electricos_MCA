@@ -35,8 +35,7 @@ const consultaActividades = `
          c.nombre_razon_social AS cliente, cc.telefono,
          dc.direccion, a.servicio_id AS "servicioId", s.nombre AS servicio,
          a.tercero_id AS "tecnicoId", t.nombre_completo AS tecnico,
-         a.orden_servicio_id AS "ordenId", o.codigo AS "ordenCodigo",
-         oe.nombre AS "ordenEstado",
+         o.id AS "ordenId", o.codigo AS "ordenCodigo", o.estado AS "ordenEstado",
          a.fecha, to_char(a.hora_inicio, 'HH24:MI') AS "horaInicio",
          to_char(a.hora_fin, 'HH24:MI') AS "horaFin", a.horas,
          a.estado, a.prioridad, a.descripcion
@@ -46,8 +45,16 @@ const consultaActividades = `
   LEFT JOIN direcciones_cliente dc ON dc.cliente_id = c.id AND dc.es_principal = TRUE
   JOIN servicios s ON s.id = a.servicio_id
   JOIN terceros t ON t.id = a.tercero_id
-  LEFT JOIN ordenes_servicio o ON o.id = a.orden_servicio_id
-  LEFT JOIN estados_orden_servicio oe ON oe.id = o.estado_id
+  LEFT JOIN LATERAL (
+    SELECT os.id, os.codigo, oe.nombre AS estado
+    FROM ordenes_servicio os
+    JOIN estados_orden_servicio oe ON oe.id = os.estado_id
+    WHERE os.cliente_id = a.cliente_id
+      AND os.servicio_id = a.servicio_id
+    ORDER BY CASE WHEN oe.nombre IN ('Pendiente', 'En Espera de Repuestos') THEN 0 ELSE 1 END,
+             os.id DESC
+    LIMIT 1
+  ) o ON TRUE
 `;
 
 // Estados de orden que todavía no tienen fecha de servicio: los que la agenda debe programar.
@@ -111,18 +118,16 @@ async function validarReferencias(client, datos) {
   return { horas };
 }
 
-// La agenda se alimenta de la orden de servicio: la orden define el cliente, el servicio
-// y no puede quedar agendada dos veces.
+// La agenda se alimenta de la orden de servicio: la orden define el cliente y el servicio,
+// y un mismo servicio del cliente no puede quedar agendado dos veces.
 async function validarOrden(client, datos, idActual = null) {
   const ordenId = idValido(datos.ordenServicioId);
   if (!ordenId) return {};
 
   const { rows } = await client.query(
-    `SELECT os.id, os.codigo, os.cliente_id, os.servicio_id,
-            e.nombre AS estado, a.id AS agenda_id, a.codigo AS agenda_codigo
+    `SELECT os.id, os.codigo, os.cliente_id, os.servicio_id, e.nombre AS estado
      FROM ordenes_servicio os
      JOIN estados_orden_servicio e ON e.id = os.estado_id
-     LEFT JOIN agenda_actividades a ON a.orden_servicio_id = os.id
      WHERE os.id = $1`,
     [ordenId],
   );
@@ -137,10 +142,21 @@ async function validarOrden(client, datos, idActual = null) {
   if (String(orden.servicio_id) !== String(datos.servicioId)) {
     return { error: `El servicio agendado no corresponde al de la orden ${orden.codigo}.` };
   }
-  if (orden.agenda_id && String(orden.agenda_id) !== String(idActual ?? '')) {
-    return { error: `La orden ${orden.codigo} ya está agendada en ${orden.agenda_codigo}.` };
+
+  const { rows: agendada } = await client.query(
+    `SELECT codigo FROM agenda_actividades
+     WHERE cliente_id = $1
+       AND servicio_id = $2
+       AND estado IN ('Programada', 'En proceso')
+       AND ($3::bigint IS NULL OR id <> $3)
+     ORDER BY fecha DESC, hora_inicio DESC
+     LIMIT 1`,
+    [datos.clienteId, datos.servicioId, idActual],
+  );
+  if (agendada[0]) {
+    return { error: `Ese servicio del cliente ya está agendado en ${agendada[0].codigo}.` };
   }
-  return { ordenServicioId: ordenId };
+  return {};
 }
 
 async function validarHorario(client, datos, horas, idExcluir = null) {
@@ -230,7 +246,15 @@ router.get('/ordenes-pendientes', async (req, res, next) => {
        LEFT JOIN servicios s ON s.id = os.servicio_id
        LEFT JOIN prioridades p ON p.id = os.prioridad_id
        LEFT JOIN terceros t ON t.id = os.tercero_id
-       LEFT JOIN agenda_actividades a ON a.orden_servicio_id = os.id
+       LEFT JOIN LATERAL (
+         SELECT ag.id, ag.codigo
+         FROM agenda_actividades ag
+         WHERE ag.cliente_id = os.cliente_id
+           AND ag.servicio_id = os.servicio_id
+           AND ag.estado IN ('Programada', 'En proceso')
+         ORDER BY ag.fecha DESC, ag.hora_inicio DESC
+         LIMIT 1
+       ) a ON TRUE
        WHERE os.cliente_id = $1
          AND os.servicio_id IS NOT NULL
          AND e.nombre = ANY($2::varchar[])
@@ -287,13 +311,13 @@ router.post('/', async (req, res, next) => {
     const { rows } = await client.query(
       `INSERT INTO agenda_actividades
          (codigo, cliente_id, servicio_id, tercero_id, fecha, hora_inicio, hora_fin,
-          horas, estado, prioridad, descripcion, orden_servicio_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          horas, estado, prioridad, descripcion)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         codigo, datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
-        datos.prioridad || 'Media', datos.descripcion || '', orden.ordenServicioId ?? null,
+        datos.prioridad || 'Media', datos.descripcion || '',
       ],
     );
     const actividad = await obtenerActividad(client, rows[0].id);
@@ -357,14 +381,12 @@ router.put('/:id', async (req, res, next) => {
       `UPDATE agenda_actividades
        SET cliente_id = $1, servicio_id = $2, tercero_id = $3, fecha = $4,
            hora_inicio = $5, hora_fin = $6, horas = $7, estado = $8,
-           prioridad = $9, descripcion = $10, orden_servicio_id = $11,
-           actualizado_en = now()
-       WHERE id = $12`,
+           prioridad = $9, descripcion = $10, actualizado_en = now()
+       WHERE id = $11`,
       [
         datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
-        datos.prioridad || 'Media', datos.descripcion || '', orden.ordenServicioId ?? null,
-        id,
+        datos.prioridad || 'Media', datos.descripcion || '', id,
       ],
     );
     const actividad = await obtenerActividad(client, id);
