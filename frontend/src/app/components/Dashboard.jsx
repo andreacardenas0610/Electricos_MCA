@@ -32,8 +32,18 @@ import { GestionUsuarios } from '../../features/users/components/GestionUsuarios
 import { GestionRolesPermisos } from '../../features/users/components/GestionRolesPermisos.jsx';
 import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/management/components/ModulosGestion.jsx';
 
+// El correo de recuperación llega como ?recuperar=<token>: se abre la pantalla
+// de contraseña nueva con el código ya cargado y se limpia la URL.
+function leerTokenRecuperacion() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('recuperar') || '';
+  if (token) window.history.replaceState({}, '', window.location.pathname);
+  return token;
+}
+
 export function Dashboard() {
   const [sesion, setSesion] = useState(getLocalSession);
+  const [tokenRecuperacion] = useState(leerTokenRecuperacion);
   const autenticado = Boolean(sesion?.usuario);
   const { theme: tema, toggleTheme } = useContext(ThemeContext);
 
@@ -68,7 +78,7 @@ export function Dashboard() {
   };
 
   if (!autenticado) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} tokenRecuperacion={tokenRecuperacion} />;
   }
 
   if (mostrandoSplash) {

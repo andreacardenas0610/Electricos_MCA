@@ -58,13 +58,17 @@ import {
   PRIORIDADES_AGENDA,
   buscarActividades,
   estadoSiguienteAgenda,
+  intervalosDelTecnico,
   resumenAgenda,
+  seCruzan,
+  slotsDelDia,
   validarAgendaCompleta,
   validarCita,
 } from '../../../shared/services/agendaService.js';
 import { normalizarServicio } from '../../../shared/services/serviciosService.js';
 import { normalizarTecnico } from '../../../shared/services/tercerosService.js';
 import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
+import '../styles/agenda.css';
 
 const FORMULARIO_VACIO = () => ({
   clienteId: '',
@@ -162,7 +166,8 @@ export function ProgramacionActividades() {
       value: String(cliente.id),
       label: `${cliente.tipoDocumento || ''} ${cliente.documento || ''} · ${cliente.nombre}`.trim(),
       meta: [cliente.departamento, cliente.municipio].filter(Boolean).join(' · ') || 'Sin ubicación',
-      search: `${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.departamento} ${cliente.municipio}`,
+      // El buscador mira nombre, cédula, contacto, teléfono, correo y ubicación.
+      search: `${cliente.documento || ''} ${cliente.tipoDocumento || ''} ${cliente.contacto || ''} ${cliente.telefono || ''} ${cliente.correo || ''} ${cliente.departamento || ''} ${cliente.municipio || ''} ${cliente.id}`,
     })),
     [clientes],
   );
@@ -252,7 +257,69 @@ export function ProgramacionActividades() {
 
   const horarioFormulario = horarioDelDia(formulario.fecha);
 
-  // Hora más temprana permitida: la apertura del día, o la hora actual si se agenda hoy.
+  // Cupos del día por técnico: solo horas dentro del horario de atención y sin choques
+  // con otros servicios (ni con el margen de 30 min entre servicios).
+  const disponibilidadDia = useMemo(() => {
+    if (!formulario.fecha || !horarioFormulario || horasFormulario <= 0) return null;
+
+    const duracion = Math.round(horasFormulario * 60);
+    const slots = slotsDelDia(formulario.fecha, duracion);
+    const filas = tecnicos.map((tecnico) => {
+      const ocupados = intervalosDelTecnico(
+        actividades,
+        formulario.fecha,
+        tecnico.id,
+        actividadEditando?.id,
+      );
+      const opciones = slots.map((slot) => {
+        const choque = ocupados.find((intervalo) => seCruzan(
+          slot.minutos,
+          slot.minutos + duracion,
+          intervalo.inicio,
+          intervalo.fin,
+        ));
+        return {
+          ...slot,
+          libre: !choque,
+          motivo: choque
+            ? `Ocupado con ${choque.codigo} de ${minutosAHora(choque.inicio)} a ${minutosAHora(choque.fin)}`
+            : `Disponible de ${slot.hora} a ${slot.horaFin}`,
+        };
+      });
+      return {
+        tecnico,
+        opciones,
+        libres: opciones.filter((opcion) => opcion.libre).length,
+      };
+    });
+
+    return { slots, filas };
+  }, [
+    formulario.fecha,
+    horarioFormulario,
+    horasFormulario,
+    tecnicos,
+    actividades,
+    actividadEditando,
+  ]);
+
+  const opcionesTecnicos = useMemo(
+    () => tecnicos.map((tecnico) => {
+      const fila = disponibilidadDia?.filas.find(
+        (item) => String(item.tecnico.id) === String(tecnico.id),
+      );
+      return {
+        value: String(tecnico.id),
+        label: tecnico.nombre,
+        meta: [
+          tecnico.especialidad,
+          fila ? `${fila.libres} ${fila.libres === 1 ? 'hora libre' : 'horas libres'}` : null,
+        ].filter(Boolean).join(' · '),
+        search: `${tecnico.documento || ''} ${tecnico.tipoDocumento || ''} ${tecnico.telefono || ''} ${tecnico.especialidad || ''}`,
+      };
+    }),
+    [tecnicos, disponibilidadDia],
+  );
   const horaMinimaFormulario = formulario.fecha === hoy
     ? horaSugerida(formulario.fecha) || horarioFormulario?.apertura || ''
     : horarioFormulario?.apertura || '';
@@ -297,10 +364,10 @@ export function ProgramacionActividades() {
     setActividadEditando(null);
     setErrores({});
     setServiciosCotizados([]);
+    // La hora se elige en la disponibilidad del día, no se propone sola.
     setFormulario({
       ...FORMULARIO_VACIO(),
       fecha,
-      horaInicio: horaSugerida(fecha),
     });
     setModalFormulario(true);
   };
@@ -436,9 +503,11 @@ export function ProgramacionActividades() {
       ordenCodigo: ordenPendiente ? fila.ordenCodigo : '',
       servicioId: String(fila.servicioId),
       servicio: fila.servicio,
+      // La duración cambia con el servicio: la hora elegida se vuelve a escoger.
+      horaInicio: '',
       descripcion: prev.descripcion || fila.descripcionItem || '',
     }));
-    setErrores((prev) => ({ ...prev, servicioId: undefined }));
+    setErrores((prev) => ({ ...prev, servicioId: undefined, horaInicio: undefined }));
   };
 
   // Catálogo del sistema: se usa cuando el cliente todavía no tiene órdenes.
@@ -458,9 +527,31 @@ export function ProgramacionActividades() {
     setFormulario((prev) => ({
       ...prev,
       fecha: valor,
-      horaInicio: horaSugerida(valor) || '',
+      // Las horas disponibles dependen del día: se escoge de nuevo en la lista.
+      horaInicio: '',
     }));
     setErrores((prev) => ({ ...prev, fecha: undefined, horaInicio: undefined }));
+  };
+
+  const seleccionarTecnico = (valor) => {
+    const tecnico = tecnicos.find((item) => String(item.id) === String(valor));
+    setFormulario((prev) => ({
+      ...prev,
+      tecnicoId: tecnico ? String(tecnico.id) : '',
+      horaInicio: '',
+    }));
+    setErrores((prev) => ({ ...prev, tecnicoId: undefined, horaInicio: undefined }));
+  };
+
+  // Un solo clic en la disponibilidad asigna técnico y hora de inicio.
+  const elegirHorario = (tecnico, opcion) => {
+    if (!opcion.libre) return;
+    setFormulario((prev) => ({
+      ...prev,
+      tecnicoId: String(tecnico.id),
+      horaInicio: opcion.hora,
+    }));
+    setErrores((prev) => ({ ...prev, tecnicoId: undefined, horaInicio: undefined }));
   };
 
   const handleGuardar = async (event) => {
@@ -921,22 +1012,22 @@ export function ProgramacionActividades() {
             />
           </Field>
 
-          <Field label="Técnico responsable" required error={errorCampo('tecnicoId')}>
-            <select
-              className="mca-select"
+          <Field
+            label="Técnico responsable"
+            required
+            error={errorCampo('tecnicoId')}
+            tooltip="Busca por nombre, cédula, teléfono o especialidad. Las horas libres se eligen abajo."
+            hint={disponibilidadDia
+              ? 'Cada técnico muestra sus horas libres del día seleccionado.'
+              : 'Puedes buscarlo por nombre o cédula.'}
+          >
+            <Combobox
               value={formulario.tecnicoId}
-              onChange={(event) => {
-                setFormulario((prev) => ({ ...prev, tecnicoId: event.target.value }));
-                setErrores((prev) => ({ ...prev, tecnicoId: undefined }));
-              }}
-            >
-              <option value="">Selecciona un técnico</option>
-              {tecnicos.map((tecnico) => (
-                <option key={tecnico.id} value={tecnico.id}>
-                  {tecnico.nombre} · {tecnico.especialidad}
-                </option>
-              ))}
-            </select>
+              onChange={seleccionarTecnico}
+              options={opcionesTecnicos}
+              placeholder="Buscar técnico por nombre o cédula..."
+              emptyText="No se encontraron técnicos activos"
+            />
           </Field>
 
           <Field
@@ -960,23 +1051,113 @@ export function ProgramacionActividades() {
           </Field>
 
           <Field
+            label="Horas disponibles del día"
+            full
+            tooltip="Solo aparecen horas dentro del horario de atención. Las horas ocupadas de cada técnico quedan grises y bloqueadas; al hacer clic en una hora libre se asigna el técnico y la hora de inicio."
+          >
+            {!formulario.fecha ? (
+              <p className="agenda-disponibilidad__vacio">
+                Selecciona la fecha para ver las horas libres de cada técnico.
+              </p>
+            ) : !horarioFormulario ? (
+              <p className="agenda-disponibilidad__vacio">
+                El {nombreDia(formulario.fecha).toLowerCase()} no hay atención. Elige otro día.
+              </p>
+            ) : horasFormulario <= 0 ? (
+              <p className="agenda-disponibilidad__vacio">
+                Selecciona el servicio cotizado para calcular las horas disponibles.
+              </p>
+            ) : (
+              <div className="agenda-disponibilidad">
+                <p className="agenda-disponibilidad__leyenda">
+                  <Clock3 size={14} aria-hidden="true" />
+                  {nombreDia(formulario.fecha)} · atención {horarioFormulario.apertura}–{horarioFormulario.cierre}
+                  {' · '}
+                  servicio de {horasFormulario === 1 ? '1 hora' : `${horasFormulario} horas`}
+                  {' · '}
+                  las horas grises ya están ocupadas
+                </p>
+
+                {disponibilidadDia.filas.map((fila) => {
+                  const seleccionado = String(formulario.tecnicoId) === String(fila.tecnico.id);
+                  return (
+                    <div
+                      key={fila.tecnico.id}
+                      className={`agenda-tecnico${seleccionado ? ' is-selected' : ''}`}
+                    >
+                      <div className="agenda-tecnico__info">
+                        <strong>{fila.tecnico.nombre}</strong>
+                        <small>
+                          {fila.tecnico.especialidad} · {fila.libres} {fila.libres === 1 ? 'hora libre' : 'horas libres'}
+                        </small>
+                      </div>
+                      {fila.opciones.length === 0 ? (
+                        <span className="agenda-tecnico__sin-cupos">
+                          El servicio no alcanza dentro del horario de este día.
+                        </span>
+                      ) : (
+                        <div
+                          className="agenda-tecnico__slots"
+                          role="group"
+                          aria-label={`Horas disponibles de ${fila.tecnico.nombre}`}
+                        >
+                          {fila.opciones.map((opcion) => {
+                            const activo = seleccionado && formulario.horaInicio === opcion.hora;
+                            return (
+                              <button
+                                key={opcion.hora}
+                                type="button"
+                                className={`agenda-slot${activo ? ' is-selected' : ''}`}
+                                disabled={!opcion.libre}
+                                title={opcion.motivo}
+                                aria-pressed={activo}
+                                onClick={() => elegirHorario(fila.tecnico, opcion)}
+                              >
+                                {opcion.hora}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {disponibilidadDia.filas.length === 0 && (
+                  <p className="agenda-disponibilidad__vacio">
+                    No hay técnicos activos para asignar.
+                  </p>
+                )}
+                {disponibilidadDia.filas.length > 0
+                  && disponibilidadDia.filas.every((fila) => fila.libres === 0) && (
+                    <p className="agenda-disponibilidad__vacio">
+                      Ese día no queda cupo para este servicio. Prueba otra fecha.
+                    </p>
+                  )}
+              </div>
+            )}
+          </Field>
+
+          <Field
             label="Hora de inicio"
             required
             error={errorCampo('horaInicio')}
-            tooltip={`Hora en que arranca el servicio. No se ofrecen las horas que ya pasaron: el mínimo disponible es ${horaMinimaFormulario || 'el cierre del día'}.`}
-            hint={`Agenda con al menos ${MARGEN_MINIMO_AGENDA_MINUTOS} min de anticipación.`}
+            tooltip="Hora en que arranca el servicio. Solo se puede elegir entre las horas libres del técnico."
+            hint={formulario.horaInicio
+              ? `Termina a las ${horaFinFormulario} y respeta ${BUFFER_ENTRE_SERVICIOS_MINUTOS} min con el siguiente servicio.`
+              : 'Elige una hora en las horas disponibles del día.'}
           >
-            <input
-              className="mca-input"
-              type="time"
-              step="900"
-              min={horaMinimaFormulario || undefined}
-              value={formulario.horaInicio}
-              onChange={(event) => {
-                setFormulario((prev) => ({ ...prev, horaInicio: event.target.value }));
-                setErrores((prev) => ({ ...prev, horaInicio: undefined }));
-              }}
-            />
+            <div className="agenda-hora-elegida">
+              <Clock3 size={15} aria-hidden="true" />
+              {formulario.horaInicio ? (
+                <>
+                  <strong>{formulario.horaInicio}</strong>
+                  <span>{formatearHora12(formulario.horaInicio)}</span>
+                </>
+              ) : (
+                <span>Sin seleccionar</span>
+              )}
+            </div>
           </Field>
 
           <Field label="Hora de finalización" hint="Calculada con la duración del servicio.">

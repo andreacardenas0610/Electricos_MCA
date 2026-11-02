@@ -1,0 +1,153 @@
+/* Disponibilidad de horas por técnico en la agenda */
+.agenda-disponibilidad {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  overflow-y: auto;
+}
+
+.agenda-disponibilidad__leyenda {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.agenda-disponibilidad__vacio {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.agenda-tecnico {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.agenda-tecnico.is-selected {
+  border-color: var(--accent-yellow-border);
+  box-shadow: inset 3px 0 0 var(--accent-yellow);
+}
+
+.agenda-tecnico__info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agenda-tecnico__info strong {
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-tecnico__info small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.agenda-tecnico__sin-cupos {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.agenda-tecnico__slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agenda-slot {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.agenda-slot:hover:not(:disabled) {
+  border-color: var(--accent-yellow-border);
+  color: var(--accent-yellow);
+}
+
+.agenda-slot:focus-visible {
+  outline: 2px solid var(--accent-yellow-border);
+  outline-offset: 1px;
+}
+
+.agenda-slot.is-selected {
+  border-color: var(--accent-yellow);
+  background: var(--accent-yellow);
+  color: var(--accent-text);
+}
+
+.agenda-slot:disabled {
+  border-style: dashed;
+  border-color: var(--border-soft);
+  background: var(--bg-hover);
+  color: var(--text-soft);
+  cursor: not-allowed;
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+
+.agenda-hora-elegida {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.agenda-hora-elegida strong {
+  color: var(--text-main);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-hora-elegida span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .agenda-tecnico {
+    grid-template-columns: 1fr;
+  }
+}

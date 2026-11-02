@@ -33,7 +33,7 @@ function CampoAuth({ nombre, etiqueta, tipo, valor, onChange, autoComplete }) {
   );
 }
 
-function MarcoAuth({ titulo, children, onBack }) {
+export function MarcoAuth({ titulo, children, onBack }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
 
   return (

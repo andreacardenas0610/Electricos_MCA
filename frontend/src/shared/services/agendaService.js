@@ -22,6 +22,56 @@ export const PRIORIDADES_AGENDA = ['Baja', 'Media', 'Alta'];
 
 const ESTADOS_ACTIVOS = ['Programada', 'En proceso'];
 
+// La agenda solo ofrece cuartos de hora dentro del horario de atención.
+export const PASO_SLOTS_MINUTOS = 30;
+
+// Horas de inicio válidas para un servicio dentro del horario del día.
+export function slotsDelDia(fecha, duracionMinutos) {
+  const horario = horarioDelDia(fecha);
+  if (!horario || duracionMinutos <= 0) return [];
+
+  const apertura = horaAMinutos(horario.apertura);
+  const cierre = horaAMinutos(horario.cierre);
+  let desde = apertura;
+
+  if (fecha === fechaISO()) {
+    const ahora = new Date();
+    const minimo = ahora.getHours() * 60 + ahora.getMinutes() + MARGEN_MINIMO_AGENDA_MINUTOS;
+    desde = Math.max(apertura, Math.ceil(minimo / PASO_SLOTS_MINUTOS) * PASO_SLOTS_MINUTOS);
+  }
+
+  const slots = [];
+  for (let inicio = desde; inicio + duracionMinutos <= cierre; inicio += PASO_SLOTS_MINUTOS) {
+    slots.push({
+      minutos: inicio,
+      hora: minutosAHora(inicio),
+      horaFin: minutosAHora(inicio + duracionMinutos),
+    });
+  }
+  return slots;
+}
+
+export function intervalosDelTecnico(actividades, fecha, tecnicoId, idExcluir = null) {
+  return actividades
+    .filter((actividad) => (
+      actividad.fecha === fecha
+      && String(actividad.tecnicoId) === String(tecnicoId)
+      && ESTADOS_ACTIVOS.includes(actividad.estado)
+      && String(actividad.id) !== String(idExcluir ?? '')
+    ))
+    .map((actividad) => ({
+      inicio: horaAMinutos(actividad.horaInicio),
+      fin: horaAMinutos(actividad.horaFin),
+      codigo: actividad.codigo,
+    }));
+}
+
+// Respeta el margen de 30 minutos que también valida el servidor.
+export function seCruzan(inicio, fin, inicioOcupado, finOcupado) {
+  return inicio < finOcupado + BUFFER_ENTRE_SERVICIOS_MINUTOS
+    && inicioOcupado < fin + BUFFER_ENTRE_SERVICIOS_MINUTOS;
+}
+
 export function estadoSiguienteAgenda(estado) {
   const indice = ESTADOS_AGENDA.indexOf(estado);
   return ESTADOS_AGENDA[(indice + 1) % ESTADOS_AGENDA.length] || ESTADOS_AGENDA[0];

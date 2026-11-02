@@ -2,15 +2,17 @@ import { useContext, useState } from 'react';
 import { CircleAlert, Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { apiRequest } from '../../../shared/api.js';
+import { RecuperacionContrasena } from './RecuperacionContrasena.jsx';
 import '../styles/auth.css';
 
-export function Login({ onLogin }) {
+export function Login({ onLogin, tokenRecuperacion = '' }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [vista, setVista] = useState(tokenRecuperacion ? 'recuperar' : 'login');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,6 +47,15 @@ export function Login({ onLogin }) {
       setEnviando(false);
     }
   };
+
+  if (vista === 'recuperar') {
+    return (
+      <RecuperacionContrasena
+        onBack={() => setVista('login')}
+        tokenInicial={tokenRecuperacion}
+      />
+    );
+  }
 
   return (
     <main className="auth-page">
@@ -112,6 +123,12 @@ export function Login({ onLogin }) {
           <button className="auth-submit" type="submit" disabled={enviando}>
             {enviando ? 'Ingresando...' : 'Iniciar sesión'} <span aria-hidden="true">&#8594;</span>
           </button>
+
+          <div className="auth-links">
+            <button type="button" onClick={() => setVista('recuperar')}>
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
 
         </form>
 
