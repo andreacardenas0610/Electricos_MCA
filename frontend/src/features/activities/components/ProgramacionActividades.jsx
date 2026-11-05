@@ -791,7 +791,7 @@ export function ProgramacionActividades() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--agenda">
             <thead>
               <tr>
                 <th>Código</th>
@@ -1347,7 +1347,7 @@ export function ProgramacionActividades() {
               </div>
 
               <div className="mca-table-wrap">
-                <table className="mca-table">
+                <table className="mca-table mca-table--incidents">
                   <thead>
                     <tr>
                       <th>Código</th>

@@ -451,7 +451,7 @@ export function Materiales() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--inventory">
             <thead>
               <tr>
                 <th>Código</th>

@@ -182,7 +182,11 @@ export function Dashboard() {
         boxShadow: '4px 0 20px rgba(0,0,0,0.2)',
         overflow: 'hidden',
         zIndex: 10
-      }}>
+      }}
+        onMouseLeave={(event) => {
+          event.currentTarget.querySelector(':focus')?.blur();
+        }}
+      >
         <div>
           {/* Header del Logo */}
           <div style={{ padding: '0 8px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

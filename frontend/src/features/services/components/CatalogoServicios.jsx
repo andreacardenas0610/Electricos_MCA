@@ -670,7 +670,7 @@ export function CatalogoServicios() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--services">
             <thead>
               <tr>
                 <th>Servicio</th>

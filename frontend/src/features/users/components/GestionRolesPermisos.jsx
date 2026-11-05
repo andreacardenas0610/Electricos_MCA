@@ -332,16 +332,16 @@ export function GestionRolesPermisos() {
               )}
 
               <div className="mca-table-wrap">
-                <table className="mca-table">
+                <table className="mca-table mca-table--permissions">
                   <thead>
                     <tr>
                       <th>Módulo</th>
                       {ACCIONES_PERMISO.map((accion) => (
-                        <th key={accion.id} style={{ textAlign: 'center', width: 92 }}>
+                        <th key={accion.id} style={{ textAlign: 'center' }}>
                           {accion.nombre}
                         </th>
                       ))}
-                      <th style={{ textAlign: 'right', width: 110 }}>Todos</th>
+                      <th style={{ textAlign: 'right' }}>Todos</th>
                     </tr>
                   </thead>
                   <tbody>

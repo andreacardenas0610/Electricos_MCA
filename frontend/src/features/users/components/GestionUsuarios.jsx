@@ -285,7 +285,7 @@ export function GestionUsuarios() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--users">
             <thead>
               <tr>
                 <th>Usuario</th>

@@ -437,8 +437,8 @@ export function Clientes() {
         }
         flush
       >
-        <div className="mca-table-wrap">
-          <table className="mca-table">
+        <div className="mca-table-wrap mca-table-wrap--fit">
+          <table className="mca-table mca-table--fit mca-table--clientes">
             <thead>
               <tr>
                 <th>Tipo doc. / NIT</th>
@@ -472,13 +472,13 @@ export function Clientes() {
                   const Icono = ICONO_PROPIEDAD[cliente.tipoPropiedad] || Building2;
                   return (
                     <tr key={cliente.id} className={claseFilaEstado(cliente.estado, 'usuario')}>
-                      <td className="is-nowrap">
+                      <td className="is-nowrap" data-label="Documento">
                         <div>{cliente.tipoDocumento || '—'}</div>
                         <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
                           {cliente.documento || '—'}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Razón social / Nombre">
                         <div className="mca-cell-title">
                           <div className="mca-cell-icon">
                             <Icono size={15} strokeWidth={1.9} />
@@ -494,12 +494,12 @@ export function Clientes() {
                           </div>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Tipo">
                         <Badge tone={TONO_PROPIEDAD[cliente.tipoPropiedad] || 'neutral'}>
                           {cliente.tipoPropiedad}
                         </Badge>
                       </td>
-                      <td>
+                      <td data-label="Persona de contacto">
                         <div>{cliente.contacto || '—'}</div>
                         {cliente.correo && (
                           <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
@@ -507,13 +507,13 @@ export function Clientes() {
                           </div>
                         )}
                       </td>
-                      <td className="is-nowrap">
+                      <td className="is-nowrap" data-label="Teléfono">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Phone size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>{cliente.telefono || '—'}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Departamento / Municipio">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>
@@ -522,7 +522,7 @@ export function Clientes() {
                           </span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Estado">
                         <EstadoToggle
                           estado={cliente.estado}
                           estados={ESTADOS.usuario}
@@ -530,7 +530,7 @@ export function Clientes() {
                           onClick={() => cambiarEstado(cliente)}
                         />
                       </td>
-                      <td className="mca-center">
+                      <td className="mca-center" data-label="Acciones">
                         <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
                           <AccionesFila
                             onVer={() => setDetalleId(cliente.id)}
@@ -1081,8 +1081,8 @@ export function GestionTerceros() {
         }
         flush
       >
-        <div className="mca-table-wrap">
-          <table className="mca-table">
+        <div className="mca-table-wrap mca-table-wrap--fit">
+          <table className="mca-table mca-table--fit mca-table--terceros">
             <thead>
               <tr>
                 <th>Tipo doc. / Documento</th>
@@ -1116,13 +1116,13 @@ export function GestionTerceros() {
                   const asignados = cargaTecnicos[String(tecnico.id)] || 0;
                   return (
                     <tr key={tecnico.id} className={claseFilaEstado(tecnico.estado, 'usuario')}>
-                      <td className="is-nowrap">
+                      <td className="is-nowrap" data-label="Documento">
                         <div>{tecnico.tipoDocumento || '—'}</div>
                         <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
                           {tecnico.documento || '—'}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Razón social / Nombre">
                         <div className="mca-cell-title">
                           <div className="mca-cell-icon">
                             <Handshake size={15} strokeWidth={1.9} />
@@ -1130,7 +1130,7 @@ export function GestionTerceros() {
                           <div className="is-primary">{tecnico.nombre}</div>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Departamento / Municipio">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>
@@ -1139,24 +1139,24 @@ export function GestionTerceros() {
                           </span>
                         </div>
                       </td>
-                      <td className="is-nowrap">
+                      <td className="is-nowrap" data-label="Teléfono">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Phone size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>{tecnico.telefono || '—'}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Correo">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Mail size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>{tecnico.correo || '—'}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Servicios activos">
                         <Badge tone={asignados ? 'warning' : 'neutral'}>
                           {asignados} {asignados === 1 ? 'servicio' : 'servicios'}
                         </Badge>
                       </td>
-                      <td>
+                      <td data-label="Estado">
                         <EstadoToggle
                           estado={tecnico.estado}
                           estados={ESTADOS.usuario}
@@ -1164,7 +1164,7 @@ export function GestionTerceros() {
                           onClick={() => cambiarEstado(tecnico)}
                         />
                       </td>
-                      <td className="mca-center">
+                      <td className="mca-center" data-label="Acciones">
                         <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
                           <AccionesFila
                             onVer={() => setDetalleId(tecnico.id)}
@@ -1730,7 +1730,7 @@ export function OrdenesServicio() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--orders">
             <thead>
               <tr>
                 <th>Código</th>

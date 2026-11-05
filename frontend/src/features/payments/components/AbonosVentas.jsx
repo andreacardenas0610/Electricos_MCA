@@ -487,7 +487,7 @@ export default function AbonosVentas() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--payments">
             <thead>
               <tr>
                 <th>Cotización</th>
@@ -659,7 +659,7 @@ export default function AbonosVentas() {
                 </div>
               ) : (
                 <div className="mca-table-wrap">
-                  <table className="mca-table">
+                  <table className="mca-table mca-table--payment-history">
                     <thead>
                       <tr>
                         <th>ID pago</th>

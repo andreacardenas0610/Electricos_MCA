@@ -767,7 +767,7 @@ export function Cotizacion() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--quotes">
             <thead>
               <tr>
                 <th>ID</th>
@@ -1141,7 +1141,7 @@ export function Cotizacion() {
                 borderRadius: 'var(--radius-md)',
               }}
             >
-              <table className="mca-table">
+              <table className="mca-table mca-table--quote-editor">
                 <thead>
                   <tr>
                     <th>Descripción</th>
@@ -1478,7 +1478,7 @@ export function Cotizacion() {
                 borderRadius: 'var(--radius-md)',
               }}
             >
-              <table className="mca-table">
+              <table className="mca-table mca-table--quote-detail">
                 <thead>
                   <tr>
                     <th>#</th>
