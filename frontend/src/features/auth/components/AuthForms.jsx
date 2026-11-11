@@ -11,11 +11,11 @@ const iconosCampo = {
   confirmar: LockKeyhole,
 };
 
-function CampoAuth({ nombre, etiqueta, tipo, valor, onChange, autoComplete }) {
+function CampoAuth({ nombre, etiqueta, tipo, valor, onChange, autoComplete, error }) {
   const Icono = iconosCampo[nombre];
 
   return (
-    <label className="auth-field">
+    <label className={`auth-field ${error ? 'has-error' : ''}`}>
       <span>{etiqueta}</span>
       <div className="auth-input-wrap">
         <Icono className="auth-input-icon" size={15} aria-hidden="true" />
@@ -27,8 +27,10 @@ function CampoAuth({ nombre, etiqueta, tipo, valor, onChange, autoComplete }) {
           onChange={onChange}
           placeholder={nombre === 'confirmar' ? 'Confirma tu contraseña' : `Ingresa ${etiqueta.toLowerCase()}`}
           autoComplete={autoComplete}
+          aria-invalid={Boolean(error)}
         />
       </div>
+      {error && <span className="auth-field-error">{error}</span>}
     </label>
   );
 }
@@ -66,36 +68,48 @@ export function MarcoAuth({ titulo, children, onBack }) {
 export function Registro({ onBack }) {
   const [datos, setDatos] = useState({ usuario: '', correo: '', password: '', confirmar: '' });
   const [mensaje, setMensaje] = useState('');
-  const cambiar = (evento) => setDatos({ ...datos, [evento.target.name]: evento.target.value });
+  const [errores, setErrores] = useState({});
+  const cambiar = (evento) => {
+    setDatos({ ...datos, [evento.target.name]: evento.target.value });
+    setErrores((actuales) => ({ ...actuales, [evento.target.name]: undefined }));
+  };
 
   const registrar = (evento) => {
     evento.preventDefault();
+    const nuevosErrores = {};
+    if (!datos.usuario.trim()) nuevosErrores.usuario = 'Escribe tu usuario.';
+    if (!datos.correo.trim()) nuevosErrores.correo = 'Escribe tu correo electrónico.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datos.correo.trim())) {
+      nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
+    }
+    if (datos.password.length < 6) nuevosErrores.password = 'La contraseña debe tener mínimo 6 caracteres.';
+    if (!datos.confirmar) nuevosErrores.confirmar = 'Confirma tu contraseña.';
+    else if (datos.password !== datos.confirmar) nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
+    if (Object.keys(nuevosErrores).length) {
+      setErrores(nuevosErrores);
+      setMensaje('');
+      return;
+    }
+
     const usuarios = getLocalUsers();
     if (usuarios.some((usuario) => usuario.usuario === datos.usuario || usuario.correo === datos.correo)) {
       setMensaje('El usuario o correo ya está registrado.');
       return;
     }
-    if (datos.password.length < 6) {
-      setMensaje('La contraseña debe tener mínimo 6 caracteres.');
-      return;
-    }
-    if (datos.password !== datos.confirmar) {
-      setMensaje('Las contraseñas no coinciden.');
-      return;
-    }
     saveLocalUsers([...usuarios, { usuario: datos.usuario, correo: datos.correo, password: datos.password }]);
     setMensaje('Registro exitoso. Ya puedes iniciar sesión.');
+    setErrores({});
     setDatos({ usuario: '', correo: '', password: '', confirmar: '' });
   };
 
   return (
     <MarcoAuth titulo="Crear cuenta" onBack={onBack}>
-      <form className="auth-form" onSubmit={registrar}>
+      <form className="auth-form" onSubmit={registrar} noValidate>
         {mensaje && <p className={mensaje.startsWith('Registro') ? 'auth-success' : 'auth-error'} role="status">{mensaje}</p>}
-        <CampoAuth nombre="usuario" etiqueta="USUARIO" tipo="text" valor={datos.usuario} onChange={cambiar} autoComplete="username" />
-        <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={datos.correo} onChange={cambiar} autoComplete="email" />
-        <CampoAuth nombre="password" etiqueta="CONTRASEÑA" tipo="password" valor={datos.password} onChange={cambiar} autoComplete="new-password" />
-        <CampoAuth nombre="confirmar" etiqueta="CONFIRMAR CONTRASEÑA" tipo="password" valor={datos.confirmar} onChange={cambiar} autoComplete="new-password" />
+        <CampoAuth nombre="usuario" etiqueta="USUARIO" tipo="text" valor={datos.usuario} onChange={cambiar} autoComplete="username" error={errores.usuario} />
+        <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={datos.correo} onChange={cambiar} autoComplete="email" error={errores.correo} />
+        <CampoAuth nombre="password" etiqueta="CONTRASEÑA" tipo="password" valor={datos.password} onChange={cambiar} autoComplete="new-password" error={errores.password} />
+        <CampoAuth nombre="confirmar" etiqueta="CONFIRMAR CONTRASEÑA" tipo="password" valor={datos.confirmar} onChange={cambiar} autoComplete="new-password" error={errores.confirmar} />
         <button className="auth-submit" type="submit">Crear cuenta</button>
       </form>
     </MarcoAuth>
@@ -109,6 +123,14 @@ export function RecuperarContrasena({ onBack }) {
 
   const recuperar = (evento) => {
     evento.preventDefault();
+    if (!correo.trim()) {
+      setMensaje('Escribe tu correo electrónico.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())) {
+      setMensaje('Ingresa un correo electrónico válido.');
+      return;
+    }
     const usuarios = getLocalUsers();
     const indice = usuarios.findIndex((usuario) => usuario.correo === correo);
     if (indice < 0) {
@@ -127,7 +149,7 @@ export function RecuperarContrasena({ onBack }) {
 
   return (
     <MarcoAuth titulo="Recuperar contraseña" onBack={onBack}>
-      <form className="auth-form" onSubmit={recuperar}>
+      <form className="auth-form" onSubmit={recuperar} noValidate>
         {mensaje && <p className={mensaje.startsWith('Contraseña') ? 'auth-success' : 'auth-error'} role="status">{mensaje}</p>}
         <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={correo} onChange={(evento) => setCorreo(evento.target.value)} autoComplete="email" />
         <CampoAuth nombre="password" etiqueta="NUEVA CONTRASEÑA" tipo="password" valor={nueva} onChange={(evento) => setNueva(evento.target.value)} autoComplete="new-password" />

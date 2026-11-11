@@ -32,7 +32,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -254,7 +253,6 @@ export default function AbonosVentas() {
 
     setErroresPago(nuevosErrores);
     if (Object.keys(nuevosErrores).length > 0) {
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -724,15 +722,12 @@ export default function AbonosVentas() {
         }
         icon={Banknote}
         footer={
-          <>
-            <Button onClick={cerrarModalPago}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-abono">
-              {modoPago === 'editar' ? 'Guardar cambios' : 'Registrar abono'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-abono">
+            {modoPago === 'editar' ? 'Guardar cambios' : 'Registrar abono'}
+          </Button>
         }
       >
-        <form id="form-abono" className="mca-form-grid" onSubmit={handleGuardarPago}>
+        <form id="form-abono" className="mca-form-grid" onSubmit={handleGuardarPago} noValidate>
           {modoPago === 'crear' && (
             <Field
               label="Cotización"

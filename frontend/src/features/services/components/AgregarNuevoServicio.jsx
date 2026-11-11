@@ -16,6 +16,7 @@ export function AgregarNuevoServicio() {
     tiempoEstimado: '',
     precioBase: '',
   });
+  const [mensaje, setMensaje] = useState(null);
 
   // PALETA DINÁMICA DE COLORES
   const theme = {
@@ -38,11 +39,11 @@ export function AgregarNuevoServicio() {
 
   const handleGuardarServicio = (e) => {
     e.preventDefault();
-    if (!formData.nombreServicio) {
-      alert('Por favor ingrese el nombre del servicio.');
+    if (!formData.nombreServicio.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Escribe el nombre del servicio.' });
       return;
     }
-    alert(`Servicio "${formData.nombreServicio}" guardado con éxito.`);
+    setMensaje({ tipo: 'success', texto: `Servicio "${formData.nombreServicio}" guardado con éxito.` });
   };
 
   const precioFormateado = parseFloat(formData.precioBase || 0).toLocaleString('en-US', {
@@ -93,7 +94,12 @@ export function AgregarNuevoServicio() {
         </div>
 
         {/* LAYOUT DE FORMULARIO (2 COLUMNAS) */}
-        <form onSubmit={handleGuardarServicio} style={styles.formLayout}>
+        <form onSubmit={handleGuardarServicio} style={styles.formLayout} noValidate>
+          {mensaje && (
+            <p className={mensaje.tipo === 'success' ? 'auth-success' : 'auth-error'} role="status">
+              {mensaje.texto}
+            </p>
+          )}
           {/* COLUMNA IZQUIERDA: INFORMACIÓN Y PARÁMETROS */}
           <div style={styles.leftColumn}>
             {/* SECCIÓN INFORMACIÓN GENERAL */}
@@ -238,12 +244,6 @@ export function AgregarNuevoServicio() {
               <button type="submit" style={styles.btnAgregarServicio}>
                 ➕ Agregar al Servicio
               </button>
-              <button
-                type="button"
-                style={{ ...styles.btnCancelar, backgroundColor: theme.bgCard, borderColor: theme.border, color: theme.textMain }}
-              >
-                Cancelar
-              </button>
             </div>
           </div>
         </form>
@@ -322,7 +322,6 @@ const styles = {
   previewHeaderDark: { backgroundColor: '#111c38', height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#facc15' },
   badgeVistaPrevia: { backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px' },
   btnAgregarServicio: { backgroundColor: '#facc15', border: 'none', color: '#0b1329', padding: '12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', width: '100%' },
-  btnCancelar: { border: '1px solid', padding: '10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', width: '100%' },
   featureCardsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginTop: '10px' },
   featureCard: { border: '1px solid', borderRadius: '10px', padding: '14px', display: 'flex', gap: '12px', alignItems: 'center' },
   featureIconBox: { width: '34px', height: '34px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '16px', flexShrink: 0 },

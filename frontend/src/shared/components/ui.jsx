@@ -435,14 +435,6 @@ export function useToast() {
   return { toast, notify, close };
 }
 
-// Une los mensajes de validación pendientes para el toast flotante de cada formulario.
-export function resumenErroresFormulario(errores = {}) {
-  const pendientes = Object.values(errores).flat().filter(Boolean);
-  return pendientes.length
-    ? `Completa los mensajes obligatorios: ${pendientes.join(' ')}`
-    : '';
-}
-
 export function Combobox({
   value,
   onChange,

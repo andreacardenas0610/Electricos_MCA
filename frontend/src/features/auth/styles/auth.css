@@ -167,6 +167,21 @@
   box-shadow: 0 0 0 3px var(--accent-yellow-soft);
 }
 
+.auth-field.has-error .auth-input-wrap input,
+.auth-input-wrap input[aria-invalid='true'] {
+  border-color: var(--danger-border);
+}
+
+.auth-field-error {
+  display: block;
+  margin-top: 5px;
+  color: var(--danger-text);
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
+}
+
 .auth-password-toggle {
   position: absolute;
   right: 11px;

@@ -30,7 +30,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha, formatearMoneda } from '../../../shared/services/base.js';
@@ -237,6 +236,7 @@ export function CatalogoServicios() {
   const [formulario, setFormulario] = useState(FORMULARIO_VACIO);
   const [errores, setErrores] = useState({});
   const [seleccion, setSeleccion] = useState({ codigo: '', cantidad: '1' });
+  const [errorMaterial, setErrorMaterial] = useState('');
 
   const [modalCategoria, setModalCategoria] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: '', estado: 'Activo' });
@@ -313,18 +313,18 @@ export function CatalogoServicios() {
   const agregarMaterial = () => {
     const material = materiales.find((item) => item.id === seleccion.codigo);
     if (!material) {
-      notify('warning', 'Mensaje flotante de validación', 'Selecciona un material del inventario.');
+      setErrorMaterial('Selecciona un material del inventario.');
       return;
     }
 
     const cantidad = Number(seleccion.cantidad);
     if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      notify('warning', 'Mensaje flotante de validación', 'La cantidad del material debe ser mayor que cero.');
+      setErrorMaterial('La cantidad del material debe ser mayor que cero.');
       return;
     }
 
     if (formulario.materiales.some((item) => item.codigo === material.id)) {
-      notify('warning', 'Mensaje flotante de validación', `${material.nombre} ya está asignado al servicio; no se puede repetir.`);
+      setErrorMaterial(`${material.nombre} ya está asignado al servicio; no se puede repetir.`);
       return;
     }
 
@@ -351,6 +351,7 @@ export function CatalogoServicios() {
       ],
     }));
     setSeleccion({ codigo: '', cantidad: '1' });
+    setErrorMaterial('');
   };
 
   const quitarMaterial = (codigo) => {
@@ -394,7 +395,6 @@ export function CatalogoServicios() {
 
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -447,7 +447,6 @@ export function CatalogoServicios() {
 
     if (!nuevaCategoria.nombre.trim()) {
       setErrorCategoria('Escribe el nombre de la categoría.');
-      notify('warning', 'Mensaje flotante de validación', 'Completa los mensajes obligatorios: Escribe el nombre de la categoría.');
       return;
     }
 
@@ -733,17 +732,14 @@ export function CatalogoServicios() {
         }
         icon={Wrench}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="form-servicio"
-              icon={servicioEditando ? undefined : Plus}
-            >
-              {servicioEditando ? 'Guardar cambios' : 'Registrar servicio'}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            type="submit"
+            form="form-servicio"
+            icon={servicioEditando ? undefined : Plus}
+          >
+            {servicioEditando ? 'Guardar cambios' : 'Registrar servicio'}
+          </Button>
         }
       >
         <form id="form-servicio" onSubmit={handleGuardar} noValidate>
@@ -906,9 +902,10 @@ export function CatalogoServicios() {
                 <select
                   className="mca-select"
                   value={seleccion.codigo}
-                  onChange={(event) =>
-                    setSeleccion((actual) => ({ ...actual, codigo: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    setSeleccion((actual) => ({ ...actual, codigo: event.target.value }));
+                    setErrorMaterial('');
+                  }}
                   aria-label="Seleccionar material"
                 >
                   <option value="">
@@ -927,9 +924,10 @@ export function CatalogoServicios() {
                   step="1"
                   style={{ width: 96 }}
                   value={seleccion.cantidad}
-                  onChange={(event) =>
-                    setSeleccion((actual) => ({ ...actual, cantidad: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    setSeleccion((actual) => ({ ...actual, cantidad: event.target.value }));
+                    setErrorMaterial('');
+                  }}
                   aria-label="Cantidad del material"
                 />
                 <Button size="sm" icon={Plus} onClick={agregarMaterial}>
@@ -940,6 +938,7 @@ export function CatalogoServicios() {
                 Estos materiales se cargan automáticamente al cotizar el servicio y puedes seguir
                 agregando más desde la cotización. Un material no se puede repetir.
               </span>
+              {errorMaterial && <span className="mca-error" role="alert">{errorMaterial}</span>}
               {errores.materiales && (
                 <span className="mca-error" role="alert">
                   {errores.materiales}
@@ -1025,12 +1024,9 @@ export function CatalogoServicios() {
         icon={FolderPlus}
         size="sm"
         footer={
-          <>
-            <Button onClick={() => setModalCategoria(false)}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-categoria-servicio">
-              Crear categoría
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-categoria-servicio">
+            Crear categoría
+          </Button>
         }
       >
         <form id="form-categoria-servicio" onSubmit={handleCrearCategoria} noValidate>

@@ -366,16 +366,13 @@ export function GestionUsuarios() {
         subtitle="Los datos de acceso se validan contra el inicio de sesión."
         icon={formulario?.id ? UserCog : UserPlus}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-usuario">
-              {formulario?.id ? 'Guardar cambios' : 'Crear usuario'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-usuario">
+            {formulario?.id ? 'Guardar cambios' : 'Crear usuario'}
+          </Button>
         }
       >
         {formulario && (
-          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar}>
+          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field label="Nombre completo" required error={errores.nombre}>
               <input
                 className="mca-input"

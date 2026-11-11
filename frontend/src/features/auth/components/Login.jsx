@@ -17,6 +17,13 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!usuario.trim() || !password) {
+      setError({
+        titulo: 'Faltan datos',
+        detalle: 'Ingresa tu usuario y contraseña para continuar.',
+      });
+      return;
+    }
     setEnviando(true);
 
     try {
@@ -71,7 +78,7 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
           <span>GESTIÓN INDUSTRIAL</span>
         </header>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           {error && (
             <div className="auth-error" role="alert">
               <CircleAlert size={18} aria-hidden="true" />
@@ -89,7 +96,10 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
               <input
                 type="text"
                 value={usuario}
-                onChange={(e) => setUsuario(e.target.value)}
+                onChange={(e) => {
+                  setUsuario(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Ingresa tu usuario"
                 autoComplete="username"
                 required
@@ -104,7 +114,10 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
               <input
                 type={mostrarPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Ingresa tu contraseña"
                 autoComplete="current-password"
                 required

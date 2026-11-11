@@ -28,7 +28,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha, formatearMoneda } from '../../../shared/services/base.js';
@@ -188,7 +187,6 @@ export function Materiales() {
 
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -255,7 +253,6 @@ export function Materiales() {
 
     if (!nuevaCategoria.nombre.trim()) {
       setErrorCategoria('Escribe el nombre de la categoría.');
-      notify('warning', 'Mensaje flotante de validación', 'Completa los mensajes obligatorios: Escribe el nombre de la categoría.');
       return;
     }
 
@@ -551,17 +548,14 @@ export function Materiales() {
         }
         icon={PackageOpen}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="form-material"
-              icon={materialEditando ? undefined : Plus}
-            >
-              {materialEditando ? 'Guardar cambios' : 'Registrar material'}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            type="submit"
+            form="form-material"
+            icon={materialEditando ? undefined : Plus}
+          >
+            {materialEditando ? 'Guardar cambios' : 'Registrar material'}
+          </Button>
         }
       >
         <form id="form-material" onSubmit={handleGuardar} noValidate>
@@ -760,12 +754,9 @@ export function Materiales() {
         icon={FolderPlus}
         size="sm"
         footer={
-          <>
-            <Button onClick={() => setModalCategoria(false)}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-categoria">
-              Crear categoría
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-categoria">
+            Crear categoría
+          </Button>
         }
       >
         <form id="form-categoria" onSubmit={handleCrearCategoria} noValidate>

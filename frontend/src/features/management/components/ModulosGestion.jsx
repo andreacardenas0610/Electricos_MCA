@@ -38,7 +38,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha } from '../../../shared/services/base.js';
@@ -279,7 +278,6 @@ export function Clientes() {
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -556,12 +554,9 @@ export function Clientes() {
         icon={Building2}
         size="lg"
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-cliente">
-              {formulario?.id ? 'Guardar cambios' : 'Crear cliente'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-cliente">
+            {formulario?.id ? 'Guardar cambios' : 'Crear cliente'}
+          </Button>
         }
       >
         {formulario && (
@@ -930,7 +925,6 @@ export function GestionTerceros() {
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -1190,12 +1184,9 @@ export function GestionTerceros() {
         icon={Handshake}
         size="lg"
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-tercero">
-              {formulario?.id ? 'Guardar cambios' : 'Crear tercero'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-tercero">
+            {formulario?.id ? 'Guardar cambios' : 'Crear tercero'}
+          </Button>
         }
       >
         {formulario && (
@@ -1581,7 +1572,6 @@ export function OrdenesServicio() {
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -1831,12 +1821,9 @@ export function OrdenesServicio() {
         icon={ClipboardList}
         size="lg"
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-orden">
-              {formulario?.id ? 'Guardar cambios' : 'Crear orden'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-orden">
+            {formulario?.id ? 'Guardar cambios' : 'Crear orden'}
+          </Button>
         }
       >
         {formulario && (

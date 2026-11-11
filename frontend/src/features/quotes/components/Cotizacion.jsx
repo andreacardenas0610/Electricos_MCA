@@ -34,7 +34,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -131,6 +130,7 @@ export function Cotizacion() {
   const [materialSeleccionado, setMaterialSeleccionado] = useState('');
   const [cotizacionesCliente, setCotizacionesCliente] = useState([]);
   const [abono, setAbono] = useState(ABONO_VACIO);
+  const [erroresAbono, setErroresAbono] = useState({});
   const [abonando, setAbonando] = useState(false);
   const [correoEnvio, setCorreoEnvio] = useState(null);
 
@@ -420,7 +420,6 @@ export function Cotizacion() {
 
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -491,12 +490,17 @@ export function Cotizacion() {
     if (!cotizacion) return;
 
     const monto = Number(abono.monto);
+    const nuevosErrores = {};
     if (!Number.isFinite(monto) || monto <= 0) {
-      notify('warning', 'Mensaje flotante de validación', 'Completa los mensajes obligatorios: El abono debe ser mayor que cero.');
-      return;
+      nuevosErrores.monto = 'El abono debe ser mayor que cero.';
+    } else if (Math.abs(monto * 100 - Math.round(monto * 100)) > 0.000001) {
+      nuevosErrores.monto = 'El abono debe tener máximo dos decimales.';
     }
     if (abono.fecha > fechaISO()) {
-      notify('warning', 'Mensaje flotante de validación', 'La fecha del abono debe ser hoy o anterior.');
+      nuevosErrores.fecha = 'La fecha del abono debe ser hoy o anterior.';
+    }
+    setErroresAbono(nuevosErrores);
+    if (Object.keys(nuevosErrores).length > 0) {
       return;
     }
 
@@ -518,6 +522,7 @@ export function Cotizacion() {
       });
       await cargarDatos();
       setAbono(ABONO_VACIO());
+      setErroresAbono({});
       notify(
         'success',
         'Abono registrado',
@@ -860,12 +865,14 @@ export function Cotizacion() {
                           onVer={() => {
                             setCotizacionDetalle(cotizacion);
                             setAbono(ABONO_VACIO());
+                            setErroresAbono({});
                           }}
                           onEditar={() => abrirEditar(cotizacion)}
                           onPdf={() => handlePdf(cotizacion)}
                           onCorreo={() => abrirEnvioCorreo(cotizacion)}
                           onAbono={() => {
                             setCotizacionDetalle(cotizacion);
+                            setErroresAbono({});
                             setAbono({
                               ...ABONO_VACIO(),
                               monto: String(minimo > abonado ? minimo : ''),
@@ -901,7 +908,6 @@ export function Cotizacion() {
               <span>Total</span>
               <strong>{formatearMoneda(totalesFormulario.total, 'COP')}</strong>
             </div>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
             <Button variant="primary" type="submit" form="form-cotizacion">
               {cotizacionEditando ? 'Guardar cambios' : 'Crear cotización'}
             </Button>
@@ -1555,6 +1561,7 @@ export function Cotizacion() {
               <form
                 className="mca-abono-box"
                 onSubmit={(event) => handleAbonar(event, cotizacionDetalle)}
+                noValidate
               >
                 <div className="mca-row" style={{ justifyContent: 'space-between' }}>
                   <span className="mca-strong">Registrar abono en esta cotización</span>
@@ -1566,6 +1573,7 @@ export function Cotizacion() {
                   <Field
                     label="Monto del abono"
                     required
+                    error={erroresAbono.monto}
                     hint={
                       abonadoDetalle <= 0
                         ? `Primer abono: no puede ser inferior a ${formatearMoneda(minimoDetalle, 'COP')}.`
@@ -1582,16 +1590,26 @@ export function Cotizacion() {
                       step="0.01"
                       placeholder="0"
                       value={abono.monto}
-                      onChange={(event) => setAbono((actual) => ({ ...actual, monto: event.target.value }))}
+                      onChange={(event) => {
+                        setAbono((actual) => ({ ...actual, monto: event.target.value }));
+                        setErroresAbono((actual) => ({ ...actual, monto: undefined }));
+                      }}
                     />
                   </Field>
-                  <Field label="Fecha del abono" hint="Se escribe sola con la fecha de hoy; solo se acepta hoy o fechas anteriores.">
+                  <Field
+                    label="Fecha del abono"
+                    error={erroresAbono.fecha}
+                    hint="Se escribe sola con la fecha de hoy; solo se acepta hoy o fechas anteriores."
+                  >
                     <input
                       className="mca-input"
                       type="date"
                       max={fechaISO()}
                       value={abono.fecha}
-                      onChange={(event) => setAbono((actual) => ({ ...actual, fecha: event.target.value }))}
+                      onChange={(event) => {
+                        setAbono((actual) => ({ ...actual, fecha: event.target.value }));
+                        setErroresAbono((actual) => ({ ...actual, fecha: undefined }));
+                      }}
                     />
                   </Field>
                   <Field label="Hora del abono" hint="Se escribe sola con la hora actual del pago.">

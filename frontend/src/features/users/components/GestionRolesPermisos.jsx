@@ -502,16 +502,13 @@ export function GestionRolesPermisos() {
         subtitle="El código se genera automáticamente y los permisos se configuran en la matriz."
         icon={ShieldCheck}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-rol">
-              {formulario?.id ? 'Guardar cambios' : 'Crear rol'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-rol">
+            {formulario?.id ? 'Guardar cambios' : 'Crear rol'}
+          </Button>
         }
       >
         {formulario && (
-          <form id="form-rol" className="mca-form-grid" onSubmit={guardar}>
+          <form id="form-rol" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
               label="Nombre del rol"
               required

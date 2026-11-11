@@ -98,7 +98,7 @@ export function RecuperacionContrasena({ onBack, tokenInicial = '' }) {
       </div>
 
       {paso === 1 ? (
-        <form className="auth-form" onSubmit={solicitar}>
+        <form className="auth-form" onSubmit={solicitar} noValidate>
           <p className="auth-note">
             Escribe tu usuario o el correo registrado. Te enviamos un enlace válido por 30 minutos
             para definir una nueva contraseña.
@@ -138,7 +138,7 @@ export function RecuperacionContrasena({ onBack, tokenInicial = '' }) {
           </div>
         </form>
       ) : (
-        <form className="auth-form" onSubmit={restablecer}>
+        <form className="auth-form" onSubmit={restablecer} noValidate>
           <p className="auth-note">
             Pega el enlace completo o solo el código que recibiste y define una contraseña de mínimo
             8 caracteres.
