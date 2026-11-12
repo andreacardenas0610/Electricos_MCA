@@ -2079,6 +2079,37 @@
   padding: 24px 16px;
 }
 
+.mca-sidebar__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mca-sidebar__brand {
+  flex: 0 0 auto;
+  margin-bottom: 28px;
+}
+
+.mca-sidebar__menu {
+  flex: 0 0 auto;
+  padding-right: 6px;
+}
+
+.mca-sidebar__group-title {
+  display: block;
+  padding: 0 12px 8px;
+  color: var(--sidebar-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.mca-sidebar__item {
+  padding: 10px 14px;
+}
+
 .mca-sidebar__label {
   /* inline-block para que max-width sí colapse el texto (un span inline lo ignora). */
   display: inline-block;
@@ -2095,10 +2126,268 @@
   opacity: 1;
 }
 
-/* Colapsada no hay sitio para la tarjeta de usuario: queda el avatar y el salir
-   reaparece al desplegar (inline style, por eso el !important). */
-.mca-sidebar:not(:hover):not(:focus-within) .mca-sidebar__logout {
-  display: none !important;
+.mca-sidebar__licenses {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sidebar-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mca-sidebar__licenses:hover {
+  color: var(--sidebar-hover-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mca-sidebar__licenses svg {
+  flex: 0 0 auto;
+}
+
+.mca-sidebar:hover .mca-sidebar__licenses,
+.mca-sidebar:focus-within .mca-sidebar__licenses {
+  justify-content: flex-start;
+}
+
+.mca-sidebar__bottom {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.mca-app-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  background: var(--bg-main);
+}
+
+.mca-topbar {
+  z-index: 5;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.mca-topbar__context {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mca-topbar__context span {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.mca-topbar__context strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mca-topbar__actions,
+.mca-topbar__profile {
+  display: flex;
+  align-items: center;
+}
+
+.mca-topbar__actions {
+  gap: 14px;
+}
+
+.mca-topbar__theme,
+.mca-topbar__logout {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mca-topbar__theme:hover,
+.mca-topbar__logout:hover {
+  border-color: var(--accent-yellow-border);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-hover-text);
+}
+
+.mca-topbar__profile {
+  gap: 10px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border-color);
+}
+
+.mca-topbar__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-yellow);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mca-topbar__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 100px;
+}
+
+.mca-topbar__identity strong {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--text-main);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mca-topbar__identity span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.mca-license-product {
+  padding: 18px;
+  border: 1px solid var(--accent-yellow-border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-yellow-soft);
+}
+
+.mca-license-product__eyebrow {
+  color: var(--accent-yellow);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.mca-license-product h3 {
+  margin: 7px 0;
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.mca-license-product p,
+.mca-licenses__note,
+.mca-licenses__source {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mca-license-product p {
+  margin: 0;
+}
+
+.mca-license-product__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mca-license-product__meta span {
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.mca-license-product__meta strong {
+  color: var(--text-main);
+}
+
+.mca-licenses__heading {
+  margin: 20px 0 4px;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.mca-licenses__note {
+  margin: 0 0 10px;
+}
+
+.mca-licenses__list {
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.mca-license-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 14px;
+  background: var(--bg-card);
+}
+
+.mca-license-row + .mca-license-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.mca-license-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mca-license-row strong {
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.mca-license-row span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.mca-license-row a {
+  flex: 0 0 auto;
+  color: var(--accent-yellow);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mca-licenses__source {
+  margin: 12px 0 0;
+  font-size: 10.5px;
 }
 
 @media (max-width: 900px) {
@@ -2109,12 +2398,60 @@
   .mca-sidebar:focus-within {
     width: 64px;
     min-width: 64px;
-    padding: 18px 6px;
+    padding: 12px 6px;
   }
 
-  /* Sin hover que la abra, el botón Salir no puede quedar oculto. */
-  .mca-sidebar .mca-sidebar__logout {
-    display: flex !important;
+  .mca-topbar {
+    min-height: 60px;
+    padding: 8px 14px;
+  }
+
+  .mca-topbar__actions {
+    gap: 8px;
+  }
+
+  .mca-topbar__profile {
+    gap: 7px;
+    padding-left: 8px;
+  }
+
+  .mca-topbar__identity {
+    min-width: 0;
+  }
+
+  .mca-topbar__identity strong {
+    max-width: 110px;
+  }
+}
+
+@media (max-width: 520px) {
+  .mca-topbar {
+    gap: 8px;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .mca-topbar__context span {
+    display: none;
+  }
+
+  .mca-topbar__context strong {
+    max-width: 110px;
+    font-size: 12px;
+  }
+
+  .mca-topbar__identity {
+    display: none;
+  }
+
+  .mca-topbar__profile {
+    border-left: 0;
+  }
+
+  .mca-topbar__theme,
+  .mca-topbar__logout {
+    width: 34px;
+    height: 34px;
   }
 }
 
