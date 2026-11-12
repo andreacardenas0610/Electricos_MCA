@@ -2093,8 +2093,17 @@
 }
 
 .mca-sidebar__menu {
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  gap: 20px;
   padding-right: 6px;
+}
+
+.mca-sidebar__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .mca-sidebar__group-title {
@@ -2452,6 +2461,40 @@
   .mca-topbar__logout {
     width: 34px;
     height: 34px;
+  }
+}
+
+@media (max-height: 800px) {
+  .mca-sidebar,
+  .mca-sidebar:hover,
+  .mca-sidebar:focus-within {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .mca-sidebar__brand {
+    margin-bottom: 18px;
+  }
+
+  .mca-sidebar__menu {
+    gap: 14px;
+  }
+
+  .mca-sidebar__items {
+    gap: 3px;
+  }
+
+  .mca-sidebar__group-title {
+    padding-bottom: 6px;
+  }
+
+  .mca-sidebar__item {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .mca-sidebar__bottom {
+    padding-top: 4px;
   }
 }
 

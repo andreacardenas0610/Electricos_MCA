@@ -219,21 +219,14 @@ export function Dashboard() {
           </div>
 
           {/* Menú Organizado por Secciones */}
-          <nav 
-            className="mca-sidebar__menu"
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '20px'
-            }}
-          >
+          <nav className="mca-sidebar__menu">
             {menuGrupos.map((grupo, index) => (
               <div className="mca-sidebar__group" key={index}>
                 <span className="mca-sidebar__label mca-sidebar__group-title">
                   {grupo.titulo}
                 </span>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="mca-sidebar__items">
                   {grupo.items.map((item) => {
                     const activo = seccionActual === item.id;
                     const Icono = item.icon;
