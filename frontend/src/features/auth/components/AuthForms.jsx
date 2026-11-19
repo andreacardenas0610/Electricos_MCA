@@ -1,12 +1,14 @@
 import { useContext, useState } from 'react';
-import { ArrowLeft, LockKeyhole, Mail, Moon, Sun, UserRound, Zap } from 'lucide-react';
+import { ArrowLeft, IdCard, LockKeyhole, Mail, Moon, Sun, UserRound, Zap } from 'lucide-react';
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
-import { getLocalUsers, saveLocalUsers } from '../../../shared/localStore.js';
+import { apiRequest } from '../../../shared/api.js';
 import '../styles/auth.css';
 
 const iconosCampo = {
+  nombre: UserRound,
   usuario: UserRound,
   correo: Mail,
+  documento: IdCard,
   password: LockKeyhole,
   confirmar: LockKeyhole,
 };
@@ -66,94 +68,85 @@ export function MarcoAuth({ titulo, children, onBack }) {
 }
 
 export function Registro({ onBack }) {
-  const [datos, setDatos] = useState({ usuario: '', correo: '', password: '', confirmar: '' });
-  const [mensaje, setMensaje] = useState('');
+  const [datos, setDatos] = useState({
+    nombre: '',
+    usuario: '',
+    correo: '',
+    documento: '',
+    password: '',
+    confirmar: '',
+  });
+  const [mensaje, setMensaje] = useState(null);
   const [errores, setErrores] = useState({});
+  const [enviando, setEnviando] = useState(false);
   const cambiar = (evento) => {
     setDatos({ ...datos, [evento.target.name]: evento.target.value });
     setErrores((actuales) => ({ ...actuales, [evento.target.name]: undefined }));
   };
 
-  const registrar = (evento) => {
+  const registrar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
+    if (!datos.nombre.trim()) nuevosErrores.nombre = 'Escribe tu nombre completo.';
     if (!datos.usuario.trim()) nuevosErrores.usuario = 'Escribe tu usuario.';
     if (!datos.correo.trim()) nuevosErrores.correo = 'Escribe tu correo electrónico.';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datos.correo.trim())) {
       nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
     }
-    if (datos.password.length < 6) nuevosErrores.password = 'La contraseña debe tener mínimo 6 caracteres.';
+    if (!datos.documento.trim()) nuevosErrores.documento = 'Escribe tu documento.';
+    if (datos.password.length < 8) nuevosErrores.password = 'La contraseña debe tener mínimo 8 caracteres.';
     if (!datos.confirmar) nuevosErrores.confirmar = 'Confirma tu contraseña.';
     else if (datos.password !== datos.confirmar) nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
-      setMensaje('');
+      setMensaje(null);
       return;
     }
 
-    const usuarios = getLocalUsers();
-    if (usuarios.some((usuario) => usuario.usuario === datos.usuario || usuario.correo === datos.correo)) {
-      setMensaje('El usuario o correo ya está registrado.');
-      return;
+    setEnviando(true);
+    setMensaje(null);
+    try {
+      const resultado = await apiRequest('/auth/registro', {
+        method: 'POST',
+        body: {
+          nombre: datos.nombre.trim(),
+          usuario: datos.usuario.trim(),
+          correo: datos.correo.trim(),
+          documento: datos.documento.trim(),
+          password: datos.password,
+        },
+      });
+      setMensaje({ tipo: 'success', texto: resultado.mensaje });
+      setErrores({});
+      setDatos({
+        nombre: '',
+        usuario: '',
+        correo: '',
+        documento: '',
+        password: '',
+        confirmar: '',
+      });
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: error.message });
+    } finally {
+      setEnviando(false);
     }
-    saveLocalUsers([...usuarios, { usuario: datos.usuario, correo: datos.correo, password: datos.password }]);
-    setMensaje('Registro exitoso. Ya puedes iniciar sesión.');
-    setErrores({});
-    setDatos({ usuario: '', correo: '', password: '', confirmar: '' });
   };
 
   return (
     <MarcoAuth titulo="Crear cuenta" onBack={onBack}>
       <form className="auth-form" onSubmit={registrar} noValidate>
-        {mensaje && <p className={mensaje.startsWith('Registro') ? 'auth-success' : 'auth-error'} role="status">{mensaje}</p>}
+        <p className="auth-note">Registro para técnicos. El acceso móvil se habilita al verificar el correo.</p>
+        {mensaje && <p className={mensaje.tipo === 'success' ? 'auth-success' : 'auth-error'} role="status">{mensaje.texto}</p>}
+        <CampoAuth nombre="nombre" etiqueta="NOMBRE COMPLETO" tipo="text" valor={datos.nombre} onChange={cambiar} autoComplete="name" error={errores.nombre} />
         <CampoAuth nombre="usuario" etiqueta="USUARIO" tipo="text" valor={datos.usuario} onChange={cambiar} autoComplete="username" error={errores.usuario} />
         <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={datos.correo} onChange={cambiar} autoComplete="email" error={errores.correo} />
+        <CampoAuth nombre="documento" etiqueta="DOCUMENTO" tipo="text" valor={datos.documento} onChange={cambiar} autoComplete="off" error={errores.documento} />
         <CampoAuth nombre="password" etiqueta="CONTRASEÑA" tipo="password" valor={datos.password} onChange={cambiar} autoComplete="new-password" error={errores.password} />
         <CampoAuth nombre="confirmar" etiqueta="CONFIRMAR CONTRASEÑA" tipo="password" valor={datos.confirmar} onChange={cambiar} autoComplete="new-password" error={errores.confirmar} />
-        <button className="auth-submit" type="submit">Crear cuenta</button>
-      </form>
-    </MarcoAuth>
-  );
-}
-
-export function RecuperarContrasena({ onBack }) {
-  const [correo, setCorreo] = useState('');
-  const [nueva, setNueva] = useState('');
-  const [mensaje, setMensaje] = useState('');
-
-  const recuperar = (evento) => {
-    evento.preventDefault();
-    if (!correo.trim()) {
-      setMensaje('Escribe tu correo electrónico.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())) {
-      setMensaje('Ingresa un correo electrónico válido.');
-      return;
-    }
-    const usuarios = getLocalUsers();
-    const indice = usuarios.findIndex((usuario) => usuario.correo === correo);
-    if (indice < 0) {
-      setMensaje('No encontramos una cuenta con ese correo.');
-      return;
-    }
-    if (nueva.length < 6) {
-      setMensaje('La contraseña debe tener mínimo 6 caracteres.');
-      return;
-    }
-    usuarios[indice] = { ...usuarios[indice], password: nueva };
-    saveLocalUsers(usuarios);
-    setMensaje('Contraseña actualizada. Ya puedes iniciar sesión.');
-    setNueva('');
-  };
-
-  return (
-    <MarcoAuth titulo="Recuperar contraseña" onBack={onBack}>
-      <form className="auth-form" onSubmit={recuperar} noValidate>
-        {mensaje && <p className={mensaje.startsWith('Contraseña') ? 'auth-success' : 'auth-error'} role="status">{mensaje}</p>}
-        <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={correo} onChange={(evento) => setCorreo(evento.target.value)} autoComplete="email" />
-        <CampoAuth nombre="password" etiqueta="NUEVA CONTRASEÑA" tipo="password" valor={nueva} onChange={(evento) => setNueva(evento.target.value)} autoComplete="new-password" />
-        <button className="auth-submit" type="submit">Actualizar contraseña</button>
+        <button className="auth-submit" type="submit" disabled={enviando}>
+          {enviando ? 'Creando cuenta...' : 'Crear cuenta'}
+        </button>
       </form>
     </MarcoAuth>
   );

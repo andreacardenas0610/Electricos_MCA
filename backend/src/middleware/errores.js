@@ -9,6 +9,18 @@ export function manejarErrores(error, req, res, next) {
     return res.status(400).json({ mensaje: error.message });
   }
 
+  if (error.status === 403) {
+    return res.status(403).json({ mensaje: 'El origen no está permitido por la política CORS.' });
+  }
+
+  if (error.status === 409) {
+    return res.status(409).json({ mensaje: error.message || 'El registro ya existe.' });
+  }
+
+  if (error.status === 503) {
+    return res.status(503).json({ mensaje: error.message || 'El servicio no está disponible temporalmente.' });
+  }
+
   if (error.code === '23505') {
     return res.status(409).json({ mensaje: 'Ya existe un registro con esos datos.' });
   }

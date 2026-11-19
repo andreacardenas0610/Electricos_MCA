@@ -3,16 +3,20 @@ import { CircleAlert, Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { RecuperacionContrasena } from './RecuperacionContrasena.jsx';
+import { Registro } from './AuthForms.jsx';
+import { VerificacionCuenta } from './VerificacionCuenta.jsx';
 import '../styles/auth.css';
 
-export function Login({ onLogin, tokenRecuperacion = '' }) {
+export function Login({ onLogin, tokenRecuperacion = '', tokenVerificacion = '' }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [vista, setVista] = useState(tokenRecuperacion ? 'recuperar' : 'login');
+  const [vista, setVista] = useState(
+    tokenVerificacion ? 'verificar' : tokenRecuperacion ? 'recuperar' : 'login',
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,6 +66,19 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
         tokenInicial={tokenRecuperacion}
       />
     );
+  }
+
+  if (vista === 'verificar') {
+    return (
+      <VerificacionCuenta
+        token={tokenVerificacion}
+        onBack={() => setVista('login')}
+      />
+    );
+  }
+
+  if (vista === 'registro') {
+    return <Registro onBack={() => setVista('login')} />;
   }
 
   return (
@@ -140,6 +157,9 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
           <div className="auth-links">
             <button type="button" onClick={() => setVista('recuperar')}>
               ¿Olvidaste tu contraseña?
+            </button>
+            <button type="button" onClick={() => setVista('registro')}>
+              ¿Eres técnico? Crear cuenta
             </button>
           </div>
 

@@ -11,17 +11,6 @@ export const UNIDADES_MEDIDA = [
   'Par',
 ];
 
-export const CATEGORIAS_MATERIALES_INICIALES = [
-  { id: 'cat-conductores', nombre: 'Conductores', unidad: 'Metro', prefijo: 'EL-BUS' },
-  { id: 'cat-aparamenta', nombre: 'Aparamenta', unidad: 'Unidad', prefijo: 'EL-APA' },
-  { id: 'cat-cables', nombre: 'Cables', unidad: 'Metro', prefijo: 'EL-CAB' },
-  { id: 'cat-canalizacion', nombre: 'Canalización', unidad: 'Metro', prefijo: 'EL-CAN' },
-  { id: 'cat-transformadores', nombre: 'Transformadores', unidad: 'Unidad', prefijo: 'EL-TRF' },
-  { id: 'cat-accesorios', nombre: 'Accesorios', unidad: 'Pieza', prefijo: 'EL-ACC' },
-  { id: 'cat-iluminacion', nombre: 'Iluminación', unidad: 'Unidad', prefijo: 'EL-ILU' },
-  { id: 'cat-herramientas', nombre: 'Herramientas', unidad: 'Unidad', prefijo: 'EL-HER' },
-];
-
 const UNIDAD_POR_CATEGORIA = {
   conductores: 'Metro',
   aparamenta: 'Unidad',

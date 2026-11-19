@@ -52,6 +52,7 @@ const FORMULARIO_USUARIO = (usuario = null) => ({
   usuario: usuario?.usuario || '',
   correo: usuario?.correo || '',
   telefono: usuario?.telefono || '',
+  terceroId: usuario?.terceroId || '',
   rol: usuario?.rol || 'Operario',
   zona: usuario?.zona || 'General',
   password: '',
@@ -65,13 +66,14 @@ export function GestionUsuarios() {
     loading,
     reload: cargarDatos,
   } = useApiData(async () => {
-    const [usuarios, roles] = await Promise.all([
+    const [usuarios, roles, terceros] = await Promise.all([
       apiRequest('/usuarios'),
       apiRequest('/roles'),
+      apiRequest('/terceros'),
     ]);
-    return { usuarios, roles };
-  }, { usuarios: [], roles: [] });
-  const { usuarios, roles } = datos;
+    return { usuarios, roles, terceros };
+  }, { usuarios: [], roles: [], terceros: [] });
+  const { usuarios, roles, terceros } = datos;
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('Todos');
@@ -109,6 +111,13 @@ export function GestionUsuarios() {
 
   const rolesDisponibles = roles.filter((rol) => (
     rol.estado === 'Activo' || rol.nombre === formulario?.rol
+  ));
+  const perfilesTecnicosDisponibles = terceros.filter((tercero) => (
+    tercero.estado === 'Activo'
+    && (!usuarios.some((usuario) => (
+      String(usuario.terceroId) === String(tercero.id)
+      && String(usuario.id) !== String(formulario?.id)
+    )))
   ));
 
   const abrirNuevo = () => {
@@ -151,6 +160,9 @@ export function GestionUsuarios() {
     if (formulario.password !== formulario.confirmar) {
       nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
     }
+    if (formulario.rol === 'Técnico' && !formulario.terceroId) {
+      nuevosErrores.terceroId = 'Selecciona el perfil del técnico.';
+    }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
       return;
@@ -165,6 +177,7 @@ export function GestionUsuarios() {
         telefono: formulario.telefono,
         rol: formulario.rol,
         zona: formulario.zona,
+        tercero_id: formulario.rol === 'Técnico' ? formulario.terceroId : null,
       };
       const guardado = await apiRequest(
         formulario.id ? `/usuarios/${encodeURIComponent(formulario.id)}` : '/usuarios',
@@ -414,7 +427,10 @@ export function GestionUsuarios() {
               <select
                 className="mca-select"
                 value={formulario.rol}
-                onChange={(evento) => setCampo('rol', evento.target.value)}
+                onChange={(evento) => {
+                  setCampo('rol', evento.target.value);
+                  if (evento.target.value !== 'Técnico') setCampo('terceroId', '');
+                }}
               >
                 {rolesDisponibles.map((rol) => (
                   <option key={rol.nombre} value={rol.nombre}>
@@ -423,6 +439,30 @@ export function GestionUsuarios() {
                 ))}
               </select>
             </Field>
+            {formulario.rol === 'Técnico' && (
+              <Field
+                label="Perfil de técnico"
+                required
+                error={errores.terceroId}
+                hint="La cuenta móvil quedará vinculada a este perfil."
+              >
+                <select
+                  className="mca-select"
+                  value={formulario.terceroId}
+                  onChange={(evento) => setCampo('terceroId', evento.target.value)}
+                >
+                  <option value="">Selecciona un técnico</option>
+                  {perfilesTecnicosDisponibles.map((tercero) => (
+                    <option key={tercero.id} value={tercero.id}>
+                      {tercero.nombre_completo} · {tercero.documento}
+                    </option>
+                  ))}
+                </select>
+                {!perfilesTecnicosDisponibles.length && (
+                  <small className="mca-muted">No hay perfiles activos sin una cuenta asociada.</small>
+                )}
+              </Field>
+            )}
             <Field label="Zona">
               <select
                 className="mca-select"

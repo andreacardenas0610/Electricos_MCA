@@ -1,183 +1,99 @@
 # Backend Eléctricos MCA
 
-API REST con Express, PostgreSQL y JWT. Incluye acceso y gestión de clientes, terceros, órdenes de servicio, inventario, catálogo de servicios, cotizaciones, pagos, agenda, usuarios y roles.
+API REST con Express, PostgreSQL, JWT y `pg`. La base remota recomendada es Neon. Los módulos de negocio consultan la API; el navegador conserva solo la sesión temporal y la preferencia visual.
 
-## Instalación
+## Configuración
 
 ```bash
 cd backend
 npm install
 ```
 
-Copia `.env.example` a `.env`, configura PostgreSQL y coloca un `JWT_SECRET` aleatorio de al menos 32 caracteres. Configura también `FRONTEND_URL` con el origen del frontend. No subas `.env` al repositorio.
+Copia `.env.example` como `.env` y configura:
+
+- `DATABASE_URL`: cadena de conexión pooled de Neon, con `?sslmode=require`.
+- `JWT_SECRET`: secreto de al menos 32 caracteres.
+- `FRONTEND_URL`: uno o más orígenes web permitidos, separados por comas.
+- `MOBILE_ORIGINS`: orígenes de WebView móvil, separados por comas. No uses `*`.
+- `SMTP_HOST` y credenciales SMTP: necesarios en producción para verificación y recuperación por correo.
+
+El `.gitignore` raíz excluye `.env` y permite versionar `.env.example`. No incluyas credenciales reales en archivos versionados.
+
+## Esquema y migraciones
+
+### Base nueva
+
+En una base vacía, ejecuta en este orden:
+
+1. `database/schema.sql`
+2. `database/seed.sql`
+
+El esquema define una sola estructura PostgreSQL para acceso, clientes, órdenes, agenda, catálogo, materiales, historial, evidencias, firma, cotizaciones y pagos. El seed añade roles y catálogos, pero no crea contraseñas ni cuentas demo. Crea el primer administrador desde una terminal interactiva:
 
 ```bash
+npm run crear-administrador
+```
+
+El comando oculta la contraseña, la guarda con bcrypt y solo permite el bootstrap si no hay ya una cuenta con rol Administrador.
+
+### Base existente
+
+Realiza y verifica un respaldo antes de cambiar producción. Conserva las migraciones históricas `001`–`007`: algunas migran datos antiguos y otras preparan tablas utilizadas por la API. Tras aplicarlas y revisar la estructura, ejecuta **una sola vez** `database/008_unificacion_acceso_ordenes_movil.sql`. La migración transfiere los hashes técnicos a `usuarios`, añade verificación y las estructuras móviles, y elimina las columnas de credenciales duplicadas de `terceros` después de validar la transferencia.
+
+La migración `008` no se ejecuta al iniciar la API ni se ha ejecutado desde este cambio contra Neon. No vuelvas a ejecutarla ni uses el esquema limpio sobre una base existente. Corrige cualquier precondición o colisión que reporte y vuelve a respaldar antes de reintentar.
+
+Después de confirmar `008`, ejecuta una sola vez `database/009_normalizacion_personas.sql`. Esta migración crea la entidad central `personas` y vincula por documento o correo los perfiles existentes de clientes, terceros/técnicos y usuarios. Conserva los perfiles históricos y no borra clientes, terceros, usuarios ni órdenes.
+
+Luego de `009`, ejecuta una sola vez `database/010_sincronizar_datos_persona.sql`. Esta migración sincroniza cambios de documento, nombre, teléfono y correo entre los perfiles vinculados a la misma persona. No la ejecutes antes de `008` y `009`.
+
+El modelo normalizado separa datos comunes y datos de perfil:
+
+- `personas`: documento, nombre, teléfono y correo comunes.
+- `usuarios`: credenciales, usuario, contraseña, rol y estado de acceso.
+- `terceros`: datos laborales y técnicos.
+- `clientes`: datos comerciales, propiedad y contactos.
+
+Una persona puede estar vinculada simultáneamente a un cliente, un tercero/técnico y una cuenta de usuario. Los datos comunes se actualizan en `personas`; la API evita duplicar perfiles al crear o editar registros.
+
+Al crear un tercero desde la aplicación también se crea, en la misma transacción, su cuenta móvil. Se define usuario, contraseña inicial y rol. El rol debe estar activo y habilitado solo para `Móvil`; los roles se pueden ampliar desde Gestión de roles. Si se edita un tercero antiguo sin cuenta, se puede crear su acceso desde el mismo formulario.
+
+Los antiguos datos de negocio que solo estaban guardados en `localStorage` no se importan automáticamente; prepara una importación validada antes de retirar esos datos.
+
+## Inicio local y Vercel
+
+```bash
+npm run check
 npm run dev
 ```
 
-La API queda en `http://localhost:3000`; comprueba `GET /api/health`.
+La API local inicia en `http://localhost:3000`; `GET /api/health` debe responder `{"estado":"ok"}`. Para Vercel, configura como directorio raíz `backend` y define `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `MOBILE_ORIGINS` y SMTP en las variables del proyecto. En el proyecto del frontend, define `VITE_API_URL` como la URL pública del backend terminada en `/api`. Los cambios de variables de Vercel requieren un nuevo despliegue.
 
-## Desplegar el backend en Vercel
+La CORS permite los orígenes configurados, los orígenes móviles locales listados en `.env.example` y solicitudes nativas sin `Origin`. Las solicitudes web no configuradas se rechazan.
 
-Vercel puede desplegar Express directamente como una función. El archivo `src/app.js` exporta la aplicación Express por defecto, que es el punto de entrada que Vercel detecta. `src/server.js` se usa para desarrollo local; no es necesario cambiarlo ni añadir `app.listen()` a la función.
+## Acceso y contratos móviles
 
-1. Sube el repositorio a GitHub sin archivos `.env` ni credenciales.
-2. En Vercel, elige **Add New → Project** e importa el repositorio.
-3. En la configuración del proyecto, abre **Root Directory → Edit** y selecciona `backend`. Confirma la selección.
-4. Deja el Framework Preset detectado como **Express**. No configures un directorio de salida.
-5. En **Environment Variables**, añade:
-   - `DATABASE_URL`: cadena de conexión de Neon. Usa la cadena **pooled** que ofrece Neon para aplicaciones serverless.
-   - `JWT_SECRET`: valor aleatorio secreto de al menos 32 caracteres.
-   - `FRONTEND_URL`: origen exacto del frontend desplegado, por ejemplo `https://mi-sitio.vercel.app`. Se admiten varios orígenes separados por comas.
-6. Pulsa **Deploy**. Si el despliegue termina, abre `https://<dominio-del-backend>/api/health`; debe responder `{"estado":"ok"}`.
-7. En el proyecto de Vercel del frontend, define `VITE_API_URL` como `https://<dominio-del-backend>/api` y vuelve a desplegar el frontend.
+Los endpoints protegidos usan `Authorization: Bearer <token>` y devuelven errores JSON con la propiedad `mensaje`. El login requiere `plataforma: "web"` o `"movil"`; administradores tienen acceso web y móvil, técnicos usan móvil y requieren cuenta activa y verificada. El técnico solo consulta y actualiza las órdenes que tiene asignadas.
 
-Las variables deben configurarse en Vercel antes del despliegue y para los entornos que vayas a utilizar. Los cambios de variables requieren un nuevo despliegue. Neon no importa ni ejecuta código del repositorio: el backend desplegado abre la conexión a Neon usando `DATABASE_URL`.
-
-## Acceso y rutas
-
-El administrador se autentica con `usuarios` y puede iniciar sesión en web o móvil. Los técnicos se autentican con `terceros` y solo pueden iniciar seleccionando móvil. Los técnicos solo ven sus órdenes asignadas; pueden actualizar su estado y seguimiento y subir/ver evidencias. Clientes, terceros y la creación/edición/eliminación de órdenes son acciones de administrador.
-
-El login es `POST /api/auth/login`, con JSON:
-
-```json
-{
-  "usuario": "admin",
-  "password": "contraseña",
-  "plataforma": "web"
-}
-```
-
-El campo `plataforma` admite `web` o `movil`. Envía el JWT devuelto en `Authorization: Bearer <token>`.
-
-El frontend toma la URL base desde `frontend/.env` (`VITE_API_URL`) y, si no está definida, usa `http://localhost:3000/api`. En Vercel configura `VITE_API_URL` con la URL pública de la API terminada en `/api`; configura `FRONTEND_URL` en el hosting del backend con el dominio público exacto del frontend. La sesión se mantiene en `sessionStorage` y se elimina al cerrar sesión o si la API responde que el token expiró.
-
-| Método | Ruta | Permiso |
+| Método | Ruta | Uso |
 |---|---|---|
-| GET, POST | `/api/clientes` | Administrador |
-| GET, PUT, DELETE | `/api/clientes/:id` | Administrador |
-| GET | `/api/clientes/catalogos/tipos-propiedad` | Administrador |
-| GET, POST | `/api/terceros` | Administrador |
-| GET, PUT, DELETE | `/api/terceros/:id` | Administrador |
-| GET, POST | `/api/materiales` | Administrador |
-| GET, PUT, DELETE | `/api/materiales/:id` | Administrador |
-| GET, POST | `/api/materiales/categorias` | Administrador |
-| GET, POST | `/api/servicios` | Administrador |
-| GET, PUT, DELETE | `/api/servicios/:id` | Administrador |
-| PATCH | `/api/servicios/:id/estado` | Administrador |
-| GET, POST | `/api/cotizaciones` | Administrador |
-| GET, PUT, DELETE | `/api/cotizaciones/:codigo` | Administrador |
-| PATCH | `/api/cotizaciones/:codigo/estado` | Administrador |
-| GET | `/api/pagos`, `/api/pagos/cuentas` | Administrador |
-| POST | `/api/pagos` | Administrador |
-| PUT, DELETE | `/api/pagos/:codigo` | Administrador |
-| GET, POST | `/api/agenda` | Administrador |
-| GET, PUT, DELETE | `/api/agenda/:id` | Administrador |
-| PATCH | `/api/agenda/:id/estado` | Administrador |
-| GET, POST | `/api/usuarios` | Administrador |
-| GET, PUT, DELETE | `/api/usuarios/:id` | Administrador |
-| PATCH | `/api/usuarios/:id/estado` | Administrador |
-| GET, POST | `/api/roles` | Administrador |
-| GET, PUT, DELETE | `/api/roles/:id` | Administrador |
-| PATCH | `/api/roles/:id/estado` | Administrador |
-| GET | `/api/ordenes-servicio` | Admin: todas; técnico: asignadas |
-| GET | `/api/ordenes-servicio/catalogos` | Administrador |
-| GET | `/api/ordenes-servicio/:id` | Admin o técnico asignado |
-| POST, PUT, DELETE | `/api/ordenes-servicio` | Administrador |
-| PATCH | `/api/ordenes-servicio/:id/estado` | Admin o técnico asignado |
-| GET | `/api/ordenes-servicio/:id/seguimiento` | Admin o técnico asignado |
-| GET, POST | `/api/ordenes-servicio/:id/evidencias` | Admin o técnico asignado |
-| GET | `/api/ordenes-servicio/evidencias/:evidenciaId/archivo` | Admin o técnico de la orden |
+| POST | `/api/auth/login` | Autenticación de cuenta |
+| POST | `/api/auth/registro` | Registro técnico; envía token de verificación |
+| POST | `/api/auth/verificar` | Verifica identidad con token de un solo uso |
+| POST | `/api/auth/recuperar` | Solicita recuperación sin revelar si existe la cuenta |
+| POST | `/api/auth/restablecer` | Cambia contraseña con token temporal |
+| GET | `/api/agendamiento` | Consulta la agenda; el técnico ve las actividades asignadas |
+| GET | `/api/ordenes` y `/api/ordenes/:id` | Consulta órdenes asignadas o, para admin, todas |
+| PATCH | `/api/ordenes/:id/estado` | Cambia estado con `estado` o `estado_id`; escribe historial |
+| GET, POST | `/api/ordenes/:id/evidencias` | Consulta o registra fotos y firma |
+| GET | `/api/ordenes/evidencias/:evidenciaId/archivo` | Descarga evidencia cargada como archivo |
+| GET, POST | `/api/ordenes/:id/materiales` | Consulta/consume materiales y descuenta existencias en transacción |
 
-Los errores de validación devuelven HTTP 400, las credenciales incorrectas 401, los accesos no permitidos 403 y los registros duplicados 409.
+El cambio de estado acepta, por ejemplo, `{"estado":"En Ejecución","comentario":"Inicio de trabajo"}` o `{"estado_id":3}`. Para evidencia, envía `multipart/form-data` con `archivo` (JPG, PNG o WEBP, máximo 5 MB), `tipo` (`Fotografía` o `Firma`) y `observacion` opcional; también puede enviarse una URL HTTPS en JSON. La firma como archivo debe ser PNG y actualiza `firma_cliente_url` y `fecha_firma`. Para materiales se envían `codigo` (o `material_codigo`) y `cantidad`.
 
-## Migración de los módulos de gestión
+Los aliases `/api/ordenes-servicio` y `/api/agenda` se conservan para la interfaz web y compatibilidad existente. Los cambios de estado registran usuario/técnico, estado anterior/nuevo y comentario en `historial_estados_orden`.
 
-Haz una copia de seguridad de Neon. Después de aplicar las migraciones `001` y `002` que correspondan a tu base, revisa y ejecuta una sola vez `database/003_modulos_gestion.sql`. Esta migración es aditiva: amplía las tablas existentes `servicios`, `usuarios` y `roles`, y crea las tablas para inventario, cotizaciones, pagos y agenda. No se ejecuta automáticamente al iniciar la API. Las cuentas y registros que solo estaban guardados en `localStorage` no se copian a Neon; ingrésalos de nuevo desde la aplicación o prepara una importación antes de poner el sistema en producción.
+## Otros endpoints web
 
-## Preparar PostgreSQL
+Clientes, terceros, catálogo, cotizaciones, pagos, usuarios y roles mantienen sus rutas `/api/clientes`, `/api/terceros`, `/api/materiales`, `/api/servicios`, `/api/cotizaciones`, `/api/pagos`, `/api/usuarios` y `/api/roles`; son de administración y requieren token de administrador. La agenda web se gestiona en `/api/agenda`.
 
-Clientes utiliza las tablas `clientes`, `tipos_propiedad`, `contactos_cliente` y `direcciones_cliente`.
-
-1. Si todavía no está la columna `usuarios.usuario`, ejecuta `database/001_agregar_usuario_login.sql`.
-2. Para iniciar sesión con la cuenta actual del admin, ejecuta `npm run configurar-usuario` desde una terminal interactiva. Pregunta el usuario, el correo con que existe en la DB y su contraseña. Guarda el hash bcrypt, no la contraseña en texto plano.
-3. Haz respaldo de la DB y revisa `database/002_tecnicos_movil_y_evidencias.sql`. Crea `terceros` si no existe. Si ya existe con otros nombres de columnas, compara y respalda primero: la migración agrega los campos que espera la API, pero no puede copiar los datos existentes automáticamente.
-4. Ejecuta la migración una vez: agrega credenciales a `terceros`, la asignación `tercero_id` y fecha/servicio a órdenes, y las columnas para seguimiento y evidencias de terceros. Conserva la antigua relación a `usuarios`.
-5. Después de crear el registro de un técnico externo, ejecuta `npm run configurar-tecnico`. Pide su documento, el nombre de usuario móvil y contraseña, y guarda el hash bcrypt.
-6. Ejecuta una sola vez `database/004_ajustes_gestion.sql`. También es aditiva: crea `categorias_servicio` y `servicios_materiales`, agrega `estado` y `stock_minimo` a `materiales`, `terminos`, `garantias`, `stock_descontado` y `aprobado_en` a `cotizaciones`, `tipo_documento`, `tercero_id` y `es_empleado` a `clientes`, y los datos de residencia (`tipo_documento`, `direccion`, `municipio`, `departamento`) a `terceros`. Impide repetir el mismo material dentro de una misma cotización.
-
-## Envío de cotizaciones por correo
-
-`POST /cotizaciones/:codigo/enviar-correo` usa el contacto registrado en la cotización. Si defines estas variables en `.env`, el envío es automático (requiere `npm install nodemailer`):
-
-```env
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=usuario@example.com
-SMTP_PASS=clave-o-token
-SMTP_FROM="Electricos MCA <usuario@example.com>"
-```
-
-Sin `SMTP_HOST` el endpoint devuelve un enlace `mailto:` ya redactado y el navegador abre el cliente de correo del usuario.
-
-Las migraciones no se ejecutan automáticamente. No vuelvas a correr el esquema inicial si contiene `DROP TABLE`. El seed compartido usa un hash de relleno inválido para el admin; el comando interactivo configura una contraseña que conozcan.
-
-## Datos de ejemplo
-
-Crear un cliente guarda sus datos principales y, si se envían, el contacto y dirección principal:
-
-```json
-{
-  "nombre_razon_social": "Instalaciones del Norte S.A.S.",
-  "documento_nit": "900123456-1",
-  "tipo_cliente": "Jurídico",
-  "tipo_propiedad_id": 2,
-  "contacto": "Ana Pérez",
-  "telefono": "3001234567",
-  "correo_electronico": "ana@ejemplo.com",
-  "direccion": "Calle 10 # 20-30",
-  "municipio": "Medellín",
-  "departamento": "Antioquia"
-}
-```
-
-Crear un técnico:
-
-```json
-{
-  "nombre_completo": "Carlos Pérez",
-  "documento": "100200300",
-  "empresa": "Servicios Eléctricos XYZ",
-  "telefono": "3001234567",
-  "correo_electronico": "carlos@ejemplo.com"
-}
-```
-
-Crear una orden:
-
-```json
-{
-  "codigo": "OS-2026-0002",
-  "cliente_id": 1,
-  "servicio_id": 1,
-  "fecha_programada": "2026-11-02",
-  "tercero_id": 1,
-  "prioridad_id": 2,
-  "estado_id": 1,
-  "descripcion": "Revisión de instalación eléctrica"
-}
-```
-
-Para cambiar estado desde móvil, usa `PATCH /api/ordenes-servicio/:id/estado` con `{"estado_id": 2, "comentario": "Inicié el trabajo."}`.
-
-## Fotos y firma
-
-Envía `POST /api/ordenes-servicio/:id/evidencias` como `multipart/form-data`:
-
-- `archivo`: JPG, PNG o WEBP, hasta 5 MB.
-- `tipo`: `Fotografía` o `Firma`.
-- La firma debe enviarse como PNG.
-- `observacion`: opcional.
-
-El contenido binario se almacena en PostgreSQL como `BYTEA` en `evidencias_orden`. Esto es sencillo para el prototipo; la base crecerá con cada foto, así que para una versión de producción convendría almacenar los archivos en un servicio de objetos y guardar aquí solo sus URL.
+Para asignar una cuenta existente a un perfil técnico, usa `npm run configurar-tecnico` desde una terminal interactiva. El comando requiere el documento del perfil y actualiza la cuenta enlazada con contraseña bcrypt.

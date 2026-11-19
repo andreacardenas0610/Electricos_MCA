@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
-  Factory,
   Handshake,
   House,
   Mail,
@@ -42,8 +41,8 @@ import {
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha } from '../../../shared/services/base.js';
 import {
+  TIPOS_PERSONA,
   TIPOS_DOCUMENTO,
-  TIPOS_PROPIEDAD,
   normalizarCliente,
 } from '../../../shared/services/clientesService.js';
 import {
@@ -60,28 +59,15 @@ const ESTADOS_ACTIVOS_AGENDA = ['Programada', 'En proceso', 'En Ejecución', 'En
 const ESTADOS_CON_FECHA = ['Programada', 'En Ejecución', 'En ejecución'];
 const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const TONO_PROPIEDAD = {
-  Residencial: 'info',
-  Comercial: 'indigo',
-  Industrial: 'warning',
-};
-
 const TONO_PRIORIDAD = {
   Baja: 'neutral',
   Media: 'info',
   Alta: 'warning',
 };
 
-const ICONO_PROPIEDAD = {
-  Residencial: House,
-  Comercial: Building2,
-  Industrial: Factory,
-};
-
 const FORMULARIO_CLIENTE = (cliente = null) => ({
-  tipoPropiedad: cliente?.tipoPropiedad || 'Comercial',
+  tipoPersona: cliente?.tipoCliente || 'Natural',
   nombre: cliente?.nombre || '',
-  tipoDocumento: cliente?.tipoDocumento || 'NIT',
   documento: cliente?.documento || '',
   contacto: cliente?.contacto || '',
   telefono: cliente?.telefono || '',
@@ -96,7 +82,7 @@ const FORMULARIO_CLIENTE = (cliente = null) => ({
   empleadoNombre: cliente?.empleadoNombre || '',
 });
 
-const FORMULARIO_TECNICO = (tecnico = null) => ({
+const FORMULARIO_TECNICO = (tecnico = null, rolMovilDefault = '') => ({
   nombre: tecnico?.nombre || '',
   tipoDocumento: tecnico?.tipoDocumento || 'Cédula',
   documento: tecnico?.documento || '',
@@ -107,6 +93,10 @@ const FORMULARIO_TECNICO = (tecnico = null) => ({
   departamento: tecnico?.departamento || '',
   especialidad: tecnico?.especialidad || '',
   estado: tecnico?.estado || 'Activo',
+  usuario: tecnico?.usuario || '',
+  password: '',
+  rolId: tecnico?.rol_id ? String(tecnico.rol_id) : String(rolMovilDefault || ''),
+  tieneUsuario: Boolean(tecnico?.usuario_id),
 });
 
 const FORMULARIO_ORDEN = (orden = null, codigo = '') => ({
@@ -185,7 +175,7 @@ export function Clientes() {
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return clientes.filter((cliente) => {
-      if (filtroTipo !== 'Todos' && cliente.tipoPropiedad !== filtroTipo) return false;
+      if (filtroTipo !== 'Todos' && cliente.tipoCliente !== filtroTipo) return false;
       if (!termino) return true;
       return `${cliente.nombre} ${cliente.documento} ${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.municipio} ${cliente.departamento}`
         .toLowerCase()
@@ -197,8 +187,8 @@ export function Clientes() {
     () => ({
       total: clientes.length,
       activos: clientes.filter((cliente) => cliente.estado === 'Activo').length,
-      residenciales: clientes.filter((cliente) => cliente.tipoPropiedad === 'Residencial').length,
-      empresas: clientes.filter((cliente) => cliente.tipoPropiedad !== 'Residencial').length,
+      naturales: clientes.filter((cliente) => cliente.tipoCliente === 'Natural').length,
+      juridicos: clientes.filter((cliente) => cliente.tipoCliente === 'Jurídico').length,
     }),
     [clientes],
   );
@@ -222,7 +212,11 @@ export function Clientes() {
   };
 
   const setCampo = (campo, valor) => {
-    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+    setFormulario((actual) => ({
+      ...actual,
+      [campo]: valor,
+      ...(campo === 'tipoPersona' && valor !== actual.tipoPersona ? { documento: '' } : {}),
+    }));
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
@@ -246,7 +240,7 @@ export function Clientes() {
       terceroId: valor || '',
       esEmpleado: Boolean(tecnico),
       empleadoNombre: tecnico?.nombre || '',
-      tipoDocumento: tecnico ? 'Cédula' : actual.tipoDocumento,
+      tipoPersona: tecnico ? 'Natural' : actual.tipoPersona,
       documento: tecnico ? tecnico.documento : actual.documento,
       nombre: tecnico ? tecnico.nombre : actual.nombre,
       telefono: tecnico && !actual.telefono ? tecnico.telefono : actual.telefono,
@@ -264,11 +258,8 @@ export function Clientes() {
     if (!formulario.nombre.trim()) {
       nuevosErrores.nombre = 'Escribe el nombre o razón social.';
     }
-    if (!formulario.tipoDocumento.trim()) {
-      nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
-    }
     if (!formulario.documento.trim()) {
-      nuevosErrores.documento = 'Escribe el número del documento o NIT.';
+      nuevosErrores.documento = 'Escribe el número de la cédula o del NIT.';
     }
     if (!formulario.telefono.trim()) {
       nuevosErrores.telefono = 'Escribe el número de la persona de contacto.';
@@ -282,17 +273,15 @@ export function Clientes() {
     }
 
     try {
-      const tipoPropiedad = TIPOS_PROPIEDAD.find(
-        (tipo) => tipo.nombre === formulario.tipoPropiedad,
-      ) || TIPOS_PROPIEDAD[0];
+      const esJuridica = formulario.tipoPersona === 'Jurídico';
       const payload = {
         nombre_razon_social: formulario.nombre.trim(),
         documento_nit: formulario.documento.trim(),
-        tipo_cliente: tipoPropiedad.nombre === 'Residencial' ? 'Natural' : 'Jurídico',
-        tipo_documento: formulario.tipoDocumento,
+        tipo_cliente: formulario.tipoPersona,
+        tipo_documento: esJuridica ? 'NIT' : 'Cédula',
         tercero_id: Number(formulario.terceroId) > 0 ? Number(formulario.terceroId) : null,
         es_empleado: formulario.esEmpleado === true || Number(formulario.terceroId) > 0,
-        tipo_propiedad_id: tipoPropiedad.id,
+        tipo_propiedad_id: null,
         estado: formulario.estado,
         contacto: formulario.contacto.trim(),
         telefono: formulario.telefono.trim(),
@@ -311,8 +300,8 @@ export function Clientes() {
         'success',
         formulario.id ? 'Cliente actualizado' : 'Cliente creado',
         guardado.esEmpleado
-          ? `${guardado.nombre} · ${guardado.tipoPropiedad} · registrado como empleado-cliente.`
-          : `${guardado.nombre} · ${guardado.tipoPropiedad}.`,
+          ? `${guardado.nombre} · Persona ${guardado.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'} · registrado como empleado-cliente.`
+          : `${guardado.nombre} · Persona ${guardado.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'}.`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -328,10 +317,10 @@ export function Clientes() {
           nombre_razon_social: cliente.nombre,
           documento_nit: cliente.documento,
           tipo_cliente: cliente.tipoCliente,
-          tipo_documento: cliente.tipoDocumento,
+          tipo_documento: cliente.tipoCliente === 'Jurídico' ? 'NIT' : 'Cédula',
           tercero_id: Number(cliente.terceroId) > 0 ? Number(cliente.terceroId) : null,
           es_empleado: cliente.esEmpleado,
-          tipo_propiedad_id: TIPOS_PROPIEDAD.find((tipo) => tipo.nombre === cliente.tipoPropiedad)?.id,
+          tipo_propiedad_id: null,
           estado: cliente.estado === 'Activo' ? 'Inactivo' : 'Activo',
           contacto: cliente.contacto,
           telefono: cliente.telefono,
@@ -392,16 +381,16 @@ export function Clientes() {
           tone="success"
         />
         <KpiCard
-          label="Residenciales"
-          value={resumen.residenciales}
-          hint="Personas naturales"
+          label="Personas naturales"
+          value={resumen.naturales}
+          hint="Identificadas con cédula"
           icon={House}
           tone="info"
         />
         <KpiCard
-          label="Empresas"
-          value={resumen.empresas}
-          hint="Comerciales e industriales"
+          label="Personas jurídicas"
+          value={resumen.juridicos}
+          hint="Identificadas con NIT"
           icon={Building2}
           tone="indigo"
         />
@@ -422,12 +411,12 @@ export function Clientes() {
               style={{ width: 170 }}
               value={filtroTipo}
               onChange={(evento) => setFiltroTipo(evento.target.value)}
-              aria-label="Filtrar clientes por tipo de propiedad"
+              aria-label="Filtrar clientes por tipo de persona"
             >
               <option value="Todos">Todos los tipos</option>
-              {TIPOS_PROPIEDAD.map((tipo) => (
-                <option key={tipo.id} value={tipo.nombre}>
-                  {tipo.nombre}
+              {TIPOS_PERSONA.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo === 'Jurídico' ? 'Jurídica' : tipo}
                 </option>
               ))}
             </select>
@@ -439,9 +428,9 @@ export function Clientes() {
           <table className="mca-table mca-table--fit mca-table--clientes">
             <thead>
               <tr>
-                <th>Tipo doc. / NIT</th>
+                <th>Cédula / NIT</th>
                 <th>Razón social / Nombre</th>
-                <th>Tipo</th>
+                <th>Tipo de persona</th>
                 <th>Persona de contacto</th>
                 <th>Nº de contacto</th>
                 <th>Departamento / Municipio</th>
@@ -467,7 +456,7 @@ export function Clientes() {
                 </tr>
               ) : (
                 filtrados.map((cliente) => {
-                  const Icono = ICONO_PROPIEDAD[cliente.tipoPropiedad] || Building2;
+                  const Icono = cliente.tipoCliente === 'Natural' ? House : Building2;
                   return (
                     <tr key={cliente.id} className={claseFilaEstado(cliente.estado, 'usuario')}>
                       <td className="is-nowrap" data-label="Documento">
@@ -484,7 +473,7 @@ export function Clientes() {
                           <div>
                             <div className="is-primary">{cliente.nombre}</div>
                             <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
-                              {cliente.tipoCliente}
+                              {cliente.tipoCliente === 'Jurídico' ? 'Persona jurídica' : 'Persona natural'}
                             </div>
                             {cliente.esEmpleado && (
                               <Badge tone="indigo" className="mca-badge--inline">Es empleado</Badge>
@@ -493,8 +482,8 @@ export function Clientes() {
                         </div>
                       </td>
                       <td data-label="Tipo">
-                        <Badge tone={TONO_PROPIEDAD[cliente.tipoPropiedad] || 'neutral'}>
-                          {cliente.tipoPropiedad}
+                        <Badge tone={cliente.tipoCliente === 'Natural' ? 'info' : 'indigo'}>
+                          {cliente.tipoCliente === 'Jurídico' ? 'Jurídica' : 'Natural'}
                         </Badge>
                       </td>
                       <td data-label="Persona de contacto">
@@ -562,51 +551,31 @@ export function Clientes() {
         {formulario && (
           <form id="form-cliente" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
-              label="Tipo de propiedad"
+              label="Tipo de persona"
               full
-              tooltip="Tipo de propiedad del cliente: Residencial para personas naturales, Comercial o Industrial para empresas."
-              hint="Residencial usa persona natural; Comercial e Industrial usan razón social."
+              tooltip="Una persona natural se identifica con cédula; una persona jurídica se identifica con NIT."
             >
               <div className="mca-row" style={{ gap: 8 }}>
-                {TIPOS_PROPIEDAD.map((tipo) => (
+                {TIPOS_PERSONA.map((tipo) => (
                   <Button
-                    key={tipo.id}
+                    key={tipo}
                     size="sm"
-                    variant={formulario.tipoPropiedad === tipo.nombre ? 'primary' : 'ghost'}
-                    onClick={() => setCampo('tipoPropiedad', tipo.nombre)}
+                    variant={formulario.tipoPersona === tipo ? 'primary' : 'ghost'}
+                    onClick={() => setCampo('tipoPersona', tipo)}
                   >
-                    {tipo.nombre}
+                    {tipo === 'Jurídico' ? 'Jurídica' : tipo}
                   </Button>
                 ))}
               </div>
             </Field>
 
             <Field
-              label="Tipo de documento"
-              required
-              error={errores.tipoDocumento}
-              tooltip="Documento con el que se identifica al cliente: Cédula, Cédula de extranjería, NIT, Pasaporte."
-            >
-              <select
-                className="mca-select"
-                value={formulario.tipoDocumento}
-                onChange={(evento) => setCampo('tipoDocumento', evento.target.value)}
-              >
-                {TIPOS_DOCUMENTO.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field
-              label={formulario.tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT'}
+              label={formulario.tipoPersona === 'Natural' ? 'Número de cédula' : 'NIT'}
               required
               error={errores.documento}
               tooltip={
-                formulario.tipoPropiedad === 'Residencial'
-                  ? 'Número completo de la cédula del cliente, sin puntos y con el dígito verificado.'
+                formulario.tipoPersona === 'Natural'
+                  ? 'Número de cédula de la persona natural.'
                   : 'Número completo del NIT del cliente, incluyendo el dígito de verificación.'
               }
             >
@@ -614,16 +583,16 @@ export function Clientes() {
                 className="mca-input"
                 value={formulario.documento}
                 onChange={(evento) => setCampo('documento', evento.target.value)}
-                placeholder={formulario.tipoPropiedad === 'Residencial' ? '1.020.304.050' : '900.123.456-7'}
+                placeholder={formulario.tipoPersona === 'Natural' ? '1.020.304.050' : '900.123.456-7'}
               />
             </Field>
 
             <Field
-              label={formulario.tipoPropiedad === 'Residencial' ? 'Nombre completo' : 'Razón social'}
+              label={formulario.tipoPersona === 'Natural' ? 'Nombre completo' : 'Razón social'}
               required
               error={errores.nombre}
               tooltip={
-                formulario.tipoPropiedad === 'Residencial'
+                formulario.tipoPersona === 'Natural'
                   ? 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
                   : 'Razón social registrada de la empresa, tal como aparece en el RUT.'
               }
@@ -632,7 +601,7 @@ export function Clientes() {
                 className="mca-input"
                 value={formulario.nombre}
                 onChange={(evento) => setCampo('nombre', evento.target.value)}
-                placeholder={formulario.tipoPropiedad === 'Residencial' ? 'Ana María Gómez' : 'Empresa S.A.S.'}
+                placeholder={formulario.tipoPersona === 'Natural' ? 'Ana María Gómez' : 'Empresa S.A.S.'}
                 autoFocus
               />
             </Field>
@@ -740,7 +709,7 @@ export function Clientes() {
         title={clienteDetalle?.nombre}
         subtitle={
           clienteDetalle
-            ? `${clienteDetalle.documento} · ${clienteDetalle.tipoPropiedad}`
+            ? `${clienteDetalle.documento} · Persona ${clienteDetalle.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'}`
             : ''
         }
         icon={Building2}
@@ -761,8 +730,9 @@ export function Clientes() {
             <DetailItem label="Tipo de documento">{clienteDetalle.tipoDocumento || '—'}</DetailItem>
             <DetailItem label="Documento / NIT">{clienteDetalle.documento || '—'}</DetailItem>
             <DetailItem label="Razón social / Nombre">{clienteDetalle.nombre || '—'}</DetailItem>
-            <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
-            <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
+            <DetailItem label="Tipo de persona">
+              {clienteDetalle.tipoCliente === 'Jurídico' ? 'Jurídica' : 'Natural'}
+            </DetailItem>
             <DetailItem label="Empleado">
               {clienteDetalle.esEmpleado
                 ? clienteDetalle.empleadoNombre || clienteDetalle.nombre
@@ -812,12 +782,14 @@ export function GestionTerceros() {
     loading: cargandoTecnicos,
     reload: cargarTecnicos,
   } = useApiData(async () => {
-    const [tecnicosApi, ordenesApi] = await Promise.all([
+    const [tecnicosApi, ordenesApi, rolesApi] = await Promise.all([
       apiRequest('/terceros'),
       apiRequest('/ordenes-servicio'),
+      apiRequest('/roles'),
     ]);
     return {
       tecnicos: tecnicosApi.map(normalizarTecnico),
+      roles: rolesApi,
       actividades: ordenesApi.map((orden) => ({
         id: orden.id,
         tecnicoId: orden.tercero_id,
@@ -830,7 +802,7 @@ export function GestionTerceros() {
         cliente: orden.cliente || '',
       })),
     };
-  }, { tecnicos: [], actividades: [] });
+  }, { tecnicos: [], actividades: [], roles: [] });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -849,6 +821,12 @@ export function GestionTerceros() {
       });
     return carga;
   }, [datos.actividades]);
+  const rolesMoviles = useMemo(
+    () => datos.roles.filter((rol) => rol.estado === 'Activo'
+      && rol.plataformas?.includes('Móvil')
+      && !rol.plataformas.includes('Web')),
+    [datos.roles],
+  );
 
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -890,13 +868,19 @@ export function GestionTerceros() {
   );
 
   const abrirNuevo = () => {
-    setFormulario(FORMULARIO_TECNICO());
+    const rolDefault = rolesMoviles.find((rol) => rol.nombre === 'Técnico')?.id
+      || rolesMoviles[0]?.id
+      || '';
+    setFormulario(FORMULARIO_TECNICO(null, rolDefault));
     setErrores({});
   };
 
   const abrirEdicion = (tecnico) => {
     setDetalleId(null);
-    setFormulario({ ...FORMULARIO_TECNICO(tecnico), id: tecnico.id });
+    const rolDefault = rolesMoviles.find((rol) => rol.nombre === 'Técnico')?.id
+      || rolesMoviles[0]?.id
+      || '';
+    setFormulario({ ...FORMULARIO_TECNICO(tecnico, rolDefault), id: tecnico.id });
     setErrores({});
   };
 
@@ -917,8 +901,15 @@ export function GestionTerceros() {
     if (!formulario.tipoDocumento.trim()) nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
     if (!formulario.documento.trim()) nuevosErrores.documento = 'Escribe el número del documento.';
     if (!formulario.telefono.trim()) nuevosErrores.telefono = 'Escribe el teléfono.';
-    if (formulario.correo.trim() && !CORREO_VALIDO.test(formulario.correo.trim())) {
-      nuevosErrores.correo = 'Ingresa un correo electrónico válido.';
+    if (!formulario.correo.trim() || !CORREO_VALIDO.test(formulario.correo.trim())) {
+      nuevosErrores.correo = 'Ingresa un correo electrónico válido para el acceso móvil.';
+    }
+    if (!formulario.usuario.trim()) nuevosErrores.usuario = 'Escribe el usuario para iniciar sesión.';
+    if (!formulario.rolId) nuevosErrores.rolId = 'Selecciona un rol habilitado para móvil.';
+    if ((!formulario.id || !formulario.tieneUsuario) && formulario.password.length < 8) {
+      nuevosErrores.password = 'Escribe una contraseña de al menos 8 caracteres.';
+    } else if (formulario.password && formulario.password.length < 8) {
+      nuevosErrores.password = 'La contraseña debe tener al menos 8 caracteres.';
     }
     if (!formulario.municipio.trim()) {
       nuevosErrores.municipio = 'Escribe el municipio donde reside.';
@@ -941,6 +932,9 @@ export function GestionTerceros() {
         municipio: formulario.municipio.trim(),
         departamento: formulario.departamento.trim(),
         estado: formulario.estado || 'Activo',
+        usuario: formulario.usuario.trim(),
+        password: formulario.password,
+        rol_id: Number(formulario.rolId),
       };
       const resultado = await apiRequest(
         formulario.id ? `/terceros/${formulario.id}` : '/terceros',
@@ -951,7 +945,7 @@ export function GestionTerceros() {
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
-        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'}.`,
+        `${guardado.nombre} · acceso móvil: ${guardado.usuario || formulario.usuario} (${guardado.rol || 'rol asignado'}).`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -1009,7 +1003,7 @@ export function GestionTerceros() {
       <PageHeader
         eyebrow="Terceros"
         title="Terceros"
-        subtitle="Técnicos externos disponibles para asignar en la agenda y las órdenes de servicio."
+        subtitle="Terceros con acceso móvil, disponibles según su rol para la operación de la empresa."
         icon={Handshake}
         actions={
           <Button variant="primary" icon={Plus} onClick={abrirNuevo}>
@@ -1180,12 +1174,12 @@ export function GestionTerceros() {
         open={Boolean(formulario)}
         onClose={cerrarFormulario}
         title={formulario?.id ? 'Editar tercero' : 'Nuevo tercero'}
-        subtitle="Los terceros activos se ofrecen automáticamente al agendar y crear órdenes."
+        subtitle="Cada tercero tiene una cuenta móvil y un rol; sus datos personales se comparten."
         icon={Handshake}
         size="lg"
         footer={
           <Button variant="primary" type="submit" form="form-tercero">
-            {formulario?.id ? 'Guardar cambios' : 'Crear tercero'}
+            {formulario?.id ? 'Guardar cambios' : 'Crear tercero y acceso móvil'}
           </Button>
         }
       >
@@ -1256,8 +1250,9 @@ export function GestionTerceros() {
 
             <Field
               label="Correo electrónico"
+              required
               error={errores.correo}
-              tooltip="Buzón para enviarle la orden de servicio y los soportes."
+              tooltip="Correo de la cuenta que usará para acceder desde la aplicación móvil."
             >
               <input
                 className="mca-input"
@@ -1265,6 +1260,54 @@ export function GestionTerceros() {
                 value={formulario.correo}
                 onChange={(evento) => setCampo('correo', evento.target.value)}
                 placeholder="tecnico@electricosmca.com"
+              />
+            </Field>
+
+            <Field
+              label="Usuario móvil"
+              required
+              error={errores.usuario}
+              tooltip="Nombre de usuario para iniciar sesión desde la aplicación móvil."
+            >
+              <input
+                className="mca-input"
+                value={formulario.usuario}
+                onChange={(evento) => setCampo('usuario', evento.target.value)}
+                placeholder="usuario.tecnico"
+              />
+            </Field>
+
+            <Field
+              label="Rol móvil"
+              required
+              error={errores.rolId}
+              tooltip="El rol debe estar activo y habilitado solo para Móvil."
+            >
+              <select
+                className="mca-select"
+                value={formulario.rolId}
+                onChange={(evento) => setCampo('rolId', evento.target.value)}
+              >
+                <option value="">Selecciona un rol</option>
+                {rolesMoviles.map((rol) => (
+                  <option key={rol.id} value={rol.id}>{rol.nombre}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label={formulario.tieneUsuario ? 'Cambiar contraseña (opcional)' : 'Contraseña móvil'}
+              required={!formulario.tieneUsuario}
+              error={errores.password}
+              tooltip="La contraseña se guarda protegida y no se vuelve a mostrar."
+            >
+              <input
+                className="mca-input"
+                type="password"
+                autoComplete="new-password"
+                value={formulario.password}
+                onChange={(evento) => setCampo('password', evento.target.value)}
+                placeholder={formulario.tieneUsuario ? 'Dejar vacía para conservarla' : 'Mínimo 8 caracteres'}
               />
             </Field>
 
@@ -1353,6 +1396,8 @@ export function GestionTerceros() {
               <DetailItem label="Especialidad">{tecnicoDetalle.especialidad}</DetailItem>
               <DetailItem label="Teléfono">{tecnicoDetalle.telefono || '—'}</DetailItem>
               <DetailItem label="Correo">{tecnicoDetalle.correo || '—'}</DetailItem>
+              <DetailItem label="Usuario móvil">{tecnicoDetalle.usuario || '—'}</DetailItem>
+              <DetailItem label="Rol móvil">{tecnicoDetalle.rol || '—'}</DetailItem>
               <DetailItem label="Departamento">{tecnicoDetalle.departamento || '—'}</DetailItem>
               <DetailItem label="Municipio donde reside">{tecnicoDetalle.municipio || '—'}</DetailItem>
               <DetailItem label="Dirección de residencia" full>

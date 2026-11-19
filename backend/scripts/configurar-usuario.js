@@ -66,17 +66,9 @@ async function configurarUsuario() {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const usuarioEnTerceros = await pool.query(
-    'SELECT id FROM terceros WHERE lower(usuario) = lower($1) LIMIT 1',
-    [username],
-  );
-  if (usuarioEnTerceros.rowCount) {
-    throw new Error('Ese nombre de usuario ya pertenece a un técnico tercero.');
-  }
-
   const resultado = await pool.query(
     `UPDATE usuarios
-     SET usuario = $1, password_hash = $2
+     SET usuario = $1, password_hash = $2, verificado = TRUE, actualizado_en = now()
      WHERE lower(correo_electronico) = lower($3)
      RETURNING id`,
     [username, passwordHash, correo],

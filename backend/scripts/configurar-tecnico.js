@@ -3,7 +3,7 @@ import readline from 'node:readline';
 import { stdin, stdout } from 'node:process';
 import bcrypt from 'bcryptjs';
 import { pool } from '../src/db.js';
-import { textoValido } from '../src/utils/validacion.js';
+import { correoValido, textoValido } from '../src/utils/validacion.js';
 
 function preguntar(mensaje) {
   const interfaz = readline.createInterface({ input: stdin, output: stdout });
@@ -49,36 +49,68 @@ function preguntarContrasena() {
 async function configurarTecnico() {
   const documento = await preguntar('Documento del técnico registrado en terceros: ');
   const usuario = await preguntar('Nombre de usuario para la app móvil: ');
+  const correo = await preguntar('Correo electrónico del técnico: ');
   const password = await preguntarContrasena();
 
   if (!textoValido(documento) || !textoValido(usuario) || usuario.length > 50) {
     throw new Error('Documento o nombre de usuario no válido.');
   }
+  if (!correoValido(correo)) throw new Error('El correo electrónico no es válido.');
   if (password.length < 8) {
     throw new Error('La contraseña debe tener al menos 8 caracteres.');
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const usuarioAdmin = await pool.query(
-    'SELECT id FROM usuarios WHERE lower(usuario) = lower($1) LIMIT 1',
-    [usuario],
-  );
-  if (usuarioAdmin.rowCount) {
-    throw new Error('Ese nombre de usuario ya pertenece a una cuenta de administrador.');
-  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: perfiles } = await client.query(
+      'SELECT id, nombre_completo FROM terceros WHERE documento = $1 FOR UPDATE',
+      [documento],
+    );
+    if (!perfiles[0]) throw new Error('No se encontró un técnico con ese documento en la tabla terceros.');
 
-  const resultado = await pool.query(
-    `UPDATE terceros
-     SET usuario = $1, password_hash = $2
-     WHERE documento = $3
-     RETURNING id`,
-    [usuario, passwordHash, documento],
-  );
+    const { rows: roles } = await client.query(
+      `SELECT id FROM roles
+       WHERE lower(nombre) = lower('Técnico') AND estado = 'Activo'
+       LIMIT 1`,
+    );
+    if (!roles[0]) throw new Error('No existe un rol Técnico activo.');
 
-  if (!resultado.rowCount) {
-    throw new Error('No se encontró un técnico con ese documento en la tabla terceros.');
+    const { rows: existentes } = await client.query(
+      'SELECT id FROM usuarios WHERE tercero_id = $1 FOR UPDATE',
+      [perfiles[0].id],
+    );
+    if (existentes[0]) {
+      await client.query(
+        `UPDATE usuarios
+         SET nombre_completo = $1, usuario = $2, correo_electronico = lower($3),
+             password_hash = $4, estado = 'Activo', verificado = TRUE,
+             rol_id = $5, actualizado_en = now()
+         WHERE id = $6`,
+        [perfiles[0].nombre_completo, usuario, correo, passwordHash, roles[0].id, existentes[0].id],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO usuarios
+           (nombre_completo, usuario, correo_electronico, password_hash,
+            estado, verificado, rol_id, tercero_id)
+         VALUES ($1, $2, lower($3), $4, 'Activo', TRUE, $5, $6)`,
+        [perfiles[0].nombre_completo, usuario, correo, passwordHash, roles[0].id, perfiles[0].id],
+      );
+    }
+    await client.query(
+      'UPDATE terceros SET correo_electronico = lower($1) WHERE id = $2',
+      [correo, perfiles[0].id],
+    );
+    await client.query('COMMIT');
+    console.log(`Cuenta móvil actualizada para "${usuario}".`);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-  console.log(`Credenciales móviles actualizadas para "${usuario}".`);
 }
 
 try {

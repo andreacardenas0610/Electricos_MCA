@@ -19,7 +19,7 @@ import {
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
 import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
-import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
+import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/sessionStore.js';
 import { API_SESSION_EXPIRED } from '../../shared/api.js';
 
 // Importación de las vistas
@@ -45,18 +45,25 @@ const LICENCIAS_DEPENDENCIAS = [
   { nombre: 'PostgreSQL (motor de base de datos)', licencia: 'PostgreSQL License', url: 'https://www.postgresql.org/about/licence/' },
 ];
 
-// El correo de recuperación llega como ?recuperar=<token>: se abre la pantalla
-// de contraseña nueva con el código ya cargado y se limpia la URL.
-function leerTokenRecuperacion() {
+function leerTokenParametro(nombre) {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('recuperar') || '';
-  if (token) window.history.replaceState({}, '', window.location.pathname);
+  const token = params.get(nombre) || '';
+  if (token) {
+    params.delete(nombre);
+    const consulta = params.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${consulta ? `?${consulta}` : ''}${window.location.hash}`,
+    );
+  }
   return token;
 }
 
 export function Dashboard() {
   const [sesion, setSesion] = useState(getLocalSession);
-  const [tokenRecuperacion] = useState(leerTokenRecuperacion);
+  const [tokenRecuperacion] = useState(() => leerTokenParametro('recuperar'));
+  const [tokenVerificacion] = useState(() => leerTokenParametro('verificar'));
   const autenticado = Boolean(sesion?.usuario);
   const { theme: tema, toggleTheme } = useContext(ThemeContext);
 
@@ -92,7 +99,13 @@ export function Dashboard() {
   };
 
   if (!autenticado) {
-    return <Login onLogin={handleLogin} tokenRecuperacion={tokenRecuperacion} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        tokenRecuperacion={tokenRecuperacion}
+        tokenVerificacion={tokenVerificacion}
+      />
+    );
   }
 
   if (mostrandoSplash) {
