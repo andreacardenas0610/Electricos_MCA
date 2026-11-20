@@ -1,19 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Moon,
   Search,
+  Sun,
   X,
   XCircle,
 } from 'lucide-react';
+import { ThemeContext } from '../context/ThemeContext.jsx';
 
 export function PageShell({ children, className = '' }) {
   return <div className={`mca-page ${className}`.trim()}>{children}</div>;
 }
 
 export function PageHeader({ title, subtitle, icon: Icon, eyebrow, actions }) {
+  const { theme, toggleTheme } = useContext(ThemeContext);
   return (
     <header className="mca-page-header">
       <div>
@@ -30,7 +34,33 @@ export function PageHeader({ title, subtitle, icon: Icon, eyebrow, actions }) {
           </div>
         </div>
       </div>
-      {actions && <div className="mca-page-actions">{actions}</div>}
+      <div className="mca-page-actions">
+        {actions}
+        <div className="mca-theme-switch" role="group" aria-label="Tema de la interfaz">
+          <button
+            type="button"
+            className={theme === 'light' ? 'is-active' : ''}
+            onClick={() => {
+              if (theme !== 'light') toggleTheme();
+            }}
+            title="Modo claro"
+            aria-pressed={theme === 'light'}
+          >
+            <Sun size={14} strokeWidth={2.1} /> Claro
+          </button>
+          <button
+            type="button"
+            className={theme === 'dark' ? 'is-active' : ''}
+            onClick={() => {
+              if (theme !== 'dark') toggleTheme();
+            }}
+            title="Modo oscuro"
+            aria-pressed={theme === 'dark'}
+          >
+            <Moon size={14} strokeWidth={2.1} /> Oscuro
+          </button>
+        </div>
+      </div>
     </header>
   );
 }
@@ -517,19 +547,22 @@ export function Combobox({
           </button>
         </div>
       ) : (
-        <input
-          className="mca-input"
-          type="text"
-          value={query}
-          placeholder={placeholder}
-          disabled={disabled}
-          autoComplete="off"
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-        />
+        <div className="mca-combobox__campo">
+          <Search size={14} strokeWidth={2} />
+          <input
+            className="mca-input"
+            type="text"
+            value={query}
+            placeholder={placeholder}
+            disabled={disabled}
+            autoComplete="off"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+          />
+        </div>
       )}
 
       {open && !disabled && (

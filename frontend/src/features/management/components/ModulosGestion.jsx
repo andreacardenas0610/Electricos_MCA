@@ -79,23 +79,35 @@ const ICONO_PROPIEDAD = {
   Industrial: Factory,
 };
 
-const FORMULARIO_CLIENTE = (cliente = null) => ({
-  tipoPropiedad: cliente?.tipoPropiedad || 'Comercial',
-  nombre: cliente?.nombre || '',
-  tipoDocumento: cliente?.tipoDocumento || 'NIT',
-  documento: cliente?.documento || '',
-  contacto: cliente?.contacto || '',
-  telefono: cliente?.telefono || '',
-  correo: cliente?.correo || '',
-  direccion: cliente?.direccion || '',
-  municipio: cliente?.municipio || '',
-  departamento: cliente?.departamento || '',
-  estado: cliente?.estado || 'Activo',
-  // Un empleado de la empresa también puede registrar compras: se vincula al tercero.
-  terceroId: cliente?.terceroId == null ? '' : String(cliente.terceroId),
-  esEmpleado: Boolean(cliente?.esEmpleado),
-  empleadoNombre: cliente?.empleadoNombre || '',
-});
+// Solo existen dos tipos de cliente; cada uno pide los documentos que le corresponden.
+const DOCUMENTOS_POR_TIPO = {
+  Natural: ['Cédula', 'Cédula de extranjería', 'Pasaporte'],
+  'Jurídico': ['NIT'],
+};
+
+const FORMULARIO_CLIENTE = (cliente = null) => {
+  const tipoCliente = cliente?.tipoCliente
+    || (cliente?.tipoPropiedad === 'Residencial' ? 'Natural' : 'Jurídico');
+  return {
+    tipoCliente,
+    tipoPropiedad: cliente?.tipoPropiedad || (tipoCliente === 'Natural' ? 'Residencial' : 'Comercial'),
+    nombre: cliente?.nombre || '',
+    tipoDocumento: cliente?.tipoDocumento || (tipoCliente === 'Jurídico' ? 'NIT' : 'Cédula'),
+    documento: cliente?.documento || '',
+    esDueno: Boolean(cliente?.esDueno),
+    contacto: cliente?.contacto || '',
+    telefono: cliente?.telefono || '',
+    correo: cliente?.correo || '',
+    direccion: cliente?.direccion || '',
+    municipio: cliente?.municipio || '',
+    departamento: cliente?.departamento || '',
+    estado: cliente?.estado || 'Activo',
+    // Un empleado de la empresa también puede registrar compras: se vincula al tercero.
+    terceroId: cliente?.terceroId == null ? '' : String(cliente.terceroId),
+    esEmpleado: Boolean(cliente?.esEmpleado),
+    empleadoNombre: cliente?.empleadoNombre || '',
+  };
+};
 
 const FORMULARIO_TECNICO = (tecnico = null) => ({
   nombre: tecnico?.nombre || '',
@@ -186,7 +198,7 @@ export function Clientes() {
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return clientes.filter((cliente) => {
-      if (filtroTipo !== 'Todos' && cliente.tipoPropiedad !== filtroTipo) return false;
+      if (filtroTipo !== 'Todos' && cliente.tipoCliente !== filtroTipo) return false;
       if (!termino) return true;
       return `${cliente.nombre} ${cliente.documento} ${cliente.contacto} ${cliente.telefono} ${cliente.correo} ${cliente.municipio} ${cliente.departamento}`
         .toLowerCase()
@@ -198,8 +210,8 @@ export function Clientes() {
     () => ({
       total: clientes.length,
       activos: clientes.filter((cliente) => cliente.estado === 'Activo').length,
-      residenciales: clientes.filter((cliente) => cliente.tipoPropiedad === 'Residencial').length,
-      empresas: clientes.filter((cliente) => cliente.tipoPropiedad !== 'Residencial').length,
+      naturales: clientes.filter((cliente) => cliente.tipoCliente === 'Natural').length,
+      juridicos: clientes.filter((cliente) => cliente.tipoCliente === 'Jurídico').length,
     }),
     [clientes],
   );
@@ -223,8 +235,46 @@ export function Clientes() {
   };
 
   const setCampo = (campo, valor) => {
-    setFormulario((actual) => ({ ...actual, [campo]: valor }));
+    setFormulario((actual) => {
+      const siguiente = { ...actual, [campo]: valor };
+      // Si el dueño es persona natural, la persona de contacto es él mismo.
+      if (campo === 'nombre' && actual.esDueno && actual.tipoCliente === 'Natural') {
+        siguiente.contacto = valor;
+      }
+      return siguiente;
+    });
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
+  };
+
+  // Cambiar entre Natural y Jurídico ajusta el documento, el nombre y la propiedad.
+  const elegirTipoCliente = (tipo) => {
+    setFormulario((actual) => ({
+      ...actual,
+      tipoCliente: tipo,
+      tipoDocumento: tipo === 'Jurídico' ? 'NIT' : 'Cédula',
+      tipoPropiedad: tipo === 'Natural'
+        ? 'Residencial'
+        : (actual.tipoPropiedad === 'Residencial' ? 'Comercial' : actual.tipoPropiedad),
+    }));
+  };
+
+  // Marcar al solicitante como dueño: en persona natural el contacto es él mismo.
+  const alternarEsDueno = (marcado) => {
+    setFormulario((actual) => ({
+      ...actual,
+      esDueno: marcado,
+      contacto: marcado && actual.tipoCliente === 'Natural'
+        ? actual.nombre
+        : actual.contacto,
+    }));
+  };
+
+  const alternarEmpleado = (marcado) => {
+    setFormulario((actual) => ({
+      ...actual,
+      esEmpleado: marcado,
+      ...(marcado ? {} : { terceroId: '', empleadoNombre: '' }),
+    }));
   };
 
   // Opción rápida: un empleado de la empresa figura como cliente.
@@ -247,6 +297,9 @@ export function Clientes() {
       terceroId: valor || '',
       esEmpleado: Boolean(tecnico),
       empleadoNombre: tecnico?.nombre || '',
+      // El empleado es persona natural: cédula, nombre propio y residencia.
+      tipoCliente: tecnico ? 'Natural' : actual.tipoCliente,
+      tipoPropiedad: tecnico ? 'Residencial' : actual.tipoPropiedad,
       tipoDocumento: tecnico ? 'Cédula' : actual.tipoDocumento,
       documento: tecnico ? tecnico.documento : actual.documento,
       nombre: tecnico ? tecnico.nombre : actual.nombre,
@@ -290,13 +343,15 @@ export function Clientes() {
       const payload = {
         nombre_razon_social: formulario.nombre.trim(),
         documento_nit: formulario.documento.trim(),
-        tipo_cliente: tipoPropiedad.nombre === 'Residencial' ? 'Natural' : 'Jurídico',
+        tipo_cliente: formulario.tipoCliente,
         tipo_documento: formulario.tipoDocumento,
         tercero_id: Number(formulario.terceroId) > 0 ? Number(formulario.terceroId) : null,
         es_empleado: formulario.esEmpleado === true || Number(formulario.terceroId) > 0,
+        es_dueno: formulario.esDueno === true,
         tipo_propiedad_id: tipoPropiedad.id,
         estado: formulario.estado,
-        contacto: formulario.contacto.trim(),
+        contacto: formulario.contacto.trim()
+          || (formulario.esDueno && formulario.tipoCliente === 'Natural' ? formulario.nombre.trim() : ''),
         telefono: formulario.telefono.trim(),
         correo_electronico: formulario.correo.trim(),
         direccion: formulario.direccion.trim(),
@@ -333,6 +388,7 @@ export function Clientes() {
           tipo_documento: cliente.tipoDocumento,
           tercero_id: Number(cliente.terceroId) > 0 ? Number(cliente.terceroId) : null,
           es_empleado: cliente.esEmpleado,
+          es_dueno: cliente.esDueno === true,
           tipo_propiedad_id: TIPOS_PROPIEDAD.find((tipo) => tipo.nombre === cliente.tipoPropiedad)?.id,
           estado: cliente.estado === 'Activo' ? 'Inactivo' : 'Activo',
           contacto: cliente.contacto,
@@ -394,16 +450,16 @@ export function Clientes() {
           tone="success"
         />
         <KpiCard
-          label="Residenciales"
-          value={resumen.residenciales}
-          hint="Personas naturales"
+          label="Personas naturales"
+          value={resumen.naturales}
+          hint="Cédula o pasaporte"
           icon={House}
           tone="info"
         />
         <KpiCard
-          label="Empresas"
-          value={resumen.empresas}
-          hint="Comerciales e industriales"
+          label="Jurídicos"
+          value={resumen.juridicos}
+          hint="Empresas con NIT"
           icon={Building2}
           tone="indigo"
         />
@@ -424,14 +480,11 @@ export function Clientes() {
               style={{ width: 170 }}
               value={filtroTipo}
               onChange={(evento) => setFiltroTipo(evento.target.value)}
-              aria-label="Filtrar clientes por tipo de propiedad"
+              aria-label="Filtrar clientes por tipo"
             >
               <option value="Todos">Todos los tipos</option>
-              {TIPOS_PROPIEDAD.map((tipo) => (
-                <option key={tipo.id} value={tipo.nombre}>
-                  {tipo.nombre}
-                </option>
-              ))}
+              <option value="Natural">Naturales</option>
+              <option value="Jurídico">Jurídicos</option>
             </select>
           </>
         }
@@ -491,13 +544,19 @@ export function Clientes() {
                             {cliente.esEmpleado && (
                               <Badge tone="indigo" className="mca-badge--inline">Es empleado</Badge>
                             )}
+                            {cliente.esDueno && (
+                              <Badge tone="success" className="mca-badge--inline">Es dueño</Badge>
+                            )}
                           </div>
                         </div>
                       </td>
                       <td>
-                        <Badge tone={TONO_PROPIEDAD[cliente.tipoPropiedad] || 'neutral'}>
-                          {cliente.tipoPropiedad}
+                        <Badge tone={cliente.tipoCliente === 'Natural' ? 'info' : 'indigo'}>
+                          {cliente.tipoCliente}
                         </Badge>
+                        <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 4 }}>
+                          {cliente.tipoPropiedad}
+                        </div>
                       </td>
                       <td>
                         <div>{cliente.contacto || '—'}</div>
@@ -554,7 +613,7 @@ export function Clientes() {
         title={formulario?.id ? 'Editar cliente' : 'Nuevo cliente'}
         subtitle="Estos datos se reutilizan automáticamente en cotizaciones, agenda y órdenes."
         icon={Building2}
-        size="lg"
+        size="md"
         footer={
           <>
             <Button onClick={cerrarFormulario}>Cancelar</Button>
@@ -567,22 +626,27 @@ export function Clientes() {
         {formulario && (
           <form id="form-cliente" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
-              label="Tipo de propiedad"
+              label="Tipo de cliente"
+              required
               full
-              tooltip="Tipo de propiedad del cliente: Residencial para personas naturales, Comercial o Industrial para empresas."
-              hint="Residencial usa persona natural; Comercial e Industrial usan razón social."
+              hint="La información que se pide depende del tipo seleccionado."
+              tooltip="Solo existen dos tipos de cliente: persona natural o jurídica."
             >
-              <div className="mca-row" style={{ gap: 8 }}>
-                {TIPOS_PROPIEDAD.map((tipo) => (
-                  <Button
-                    key={tipo.id}
-                    size="sm"
-                    variant={formulario.tipoPropiedad === tipo.nombre ? 'primary' : 'ghost'}
-                    onClick={() => setCampo('tipoPropiedad', tipo.nombre)}
-                  >
-                    {tipo.nombre}
-                  </Button>
-                ))}
+              <div className="mca-segmented">
+                <button
+                  type="button"
+                  className={formulario.tipoCliente === 'Natural' ? 'is-active' : ''}
+                  onClick={() => elegirTipoCliente('Natural')}
+                >
+                  Natural
+                </button>
+                <button
+                  type="button"
+                  className={formulario.tipoCliente === 'Jurídico' ? 'is-active' : ''}
+                  onClick={() => elegirTipoCliente('Jurídico')}
+                >
+                  Jurídico
+                </button>
               </div>
             </Field>
 
@@ -590,14 +654,18 @@ export function Clientes() {
               label="Tipo de documento"
               required
               error={errores.tipoDocumento}
-              tooltip="Documento con el que se identifica al cliente: Cédula, Cédula de extranjería, NIT, Pasaporte."
+              tooltip={
+                formulario.tipoCliente === 'Natural'
+                  ? 'Documento personal: cédula, cédula de extranjería o pasaporte.'
+                  : 'Las empresas se identifican con su NIT.'
+              }
             >
               <select
                 className="mca-select"
                 value={formulario.tipoDocumento}
                 onChange={(evento) => setCampo('tipoDocumento', evento.target.value)}
               >
-                {TIPOS_DOCUMENTO.map((tipo) => (
+                {DOCUMENTOS_POR_TIPO[formulario.tipoCliente].map((tipo) => (
                   <option key={tipo} value={tipo}>
                     {tipo}
                   </option>
@@ -606,64 +674,143 @@ export function Clientes() {
             </Field>
 
             <Field
-              label={formulario.tipoPropiedad === 'Residencial' ? 'Documento de identidad' : 'NIT'}
+              label={formulario.tipoCliente === 'Jurídico' ? 'NIT' : 'Número de documento'}
               required
               error={errores.documento}
               tooltip={
-                formulario.tipoPropiedad === 'Residencial'
-                  ? 'Número completo de la cédula del cliente, sin puntos y con el dígito verificado.'
-                  : 'Número completo del NIT del cliente, incluyendo el dígito de verificación.'
+                formulario.tipoCliente === 'Jurídico'
+                  ? 'Número completo del NIT, incluyendo el dígito de verificación.'
+                  : 'Número completo del documento de identidad, sin puntos de más.'
               }
             >
               <input
                 className="mca-input"
                 value={formulario.documento}
                 onChange={(evento) => setCampo('documento', evento.target.value)}
-                placeholder={formulario.tipoPropiedad === 'Residencial' ? '1.020.304.050' : '900.123.456-7'}
+                placeholder={formulario.tipoCliente === 'Jurídico' ? '900.123.456-7' : '1.020.304.050'}
+                autoFocus
               />
             </Field>
 
             <Field
-              label={formulario.tipoPropiedad === 'Residencial' ? 'Nombre completo' : 'Razón social'}
+              label={formulario.tipoCliente === 'Jurídico' ? 'Razón social' : 'Nombre completo'}
               required
               error={errores.nombre}
               tooltip={
-                formulario.tipoPropiedad === 'Residencial'
-                  ? 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
-                  : 'Razón social registrada de la empresa, tal como aparece en el RUT.'
+                formulario.tipoCliente === 'Jurídico'
+                  ? 'Razón social registrada de la empresa, tal como aparece en el RUT.'
+                  : 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
               }
             >
               <input
                 className="mca-input"
                 value={formulario.nombre}
                 onChange={(evento) => setCampo('nombre', evento.target.value)}
-                placeholder={formulario.tipoPropiedad === 'Residencial' ? 'Ana María Gómez' : 'Empresa S.A.S.'}
-                autoFocus
+                placeholder={formulario.tipoCliente === 'Jurídico' ? 'Empresa S.A.S.' : 'Ana María Gómez'}
               />
             </Field>
 
+            {formulario.tipoCliente === 'Jurídico' ? (
+              <Field
+                label="Tipo de propiedad"
+                full
+                hint="Para personas naturales la propiedad siempre es residencial."
+                tooltip="Clase de inmueble donde se presta el servicio."
+              >
+                <div className="mca-segmented">
+                  {TIPOS_PROPIEDAD.filter((tipo) => tipo.nombre !== 'Residencial').map((tipo) => (
+                    <button
+                      key={tipo.id}
+                      type="button"
+                      className={formulario.tipoPropiedad === tipo.nombre ? 'is-active' : ''}
+                      onClick={() => setCampo('tipoPropiedad', tipo.nombre)}
+                    >
+                      {tipo.nombre}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            ) : (
+              <div className="mca-notice is-info mca-field--full">
+                <House size={15} strokeWidth={2} />
+                <span>
+                  Persona natural: la propiedad se registra como <strong>Residencial</strong>.
+                </span>
+              </div>
+            )}
+
             <Field
-              label="Es un empleado de la empresa"
+              label="¿El solicitante es el dueño?"
               full
-              hint="Un empleado puede ser cliente: al seleccionarlo se copian sus datos y la ficha queda marcada como empleado."
-              tooltip="Marca si quien compra es un empleado de Eléctricos MCA. Al elegirlo se copian su nombre, documento, teléfono y residencia."
+              hint={
+                formulario.tipoCliente === 'Natural'
+                  ? 'Si es el dueño, la persona de contacto es él mismo.'
+                  : 'Marca si la persona que solicita el servicio es el dueño de la propiedad.'
+              }
+              tooltip="Permite registrar que el dueño es quien está solicitando el servicio."
             >
-              <Combobox
-                value={formulario.terceroId}
-                onChange={elegirEmpleado}
-                options={opcionesEmpleados}
-                placeholder="Buscar empleado / tercero..."
-                emptyText="No hay terceros activos"
-              />
+              <label className={`mca-check ${formulario.esDueno ? 'is-active' : ''}`.trim()}>
+                <input
+                  type="checkbox"
+                  checked={formulario.esDueno}
+                  onChange={(evento) => alternarEsDueno(evento.target.checked)}
+                />
+                <span className="mca-check__texto">Sí, el solicitante es el dueño</span>
+                <span className="mca-check__meta">
+                  {formulario.tipoCliente === 'Natural' ? 'Sus datos son el contacto' : 'Queda marcado en la ficha'}
+                </span>
+              </label>
             </Field>
+
+            <Field
+              label="¿Es empleado de la empresa?"
+              full
+              hint="Un empleado puede ser cliente: se vincula a su ficha de tercero sin crear duplicados."
+              tooltip="Marca si quien compra es un empleado de Eléctricos MCA."
+            >
+              <label className={`mca-check ${formulario.esEmpleado ? 'is-active' : ''}`.trim()}>
+                <input
+                  type="checkbox"
+                  checked={formulario.esEmpleado}
+                  onChange={(evento) => alternarEmpleado(evento.target.checked)}
+                />
+                <span className="mca-check__texto">Sí, es empleado de Eléctricos MCA</span>
+                <span className="mca-check__meta">
+                  {formulario.empleadoNombre || 'Se vincula al tercero por documento'}
+                </span>
+              </label>
+            </Field>
+
+            {formulario.esEmpleado && (
+              <Field
+                label="Empleado vinculado"
+                full
+                hint="Al seleccionarlo se copian sus datos y la ficha queda marcada como empleado."
+                tooltip="Busca y selecciona al empleado; si no está en la lista, el documento lo vinculará solo."
+              >
+                <Combobox
+                  value={formulario.terceroId}
+                  onChange={elegirEmpleado}
+                  options={opcionesEmpleados}
+                  placeholder="Buscar empleado / tercero..."
+                  emptyText="No hay terceros activos"
+                />
+              </Field>
+            )}
 
             <Field
               label="Persona de contacto"
+              hint={
+                formulario.esDueno && formulario.tipoCliente === 'Natural'
+                  ? 'El solicitante es el dueño: queda como contacto.'
+                  : undefined
+              }
               tooltip="Nombre de la persona que atiende la cuenta dentro de la empresa o del hogar."
             >
               <input
                 className="mca-input"
                 value={formulario.contacto}
+                disabled={formulario.esDueno && formulario.tipoCliente === 'Natural'}
                 onChange={(evento) => setCampo('contacto', evento.target.value)}
                 placeholder="Nombre del contacto"
               />
@@ -768,6 +915,9 @@ export function Clientes() {
             <DetailItem label="Razón social / Nombre">{clienteDetalle.nombre || '—'}</DetailItem>
             <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
             <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
+            <DetailItem label="¿Es el dueño?">
+              {clienteDetalle.esDueno ? 'Sí, el solicitante es el dueño' : 'No'}
+            </DetailItem>
             <DetailItem label="Empleado">
               {clienteDetalle.esEmpleado
                 ? clienteDetalle.empleadoNombre || clienteDetalle.nombre
@@ -817,12 +967,14 @@ export function GestionTerceros() {
     loading: cargandoTecnicos,
     reload: cargarTecnicos,
   } = useApiData(async () => {
-    const [tecnicosApi, ordenesApi] = await Promise.all([
+    const [tecnicosApi, ordenesApi, clientesApi] = await Promise.all([
       apiRequest('/terceros'),
       apiRequest('/ordenes-servicio'),
+      apiRequest('/clientes'),
     ]);
     return {
       tecnicos: tecnicosApi.map(normalizarTecnico),
+      clientes: clientesApi.map(normalizarCliente),
       actividades: ordenesApi.map((orden) => ({
         id: orden.id,
         tecnicoId: orden.tercero_id,
@@ -835,14 +987,29 @@ export function GestionTerceros() {
         cliente: orden.cliente || '',
       })),
     };
-  }, { tecnicos: [], actividades: [] });
+  }, { tecnicos: [], clientes: [], actividades: [] });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
   const [errores, setErrores] = useState({});
   const [detalleId, setDetalleId] = useState(null);
   const [porEliminar, setPorEliminar] = useState(null);
+  // Conversión de un tercero en cliente: se llama la información del tercero al abrir.
+  const [convertirA, setConvertirA] = useState(null);
+  const [convForm, setConvForm] = useState(null);
+  const [convCargando, setConvCargando] = useState(false);
   const { toast, notify, close } = useToast();
+
+  // Ficha de cliente vinculada a cada tercero (por tercero_id), sin duplicar personas.
+  const clienteDeTercero = useMemo(() => {
+    const mapa = new Map();
+    datos.clientes.forEach((cliente) => {
+      if (cliente.terceroId != null && cliente.terceroId !== '') {
+        mapa.set(String(cliente.terceroId), cliente);
+      }
+    });
+    return mapa;
+  }, [datos.clientes]);
 
   const cargaTecnicos = useMemo(() => {
     const carga = {};
@@ -901,7 +1068,12 @@ export function GestionTerceros() {
 
   const abrirEdicion = (tecnico) => {
     setDetalleId(null);
-    setFormulario({ ...FORMULARIO_TECNICO(tecnico), id: tecnico.id });
+    setFormulario({
+      ...FORMULARIO_TECNICO(tecnico),
+      id: tecnico.id,
+      // Casilla «¿Es cliente?»: refleja si ya tiene ficha de cliente vinculada.
+      esCliente: Boolean(clienteDeTercero.has(String(tecnico.id))),
+    });
     setErrores({});
   };
 
@@ -954,10 +1126,44 @@ export function GestionTerceros() {
       );
       const guardado = normalizarTecnico(resultado);
       await cargarTecnicos();
+
+      // Casilla «¿Es cliente?»: crea la ficha de cliente vinculada al guardar.
+      const yaEsCliente = clienteDeTercero.has(String(guardado.id));
+      let vinculoCliente = '';
+      if (formulario.esCliente && !yaEsCliente) {
+        try {
+          const esJuridico = (guardado.tipoDocumento || '') === 'NIT';
+          await apiRequest('/clientes', {
+            method: 'POST',
+            body: {
+              nombre_razon_social: guardado.nombre,
+              documento_nit: guardado.documento,
+              tipo_cliente: esJuridico ? 'Jurídico' : 'Natural',
+              tipo_documento: esJuridico ? 'NIT' : (guardado.tipoDocumento || 'Cédula'),
+              tercero_id: Number(guardado.id),
+              es_empleado: true,
+              tipo_propiedad_id: esJuridico ? 2 : 1,
+              contacto: guardado.nombre,
+              telefono: guardado.telefono || '',
+              correo_electronico: guardado.correo || '',
+              direccion: guardado.direccion || '',
+              municipio: guardado.municipio || '',
+              departamento: guardado.departamento || '',
+            },
+          });
+          vinculoCliente = ' Su ficha de cliente quedó vinculada sin duplicar datos.';
+          await cargarTecnicos();
+        } catch (error) {
+          notify('warning', 'El vínculo con cliente no se pudo crear', error.message);
+        }
+      } else if (!formulario.esCliente && yaEsCliente) {
+        vinculoCliente = ' La ficha de cliente vinculada se conserva.';
+      }
+
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
-        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'}.`,
+        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'}.${vinculoCliente}`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -1007,6 +1213,89 @@ export function GestionTerceros() {
       setPorEliminar(null);
     } catch (error) {
       notify('error', 'No se pudo eliminar', error.message);
+    }
+  };
+
+  // Convertir un tercero en cliente: llama la información fresca del tercero
+  // y abre el formulario con los datos copiados, vinculando la ficha (sin duplicar).
+  const abrirConversion = async (tecnico) => {
+    setConvertirA(tecnico);
+    setConvForm(null);
+    setConvCargando(true);
+    try {
+      const fresco = normalizarTecnico(await apiRequest(`/terceros/${tecnico.id}`));
+      const esJuridico = (fresco.tipoDocumento || '') === 'NIT';
+      setConvForm({
+        tipoCliente: esJuridico ? 'Jurídico' : 'Natural',
+        tipoPropiedad: esJuridico ? 'Comercial' : 'Residencial',
+        nombre: fresco.nombre || '',
+        tipoDocumento: esJuridico ? 'NIT' : (fresco.tipoDocumento || 'Cédula'),
+        documento: fresco.documento || '',
+        contacto: fresco.nombre || '',
+        telefono: fresco.telefono || '',
+        correo: fresco.correo || '',
+        direccion: fresco.direccion || '',
+        municipio: fresco.municipio || '',
+        departamento: fresco.departamento || '',
+      });
+    } catch (error) {
+      notify('error', 'No se pudo llamar la información', error.message);
+      setConvertirA(null);
+    } finally {
+      setConvCargando(false);
+    }
+  };
+
+  const setConvCampo = (campo, valor) => {
+    setConvForm((actual) => ({ ...actual, [campo]: valor }));
+  };
+
+  const elegirConvTipo = (tipo) => {
+    setConvForm((actual) => ({
+      ...actual,
+      tipoCliente: tipo,
+      tipoPropiedad: tipo === 'Natural' ? 'Residencial' : 'Comercial',
+      tipoDocumento: tipo === 'Jurídico' ? 'NIT' : 'Cédula',
+    }));
+  };
+
+  const confirmarConversion = async (evento) => {
+    evento.preventDefault();
+    if (!convForm?.nombre.trim() || !convForm?.documento.trim()) {
+      notify('warning', 'Completa los datos del cliente', 'Escribe el nombre y el documento.');
+      return;
+    }
+    try {
+      const creado = await apiRequest('/clientes', {
+        method: 'POST',
+        body: {
+          nombre_razon_social: convForm.nombre.trim(),
+          documento_nit: convForm.documento.trim(),
+          tipo_cliente: convForm.tipoCliente,
+          tipo_documento: convForm.tipoDocumento,
+          tercero_id: Number(convertirA.id),
+          es_empleado: true,
+          tipo_propiedad_id: TIPOS_PROPIEDAD.find(
+            (tipo) => tipo.nombre === convForm.tipoPropiedad,
+          )?.id || null,
+          contacto: convForm.contacto.trim(),
+          telefono: convForm.telefono.trim(),
+          correo_electronico: convForm.correo.trim(),
+          direccion: convForm.direccion.trim(),
+          municipio: convForm.municipio.trim(),
+          departamento: convForm.departamento.trim(),
+        },
+      });
+      await cargarTecnicos();
+      notify(
+        'success',
+        'Tercero convertido en cliente',
+        `${creado.nombre_razon_social || convertirA.nombre} ya es cliente y conserva su ficha de tercero.`,
+      );
+      setConvertirA(null);
+      setConvForm(null);
+    } catch (error) {
+      notify('error', 'No se pudo convertir', error.message);
     }
   };
 
@@ -1087,10 +1376,10 @@ export function GestionTerceros() {
               <tr>
                 <th>Tipo doc. / Documento</th>
                 <th>Razón social / Nombre</th>
-                <th>Departamento / Municipio</th>
                 <th>Teléfono</th>
                 <th>Correo</th>
                 <th>Servicios activos</th>
+                <th>Cliente</th>
                 <th>Estado</th>
                 <th className="mca-center">Acciones</th>
               </tr>
@@ -1130,15 +1419,6 @@ export function GestionTerceros() {
                           <div className="is-primary">{tecnico.nombre}</div>
                         </div>
                       </td>
-                      <td>
-                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                          <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
-                          <span>
-                            {tecnico.departamento || '—'}
-                            {tecnico.municipio ? ` · ${tecnico.municipio}` : ''}
-                          </span>
-                        </div>
-                      </td>
                       <td className="is-nowrap">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Phone size={13} strokeWidth={1.9} className="mca-soft" />
@@ -1155,6 +1435,20 @@ export function GestionTerceros() {
                         <Badge tone={asignados ? 'warning' : 'neutral'}>
                           {asignados} {asignados === 1 ? 'servicio' : 'servicios'}
                         </Badge>
+                      </td>
+                      <td>
+                        {clienteDeTercero.has(String(tecnico.id)) ? (
+                          <Badge tone="success">Es cliente</Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="mca-btn--convertir"
+                            icon={UsersRound}
+                            onClick={() => abrirConversion(tecnico)}
+                          >
+                            Convertir a cliente
+                          </Button>
+                        )}
                       </td>
                       <td>
                         <EstadoToggle
@@ -1327,6 +1621,175 @@ export function GestionTerceros() {
                 se muestra solo al ver la ficha del tercero.
               </span>
             </div>
+
+            <Field
+              label="¿Es cliente?"
+              full
+              hint="Marca la casilla para crear su ficha de cliente vinculada, sin duplicar los datos."
+              tooltip="El tercero puede ser también cliente: la ficha se vincula por su documento."
+            >
+              <label className={`mca-check ${formulario.esCliente ? 'is-active' : ''}`.trim()}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(formulario.esCliente)}
+                  onChange={(evento) => setCampo('esCliente', evento.target.checked)}
+                />
+                <span className="mca-check__texto">Sí, este tercero también es cliente</span>
+                <span className="mca-check__meta">
+                  {clienteDeTercero.has(String(formulario.id))
+                    ? 'Ya tiene ficha de cliente vinculada'
+                    : 'Se crea la ficha de cliente al guardar'}
+                </span>
+              </label>
+            </Field>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(convertirA)}
+        onClose={() => {
+          setConvertirA(null);
+          setConvForm(null);
+        }}
+        title={convertirA ? `Convertir a cliente: ${convertirA.nombre}` : 'Convertir a cliente'}
+        subtitle="Se llama la información del tercero y se crea su ficha de cliente vinculada, sin duplicar la persona."
+        icon={UsersRound}
+        size="md"
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                setConvertirA(null);
+                setConvForm(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit" form="form-convertir">
+              Crear cliente
+            </Button>
+          </>
+        }
+      >
+        {convCargando || !convForm ? (
+          <p role="status" style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+            Llamando la información del tercero...
+          </p>
+        ) : (
+          <form id="form-convertir" className="mca-form-grid" onSubmit={confirmarConversion} noValidate>
+            <Field
+              label="Tipo de cliente"
+              required
+              full
+              hint="La ficha se vincula al tercero: queda marcado como empleado."
+              tooltip="Natural si se identifica con cédula; Jurídico si su documento es un NIT."
+            >
+              <div className="mca-segmented">
+                <button
+                  type="button"
+                  className={convForm.tipoCliente === 'Natural' ? 'is-active' : ''}
+                  onClick={() => elegirConvTipo('Natural')}
+                >
+                  Natural
+                </button>
+                <button
+                  type="button"
+                  className={convForm.tipoCliente === 'Jurídico' ? 'is-active' : ''}
+                  onClick={() => elegirConvTipo('Jurídico')}
+                >
+                  Jurídico
+                </button>
+              </div>
+            </Field>
+
+            <Field
+              label={convForm.tipoCliente === 'Jurídico' ? 'Razón social' : 'Nombre completo'}
+              required
+              tooltip="Nombre o razón social copiado del tercero."
+            >
+              <input
+                className="mca-input"
+                value={convForm.nombre}
+                onChange={(evento) => setConvCampo('nombre', evento.target.value)}
+              />
+            </Field>
+
+            <Field
+              label={convForm.tipoCliente === 'Jurídico' ? 'NIT' : 'Número de documento'}
+              required
+              tooltip="Documento copiado del tercero; con él se evitan duplicados."
+            >
+              <input
+                className="mca-input"
+                value={convForm.documento}
+                onChange={(evento) => setConvCampo('documento', evento.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Persona de contacto"
+              tooltip="Persona que atiende la cuenta; por defecto el propio tercero."
+            >
+              <input
+                className="mca-input"
+                value={convForm.contacto}
+                onChange={(evento) => setConvCampo('contacto', evento.target.value)}
+              />
+            </Field>
+
+            <Field label="Número de contacto" tooltip="Celular o teléfono fijo del contacto.">
+              <input
+                className="mca-input"
+                type="tel"
+                value={convForm.telefono}
+                onChange={(evento) => setConvCampo('telefono', evento.target.value)}
+              />
+            </Field>
+
+            <Field label="Correo electrónico" tooltip="Correo para enviarle la cotización y los soportes.">
+              <input
+                className="mca-input"
+                type="email"
+                value={convForm.correo}
+                onChange={(evento) => setConvCampo('correo', evento.target.value)}
+              />
+            </Field>
+
+            <Field label="Departamento" tooltip="Departamento copiado del tercero.">
+              <CampoDepartamento
+                className="mca-input"
+                value={convForm.departamento}
+                onChange={(evento) => setConvCampo('departamento', evento.target.value)}
+                placeholder="Escribe o selecciona un departamento"
+              />
+            </Field>
+
+            <Field label="Municipio" tooltip="Municipio copiado del tercero.">
+              <CampoMunicipio
+                className="mca-input"
+                departamento={convForm.departamento}
+                value={convForm.municipio}
+                onChange={(evento) => setConvCampo('municipio', evento.target.value)}
+                placeholder="Escribe o selecciona un municipio"
+              />
+            </Field>
+
+            <Field label="Dirección" full tooltip="Dirección copiada del tercero.">
+              <input
+                className="mca-input"
+                value={convForm.direccion}
+                onChange={(evento) => setConvCampo('direccion', evento.target.value)}
+              />
+            </Field>
+
+            <div className="mca-notice is-success mca-field--full">
+              <CheckCircle2 size={15} strokeWidth={2} />
+              <span>
+                La propiedad queda como <strong>{convForm.tipoPropiedad}</strong> y el tercero
+                conserva su ficha: solo se crea la ficha de cliente vinculada.
+              </span>
+            </div>
           </form>
         )}
       </Modal>
@@ -1346,6 +1809,15 @@ export function GestionTerceros() {
           tecnicoDetalle && (
             <>
               <Button onClick={() => setDetalleId(null)}>Cerrar</Button>
+              {!clienteDeTercero.has(String(tecnicoDetalle.id)) && (
+                <Button
+                  className="mca-btn--convertir"
+                  icon={UsersRound}
+                  onClick={() => abrirConversion(tecnicoDetalle)}
+                >
+                  Convertir a cliente
+                </Button>
+              )}
               <Button variant="primary" onClick={() => abrirEdicion(tecnicoDetalle)}>
                 Editar tercero
               </Button>
@@ -1376,6 +1848,11 @@ export function GestionTerceros() {
                 />
               </DetailItem>
               <DetailItem label="Servicios activos">{serviciosDetalle.length}</DetailItem>
+              <DetailItem label="Cliente vinculado">
+                {clienteDeTercero.has(String(tecnicoDetalle.id))
+                  ? clienteDeTercero.get(String(tecnicoDetalle.id)).nombre
+                  : 'No es cliente'}
+              </DetailItem>
             </DetailGrid>
 
             {serviciosDetalle.length > 0 && (

@@ -35,6 +35,33 @@ function normalizarRol(row) {
   };
 }
 
+let usuariosRolesDisponible = true;
+
+// Cuenta los usuarios que tienen el rol, como principal o como rol adicional.
+async function contarUsuariosConRol(client, rolId) {
+  if (usuariosRolesDisponible) {
+    try {
+      const { rows } = await client.query(
+        `SELECT COUNT(*)::int AS total FROM (
+           SELECT usuario_id FROM usuarios WHERE rol_id = $1
+           UNION
+           SELECT usuario_id FROM usuarios_roles WHERE rol_id = $1
+         ) u`,
+        [rolId],
+      );
+      return rows[0].total;
+    } catch (error) {
+      if (!String(error.message || '').includes('usuarios_roles')) throw error;
+      usuariosRolesDisponible = false;
+    }
+  }
+  const { rows } = await client.query(
+    'SELECT COUNT(*)::int AS total FROM usuarios WHERE rol_id = $1',
+    [rolId],
+  );
+  return rows[0].total;
+}
+
 function generarCodigo(nombre) {
   const base = nombre
     .normalize('NFD')
@@ -138,11 +165,8 @@ router.put('/:id', async (req, res, next) => {
       return res.status(400).json({ mensaje: 'El rol Administrador debe permanecer activo.' });
     }
     if (datos.estado === 'Inactivo') {
-      const asignados = await client.query(
-        'SELECT COUNT(*)::int AS total FROM usuarios WHERE rol_id = $1',
-        [req.params.id],
-      );
-      if (asignados.rows[0].total > 0) {
+      const total = await contarUsuariosConRol(client, req.params.id);
+      if (total > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({ mensaje: 'No puedes inactivar un rol con usuarios asignados.' });
       }
@@ -195,11 +219,8 @@ router.patch('/:id/estado', async (req, res, next) => {
       return res.status(400).json({ mensaje: 'El rol Administrador debe permanecer activo.' });
     }
     if (estado === 'Inactivo') {
-      const { rows: usuarios } = await client.query(
-        'SELECT COUNT(*)::int AS total FROM usuarios WHERE rol_id = $1',
-        [req.params.id],
-      );
-      if (usuarios[0].total > 0) {
+      const total = await contarUsuariosConRol(client, req.params.id);
+      if (total > 0) {
         await client.query('ROLLBACK');
         return res.status(409).json({ mensaje: 'No puedes inactivar un rol con usuarios asignados.' });
       }
@@ -235,11 +256,8 @@ router.delete('/:id', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: 'El rol Administrador no se puede eliminar.' });
     }
-    const usuarios = await client.query(
-      'SELECT COUNT(*)::int AS total FROM usuarios WHERE rol_id = $1',
-      [req.params.id],
-    );
-    if (usuarios.rows[0].total > 0) {
+    const total = await contarUsuariosConRol(client, req.params.id);
+    if (total > 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ mensaje: 'No puedes eliminar un rol con usuarios asignados.' });
     }

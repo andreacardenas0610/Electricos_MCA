@@ -1,6 +1,13 @@
 export const API_SESSION_EXPIRED = 'mca:session-expired';
 
-const configuredApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000')
+// Si no existe VITE_API_URL, la API se busca en el mismo equipo donde se abrió
+// la página, en el puerto 3000. Así funciona tanto en localhost como al abrir
+// la app desde otro equipo de la red (por ejemplo, el celular).
+const hostPagina = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const apiPorDefecto = hostPagina && hostPagina !== 'localhost' && hostPagina !== '127.0.0.1'
+  ? `${window.location.protocol}//${hostPagina}:3000`
+  : 'http://localhost:3000';
+const configuredApiUrl = (import.meta.env.VITE_API_URL || apiPorDefecto)
   .replace(/\/+$/, '');
 const API_BASE_URL = /\/api$/i.test(configuredApiUrl)
   ? configuredApiUrl

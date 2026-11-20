@@ -12,13 +12,14 @@
   animation: mca-fade-in 0.25s ease;
 }
 
+/* Cabecera de página: usa los colores del tema activo (claro u oscuro). */
 .mca-page-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .mca-breadcrumb {
@@ -69,6 +70,41 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* Selector de tema en el navbar: muestra los dos modos y marca el activo. */
+.mca-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+}
+
+.mca-theme-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mca-theme-switch button:hover:not(.is-active) {
+  color: var(--text-main);
+}
+
+.mca-theme-switch button.is-active {
+  background: var(--accent-yellow);
+  color: #1c1e26;
 }
 
 /* ---------- Paneles ---------- */
@@ -1441,12 +1477,35 @@
   color: var(--danger-text);
 }
 
+/* Lupa dentro del campo de búsqueda del combobox. */
+.mca-combobox__campo {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mca-combobox__campo > svg {
+  position: absolute;
+  left: 11px;
+  color: var(--text-soft);
+  pointer-events: none;
+}
+
+.mca-combobox__campo .mca-input {
+  padding-left: 33px;
+}
+
 /* ---------- Panel de control ---------- */
 .mca-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 16px;
   align-items: start;
+}
+
+/* Variante invertida: columna fija (selector) a la izquierda y contenido a la derecha. */
+.mca-dashboard-grid--invertido {
+  grid-template-columns: 360px minmax(0, 1fr);
 }
 
 .mca-chart-caption {
@@ -1742,11 +1801,113 @@
 /* Va siempre dentro del flex del layout (sin position fixed y sin margin-right negativo):
    al crecer, el área de contenido se ajusta en lugar de quedar cubierta. */
 .mca-sidebar {
+  position: relative;
   flex: 0 0 auto;
   width: 84px;
   min-width: 84px;
   padding: 24px 10px;
   transition: width 0.22s ease, min-width 0.22s ease, padding 0.22s ease;
+}
+
+/* Pista: pastilla amarilla que avisa que el menú se expande al pasar el cursor. */
+.mca-sidebar__pista {
+  position: absolute;
+  right: -11px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--accent-yellow);
+  color: #1c1e26;
+  border: 2px solid var(--bg-main);
+  border-radius: 999px;
+  padding: 5px 7px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+  opacity: 1;
+  transition: opacity 0.18s ease;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.mca-sidebar:hover .mca-sidebar__pista,
+.mca-sidebar:focus-within .mca-sidebar__pista {
+  opacity: 0;
+}
+
+/* ---------- Lista de roles con casillas (un usuario con varios roles) ---------- */
+.mca-rol-options {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.mca-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mca-check:hover {
+  border-color: var(--accent-yellow-border);
+}
+
+.mca-check input {
+  accent-color: var(--accent-yellow);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.mca-check.is-active {
+  border-color: var(--accent-yellow);
+  background: var(--accent-yellow-soft);
+}
+
+.mca-check__texto {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.mca-check__meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Campo con botón a la derecha (la lupa del documento). */
+.mca-input-con-boton {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mca-input-con-boton .mca-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Botón destacado para convertir un tercero en cliente. */
+.mca-btn--convertir {
+  background: linear-gradient(135deg, #ffd54a 0%, #ffb300 100%);
+  color: #211b00;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(255, 179, 0, 0.35);
+}
+
+.mca-btn--convertir:hover {
+  background: linear-gradient(135deg, #ffe082 0%, #ffc93c 100%);
+  box-shadow: 0 6px 18px rgba(255, 179, 0, 0.5);
 }
 
 .mca-sidebar:hover,
@@ -1792,6 +1953,11 @@
   /* Sin hover que la abra, el botón Salir no puede quedar oculto. */
   .mca-sidebar .mca-sidebar__logout {
     display: flex !important;
+  }
+
+  /* Sin despliegue tampoco hace falta la pista. */
+  .mca-sidebar__pista {
+    display: none;
   }
 }
 

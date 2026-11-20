@@ -6,6 +6,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Search,
   ShieldCheck,
   UserCog,
   UserPlus,
@@ -47,16 +48,24 @@ const TONO_ROL = {
   Operario: 'neutral',
 };
 
-const FORMULARIO_USUARIO = (usuario = null) => ({
-  nombre: usuario?.nombre || '',
-  usuario: usuario?.usuario || '',
-  correo: usuario?.correo || '',
-  telefono: usuario?.telefono || '',
-  rol: usuario?.rol || 'Operario',
-  zona: usuario?.zona || 'General',
-  password: '',
-  confirmar: '',
-});
+const FORMULARIO_USUARIO = (usuario = null) => {
+  // La cuenta puede tener varios roles: el primero de la lista es el principal.
+  const roles = usuario?.roles?.length
+    ? [...usuario.roles]
+    : [usuario?.rol || 'Operario'];
+  return {
+    documento: usuario?.documento || '',
+    nombre: usuario?.nombre || '',
+    usuario: usuario?.usuario || '',
+    correo: usuario?.correo || '',
+    telefono: usuario?.telefono || '',
+    rol: roles[0] || 'Operario',
+    roles,
+    zona: usuario?.zona || 'General',
+    password: '',
+    confirmar: '',
+  };
+};
 
 export function GestionUsuarios() {
   const {
@@ -84,22 +93,22 @@ export function GestionUsuarios() {
   const resumen = useMemo(() => ({
     total: usuarios.length,
     activos: usuarios.filter((usuario) => usuario.estado === 'Activo').length,
-    administradores: usuarios.filter((usuario) => usuario.rol === 'Administrador').length,
-    tecnicos: usuarios.filter((usuario) => usuario.rol === 'Técnico').length,
+    administradores: usuarios.filter((usuario) => (usuario.roles || []).includes('Administrador')).length,
+    tecnicos: usuarios.filter((usuario) => (usuario.roles || []).includes('Técnico')).length,
   }), [usuarios]);
 
   const opcionesRol = useMemo(() => {
     const nombres = new Set(roles.map((rol) => rol.nombre));
-    usuarios.forEach((usuario) => nombres.add(usuario.rol));
+    usuarios.forEach((usuario) => (usuario.roles || []).forEach((rol) => nombres.add(rol)));
     return [...nombres];
   }, [roles, usuarios]);
 
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return usuarios.filter((usuario) => {
-      if (filtroRol !== 'Todos' && usuario.rol !== filtroRol) return false;
+      if (filtroRol !== 'Todos' && !(usuario.roles || []).includes(filtroRol)) return false;
       if (!termino) return true;
-      return `${usuario.nombre} ${usuario.usuario} ${usuario.correo} ${usuario.rol} ${usuario.zona}`
+      return `${usuario.nombre} ${usuario.usuario} ${usuario.correo} ${(usuario.roles || []).join(' ')} ${usuario.zona}`
         .toLowerCase()
         .includes(termino);
     });
@@ -108,7 +117,7 @@ export function GestionUsuarios() {
   const usuarioDetalle = usuarios.find((usuario) => String(usuario.id) === String(detalleId));
 
   const rolesDisponibles = roles.filter((rol) => (
-    rol.estado === 'Activo' || rol.nombre === formulario?.rol
+    rol.estado === 'Activo' || (formulario?.roles || []).includes(rol.nombre)
   ));
 
   const abrirNuevo = () => {
@@ -132,9 +141,74 @@ export function GestionUsuarios() {
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
+  // Un usuario puede tener varios roles: el primero de la lista es el principal.
+  const alternarRol = (nombre) => {
+    setFormulario((actual) => {
+      const tiene = actual.roles.includes(nombre);
+      const roles = tiene
+        ? actual.roles.filter((rol) => rol !== nombre)
+        : [...actual.roles, nombre];
+      // Siempre debe quedar al menos un rol marcado.
+      const finales = roles.length ? roles : [actual.rol];
+      return { ...actual, roles: finales, rol: finales[0] };
+    });
+  };
+
+  // Lupa de la cédula: busca en usuarios, terceros y clientes para rellenar
+  // el formulario sin tener que digitar dos veces los mismos datos.
+  const buscarDocumento = async () => {
+    const documento = String(formulario.documento || '').trim();
+    if (documento.length < 3) {
+      notify('warning', 'Escribe la cédula', 'La lupa busca con mínimo 3 caracteres.');
+      return;
+    }
+    try {
+      const resultado = await apiRequest(
+        `/usuarios/buscar-documento?documento=${encodeURIComponent(documento)}`,
+      );
+      if (resultado.usuario) {
+        notify(
+          'warning',
+          'Esa cédula ya tiene usuario',
+          `La cuenta pertenece a ${resultado.usuario.nombre}.`,
+        );
+        return;
+      }
+      const fuente = resultado.tercero || resultado.cliente;
+      if (!fuente) {
+        notify('info', 'Sin coincidencias', 'No se encontró esa cédula en terceros ni en clientes.');
+        return;
+      }
+      setFormulario((actual) => ({
+        ...actual,
+        nombre: resultado.tercero?.nombre_completo
+          || resultado.cliente?.nombre_razon_social
+          || actual.nombre,
+        correo: resultado.tercero?.correo_electronico
+          || resultado.cliente?.correo_electronico
+          || actual.correo,
+        telefono: resultado.tercero?.telefono
+          || resultado.cliente?.telefono
+          || actual.telefono,
+      }));
+      notify(
+        'success',
+        'Datos encontrados',
+        resultado.tercero
+          ? 'Se rellenaron los datos desde la ficha del tercero.'
+          : 'Se rellenaron los datos desde la ficha del cliente.',
+      );
+    } catch (error) {
+      notify('error', 'No se pudo buscar', error.message);
+    }
+  };
+
   const guardar = async (evento) => {
     evento.preventDefault();
     const nuevosErrores = {};
+    if (!String(formulario.documento || '').trim()) {
+      nuevosErrores.documento = 'Escribe la cédula del usuario.';
+    }
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre completo.';
     if (!formulario.usuario.trim()) nuevosErrores.usuario = 'Escribe el nombre de acceso.';
     if (!formulario.correo.trim()) {
@@ -151,6 +225,9 @@ export function GestionUsuarios() {
     if (formulario.password !== formulario.confirmar) {
       nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
     }
+    if (!formulario.roles?.length) {
+      nuevosErrores.roles = 'Selecciona al menos un rol para la cuenta.';
+    }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
       return;
@@ -159,11 +236,13 @@ export function GestionUsuarios() {
     try {
       const { password } = formulario;
       const datosUsuario = {
+        documento: formulario.documento,
         nombre: formulario.nombre,
         usuario: formulario.usuario,
         correo: formulario.correo,
         telefono: formulario.telefono,
         rol: formulario.rol,
+        roles: formulario.roles,
         zona: formulario.zona,
       };
       const guardado = await apiRequest(
@@ -174,10 +253,11 @@ export function GestionUsuarios() {
         },
       );
       await cargarDatos();
+      const listaRoles = guardado.roles?.length ? guardado.roles : [guardado.rol];
       notify(
         'success',
         formulario.id ? 'Usuario actualizado' : 'Usuario creado',
-        `${guardado.nombre} · ${guardado.rol}.`,
+        `${guardado.nombre} · ${listaRoles.join(' + ')}.`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -326,7 +406,16 @@ export function GestionUsuarios() {
                   </td>
                   <td>{usuario.correo || '—'}</td>
                   <td>
-                    <Badge tone={TONO_ROL[usuario.rol] || 'neutral'}>{usuario.rol}</Badge>
+                    <div className="mca-row" style={{ gap: 4, flexWrap: 'wrap' }}>
+                      {(usuario.roles || [usuario.rol]).map((rol) => (
+                        <Badge
+                          key={rol}
+                          tone={rol === usuario.rol ? (TONO_ROL[rol] || 'neutral') : 'indigo'}
+                        >
+                          {rol}
+                        </Badge>
+                      ))}
+                    </div>
                   </td>
                   <td>{usuario.zona}</td>
                   <td>{usuario.telefono || '—'}</td>
@@ -376,13 +465,34 @@ export function GestionUsuarios() {
       >
         {formulario && (
           <form id="form-usuario" className="mca-form-grid" onSubmit={guardar}>
+            <Field
+              label="Cédula"
+              required
+              full
+              error={errores.documento}
+              hint="Siempre se pide primero: con la lupa se rellenan los demás datos."
+              tooltip="Número de cédula del usuario; no puede repetirse."
+            >
+              <div className="mca-input-con-boton">
+                <input
+                  className="mca-input"
+                  value={formulario.documento}
+                  onChange={(evento) => setCampo('documento', evento.target.value)}
+                  placeholder="1.020.304.050"
+                  inputMode="numeric"
+                  autoFocus
+                />
+                <Button icon={Search} onClick={buscarDocumento} title="Buscar la cédula en el sistema">
+                  Lupa
+                </Button>
+              </div>
+            </Field>
             <Field label="Nombre completo" required error={errores.nombre}>
               <input
                 className="mca-input"
                 value={formulario.nombre}
                 onChange={(evento) => setCampo('nombre', evento.target.value)}
                 placeholder="Nombre y apellido"
-                autoFocus
               />
             </Field>
             <Field label="Usuario de acceso" required error={errores.usuario}>
@@ -413,18 +523,41 @@ export function GestionUsuarios() {
                 placeholder="310 555 0000"
               />
             </Field>
-            <Field label="Rol" required hint="Define los permisos del usuario.">
-              <select
-                className="mca-select"
-                value={formulario.rol}
-                onChange={(evento) => setCampo('rol', evento.target.value)}
-              >
-                {rolesDisponibles.map((rol) => (
-                  <option key={rol.nombre} value={rol.nombre}>
-                    {rol.nombre}{rol.estado === 'Inactivo' ? ' (inactivo)' : ''}
-                  </option>
-                ))}
-              </select>
+            <Field
+              label="Roles"
+              required
+              full
+              error={errores.roles}
+              hint="El primero de la lista es el rol principal; la cuenta puede tener varios."
+              tooltip="Selecciona uno o más roles para la cuenta. El rol principal define el acceso por defecto."
+            >
+              <div className="mca-rol-options">
+                {rolesDisponibles.map((rol) => {
+                  const marcado = formulario.roles.includes(rol.nombre);
+                  const esPrincipal = marcado && formulario.rol === rol.nombre;
+                  return (
+                    <label
+                      key={rol.nombre}
+                      className={`mca-check ${marcado ? 'is-active' : ''}`.trim()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={() => alternarRol(rol.nombre)}
+                      />
+                      <span className="mca-check__texto">
+                        {rol.nombre}
+                        {esPrincipal && (
+                          <Badge tone="yellow" className="mca-badge--inline">Principal</Badge>
+                        )}
+                      </span>
+                      <span className="mca-check__meta">
+                        {rol.descripcion || rol.codigo || ''}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </Field>
             <Field label="Zona">
               <select
@@ -488,10 +621,23 @@ export function GestionUsuarios() {
             <DetailGrid>
               <DetailItem label="Nombre">{usuarioDetalle.nombre}</DetailItem>
               <DetailItem label="Usuario">@{usuarioDetalle.usuario}</DetailItem>
+              <DetailItem label="Cédula">{usuarioDetalle.documento || '—'}</DetailItem>
               <DetailItem label="Correo">{usuarioDetalle.correo || '—'}</DetailItem>
               <DetailItem label="Teléfono">{usuarioDetalle.telefono || '—'}</DetailItem>
               <DetailItem label="Rol">
                 <Badge tone={TONO_ROL[usuarioDetalle.rol] || 'neutral'}>{usuarioDetalle.rol}</Badge>
+              </DetailItem>
+              <DetailItem label="Roles de la cuenta" full>
+                <div className="mca-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  {(usuarioDetalle.roles || [usuarioDetalle.rol]).map((rol) => (
+                    <Badge
+                      key={rol}
+                      tone={rol === usuarioDetalle.rol ? (TONO_ROL[rol] || 'neutral') : 'indigo'}
+                    >
+                      {rol}
+                    </Badge>
+                  ))}
+                </div>
               </DetailItem>
               <DetailItem label="Zona">{usuarioDetalle.zona}</DetailItem>
               <DetailItem label="Estado">

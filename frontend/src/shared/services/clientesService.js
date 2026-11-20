@@ -149,6 +149,7 @@ export function normalizarCliente(cliente) {
     tipoPropiedad,
     // Un empleado (tercero activo) también puede registrar ventas como cliente.
     esEmpleado: cliente.es_empleado === true || cliente.esEmpleado === true,
+    esDueno: cliente.es_dueno === true || cliente.esDueno === true,
     terceroId: cliente.tercero_id ?? cliente.terceroId ?? null,
     empleadoNombre: cliente.empleado_nombre || cliente.empleadoNombre || '',
     contacto: cliente.contacto || '',
@@ -231,6 +232,7 @@ export function guardarCliente(datos, idOriginal = null) {
     tipo_propiedad: tipoPropiedad.nombre,
     tercero_id: Number(datos.terceroId) > 0 ? Number(datos.terceroId) : null,
     es_empleado: datos.esEmpleado === true || Number(datos.terceroId) > 0,
+    es_dueno: datos.esDueno === true,
     contacto: String(datos.contacto || '').trim(),
     telefono,
     correo_electronico: correo,

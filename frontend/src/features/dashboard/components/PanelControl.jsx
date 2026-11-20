@@ -5,15 +5,13 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Coins,
   FileText,
   Gauge,
-  Handshake,
   PackageOpen,
   Plus,
   ReceiptText,
-  UsersRound,
   Wallet,
-  Wrench,
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
@@ -159,11 +157,21 @@ export function PanelControl({ onNavegar }) {
       .sort((a, b) => a.stock - b.stock),
     [datos.materiales],
   );
+  const cotizacionesVencidas = useMemo(
+    () => pendientes.filter((cotizacion) => cotizacionVencida(cotizacion)),
+    [pendientes],
+  );
+  const cuentasPorCobrar = useMemo(
+    () => cuentasActivas
+      .filter((cuenta) => cuenta.saldo > 0)
+      .sort((a, b) => Number(b.saldo) - Number(a.saldo)),
+    [cuentasActivas],
+  );
 
-  const cuentasConSaldo = cuentasActivas.filter((cuenta) => cuenta.saldo > 0).length;
+  const cuentasConSaldo = cuentasPorCobrar.length;
   const serviciosActivos = datos.servicios.filter((servicio) => servicio.estado === 'Activo').length;
   const clientesActivos = datos.clientes.filter((cliente) => cliente.estado !== 'Inactivo').length;
-  const totalAlertas = datos.incidencias.length + stockCritico.length;
+  const totalAlertas = datos.incidencias.length + stockCritico.length + cotizacionesVencidas.length;
   const porcentajeRecaudo = resumenCobro.facturado > 0
     ? Math.min(100, Math.round((resumenCobro.abonado / resumenCobro.facturado) * 100))
     : 0;
@@ -240,7 +248,7 @@ export function PanelControl({ onNavegar }) {
 
       <div className="mca-kpis">
         <KpiCard
-          label="Facturación aprobada"
+          label="Cotizaciones aprobadas"
           value={formatearMoneda(resumenCobro.facturado, 'COP')}
           hint={`${resumenCot.aprobadas} cotizaciones · ${resumenCobro.liquidadas} liquidadas`}
           icon={ReceiptText}
@@ -262,8 +270,8 @@ export function PanelControl({ onNavegar }) {
         />
         <KpiCard
           label="Servicios activos"
-          value={resumenAg.programadas + resumenAg.proceso}
-          hint={`${agendaHoy.length} hoy · ${totalAlertas} alertas operativas`}
+          value={serviciosActivos}
+          hint={`${resumenAg.programadas + resumenAg.proceso} agendados · ${agendaHoy.length} hoy · ${totalAlertas} alertas`}
           icon={CalendarCheck}
           tone={totalAlertas > 0 ? 'danger' : 'yellow'}
         />
@@ -421,7 +429,11 @@ export function PanelControl({ onNavegar }) {
           <Panel
             title="Cotizaciones por aprobar"
             subtitle="Pipeline esperando decisión del cliente"
-            actions={<Badge tone={pendientes.length ? 'warning' : 'success'}>{pendientes.length}</Badge>}
+            actions={
+              <Badge tone={pendientes.length ? 'warning' : 'success'}>
+                {pendientes.length} · {cotizacionesVencidas.length} vencidas
+              </Badge>
+            }
           >
             <div className="mca-row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div>
@@ -482,7 +494,7 @@ export function PanelControl({ onNavegar }) {
             {totalAlertas === 0 ? (
               <div className="mca-notice is-success">
                 <CheckCircle2 size={16} strokeWidth={2} />
-                <div>Sin incidencias de agenda ni materiales en nivel crítico.</div>
+                <div>Sin incidencias de agenda, cotizaciones vencidas ni materiales en nivel crítico.</div>
               </div>
             ) : (
               <div className="mca-stack" style={{ gap: 10 }}>
@@ -494,6 +506,15 @@ export function PanelControl({ onNavegar }) {
                     <AlertTriangle size={16} strokeWidth={2} />
                     <div>
                       <strong>{incidencia.codigo}</strong> · {incidencia.mensaje}
+                    </div>
+                  </div>
+                ))}
+                {cotizacionesVencidas.slice(0, 2).map((cotizacion) => (
+                  <div key={`vencida-${cotizacion.id}`} className="mca-notice is-danger">
+                    <FileText size={16} strokeWidth={2} />
+                    <div>
+                      <strong>{cotizacion.cliente}</strong> · cotización vencida por{' '}
+                      {formatearMoneda(cotizacion.total, 'COP')}.
                     </div>
                   </div>
                 ))}
@@ -512,6 +533,11 @@ export function PanelControl({ onNavegar }) {
                       Revisar agenda
                     </Button>
                   )}
+                  {cotizacionesVencidas.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => navegar('Cotizacion')}>
+                      Revisar cotizaciones
+                    </Button>
+                  )}
                   {stockCritico.length > 0 && (
                     <Button variant="ghost" size="sm" onClick={() => navegar('materiales')}>
                       Ver inventario
@@ -522,67 +548,62 @@ export function PanelControl({ onNavegar }) {
             )}
           </Panel>
 
-          <Panel title="Resumen general" subtitle="Datos maestros conectados">
-            <div className="mca-list">
-              <button
-                type="button"
-                className="mca-list__item mca-list__item--button"
-                onClick={() => navegar('clientes')}
-              >
-                <div className="mca-list__icon"><UsersRound size={16} strokeWidth={1.9} /></div>
-                <div className="mca-list__body">
-                  <div className="mca-list__title">Clientes registrados</div>
-                  <div className="mca-list__meta">{clientesActivos} activos</div>
+          <Panel
+            title="Cuentas por cobrar"
+            subtitle={`${cuentasPorCobrar.length} cuentas con saldo · ${clientesActivos} clientes activos`}
+            actions={
+              <Badge tone={cuentasPorCobrar.length ? 'warning' : 'success'}>
+                {cuentasPorCobrar.length}
+              </Badge>
+            }
+          >
+            <div className="mca-row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div>
+                <div className="mca-chart-caption">Saldo total por recaudar</div>
+                <div className="mca-chart-total" style={{ fontSize: 24 }}>
+                  {formatearMoneda(resumenCobro.saldo, 'COP')}
                 </div>
-                <div className="mca-list__value">
-                  <div className="mca-list__amount">{datos.clientes.length}</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                className="mca-list__item mca-list__item--button"
-                onClick={() => navegar('servicios')}
-              >
-                <div className="mca-list__icon"><Wrench size={16} strokeWidth={1.9} /></div>
-                <div className="mca-list__body">
-                  <div className="mca-list__title">Servicios en catálogo</div>
-                  <div className="mca-list__meta">{serviciosActivos} activos</div>
-                </div>
-                <div className="mca-list__value">
-                  <div className="mca-list__amount">{datos.servicios.length}</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                className="mca-list__item mca-list__item--button"
-                onClick={() => navegar('materiales')}
-              >
-                <div className="mca-list__icon"><PackageOpen size={16} strokeWidth={1.9} /></div>
-                <div className="mca-list__body">
-                  <div className="mca-list__title">Materiales</div>
-                  <div className="mca-list__meta">
-                    {stockCritico.length} requieren reposición
-                  </div>
-                </div>
-                <div className="mca-list__value">
-                  <div className="mca-list__amount">{datos.materiales.length}</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                className="mca-list__item mca-list__item--button"
-                onClick={() => navegar('terceros')}
-              >
-                <div className="mca-list__icon"><Handshake size={16} strokeWidth={1.9} /></div>
-                <div className="mca-list__body">
-                  <div className="mca-list__title">Técnicos activos</div>
-                  <div className="mca-list__meta">Equipo de campo disponible</div>
-                </div>
-                <div className="mca-list__value">
-                  <div className="mca-list__amount">{datos.tecnicos.length}</div>
-                </div>
-              </button>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => navegar('AbonosVentas')}>
+                Ver cartera
+              </Button>
             </div>
+
+            {cuentasPorCobrar.length === 0 ? (
+              <div className="mca-notice is-success" style={{ marginTop: 14 }}>
+                <CheckCircle2 size={16} strokeWidth={2} />
+                <div>Sin saldos pendientes: toda la cartera está al día.</div>
+              </div>
+            ) : (
+              <div className="mca-list" style={{ marginTop: 12 }}>
+                {cuentasPorCobrar.slice(0, 4).map((cuenta) => (
+                  <button
+                    key={cuenta.id ?? cuenta.codigo}
+                    type="button"
+                    className="mca-list__item mca-list__item--button"
+                    onClick={() => navegar('AbonosVentas')}
+                  >
+                    <div className="mca-list__icon">
+                      <Coins size={16} strokeWidth={1.9} />
+                    </div>
+                    <div className="mca-list__body">
+                      <div className="mca-list__title">{cuenta.cliente}</div>
+                      <div className="mca-list__meta">
+                        {cuenta.codigo} · {cuenta.estado}
+                      </div>
+                    </div>
+                    <div className="mca-list__value">
+                      <div className="mca-list__amount">
+                        {formatearMoneda(cuenta.saldo, 'COP')}
+                      </div>
+                      <div className="mca-list__hint">
+                        de {formatearMoneda(cuenta.montoTotal, 'COP')}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </Panel>
         </div>
       </div>

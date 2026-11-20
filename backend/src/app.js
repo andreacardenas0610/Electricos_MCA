@@ -35,9 +35,27 @@ const allowedOrigins = (
   .map((item) => item.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
+// Orígenes de desarrollo/local: localhost y 127.0.0.1 en cualquier puerto y la
+// red privada (por ejemplo, abrir la app desde el celular en la misma red).
+// Sin esto, abrir la página con 127.0.0.1 u otro puerto bloquea TODAS las
+// llamadas a la API y no deja iniciar sesión.
+function esOrigenDeDesarrollo(origin) {
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return true;
+    }
+    return /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      || /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      || /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || esOrigenDeDesarrollo(origin)) {
       return callback(null, true);
     }
 
