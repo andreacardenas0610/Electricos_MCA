@@ -18,7 +18,7 @@ import materialesRoutes from './routes/materiales.js';
 import serviciosRoutes from './routes/servicios.js';
 import cotizacionesRoutes from './routes/cotizaciones.js';
 import pagosRoutes from './routes/pagos.js';
-import agendaRoutes from './routes/agenda.js';
+import agendaRoutes, { accesoAgendamiento } from './routes/agenda.js';
 import usuariosRoutes from './routes/usuarios.js';
 import rolesRoutes from './routes/roles.js';
 
@@ -28,12 +28,13 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express();
 
-const allowedOrigins = (
-  process.env.FRONTEND_URL || 'http://localhost:5173'
-)
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  process.env.MOBILE_ORIGINS || 'capacitor://localhost,https://localhost,http://localhost',
+].join(',')
   .split(',')
   .map((item) => item.trim().replace(/\/+$/, ''))
-  .filter(Boolean);
+  .filter(Boolean));
 
 // Orígenes de desarrollo/local: localhost y 127.0.0.1 en cualquier puerto y la
 // red privada (por ejemplo, abrir la app desde el celular en la misma red).
@@ -55,13 +56,17 @@ function esOrigenDeDesarrollo(origin) {
 
 app.use(cors({
   origin(origin, callback) {
+<<<<<<< HEAD
     if (!origin || allowedOrigins.includes(origin) || esOrigenDeDesarrollo(origin)) {
+=======
+    if (!origin || allowedOrigins.has(origin)) {
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
       return callback(null, true);
     }
 
-    return callback(
-      new Error(`Origen no permitido por CORS: ${origin}`)
-    );
+    const error = new Error(`Origen no permitido por CORS: ${origin}`);
+    error.status = 403;
+    return callback(error);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -90,6 +95,7 @@ app.use(
 );
 
 app.use('/api/ordenes-servicio', verificarToken, ordenesRoutes);
+app.use('/api/ordenes', verificarToken, ordenesRoutes);
 
 app.use(
   '/api/materiales',
@@ -123,6 +129,13 @@ app.use(
   '/api/agenda',
   verificarToken,
   soloAdministradores,
+  agendaRoutes
+);
+
+app.use(
+  '/api/agendamiento',
+  verificarToken,
+  accesoAgendamiento,
   agendaRoutes
 );
 

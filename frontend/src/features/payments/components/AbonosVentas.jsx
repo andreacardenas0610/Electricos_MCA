@@ -32,7 +32,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -254,7 +253,6 @@ export default function AbonosVentas() {
 
     setErroresPago(nuevosErrores);
     if (Object.keys(nuevosErrores).length > 0) {
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -487,7 +485,7 @@ export default function AbonosVentas() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--payments">
             <thead>
               <tr>
                 <th>Cotización</th>
@@ -659,7 +657,7 @@ export default function AbonosVentas() {
                 </div>
               ) : (
                 <div className="mca-table-wrap">
-                  <table className="mca-table">
+                  <table className="mca-table mca-table--payment-history">
                     <thead>
                       <tr>
                         <th>ID pago</th>
@@ -724,15 +722,12 @@ export default function AbonosVentas() {
         }
         icon={Banknote}
         footer={
-          <>
-            <Button onClick={cerrarModalPago}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-abono">
-              {modoPago === 'editar' ? 'Guardar cambios' : 'Registrar abono'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-abono">
+            {modoPago === 'editar' ? 'Guardar cambios' : 'Registrar abono'}
+          </Button>
         }
       >
-        <form id="form-abono" className="mca-form-grid" onSubmit={handleGuardarPago}>
+        <form id="form-abono" className="mca-form-grid" onSubmit={handleGuardarPago} noValidate>
           {modoPago === 'crear' && (
             <Field
               label="Cotización"

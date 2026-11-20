@@ -32,7 +32,6 @@ import {
   Panel,
   SearchInput,
   Toast,
-  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import {
@@ -583,7 +582,6 @@ export function ProgramacionActividades() {
 
     if (Object.keys(nuevosErrores).length > 0) {
       setErrores(nuevosErrores);
-      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
@@ -791,7 +789,7 @@ export function ProgramacionActividades() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--agenda">
             <thead>
               <tr>
                 <th>Código</th>
@@ -913,15 +911,12 @@ export function ProgramacionActividades() {
         icon={actividadEditando ? CalendarClock : CalendarPlus}
         size="lg"
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-agenda">
-              {actividadEditando ? 'Guardar cambios' : 'Agendar servicio'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-agenda">
+            {actividadEditando ? 'Guardar cambios' : 'Agendar servicio'}
+          </Button>
         }
       >
-        <form id="form-agenda" className="mca-form-grid" onSubmit={handleGuardar}>
+        <form id="form-agenda" className="mca-form-grid" onSubmit={handleGuardar} noValidate>
           <Field
             label="Cliente"
             required
@@ -1347,7 +1342,7 @@ export function ProgramacionActividades() {
               </div>
 
               <div className="mca-table-wrap">
-                <table className="mca-table">
+                <table className="mca-table mca-table--incidents">
                   <thead>
                     <tr>
                       <th>Código</th>

@@ -31,6 +31,7 @@ frontend/
 ├── package.json
 └── vite.config.js
 backend/
+├── database/                # Esquema PostgreSQL, seed y migraciones
 ├── src/
 │   ├── middleware/           # JWT y manejo de errores
 │   ├── routes/               # Login, clientes, terceros y órdenes

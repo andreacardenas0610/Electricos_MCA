@@ -319,7 +319,160 @@ export function GestionRolesPermisos() {
         />
       </div>
 
+<<<<<<< HEAD
       <div className="mca-dashboard-grid mca-dashboard-grid--invertido">
+=======
+      <div className="mca-dashboard-grid">
+        <Panel
+          title={rolActivo ? `Permisos · ${rolActivo.nombre}` : 'Permisos del rol'}
+          subtitle={rolActivo
+            ? 'Marca las acciones permitidas por módulo. Cada cambio se guarda al instante.'
+            : 'Selecciona un rol para configurar sus permisos.'}
+          actions={rolActivo && (
+            <>
+              <EstadoToggle
+                estado={rolActivo.estado}
+                estados={ESTADOS.usuario}
+                onClick={() => alternarEstado(rolActivo)}
+                width={110}
+              />
+              <AccionesFila
+                onVer={() => setDetalleId(rolActivo.id)}
+                onEditar={() => abrirEdicion(rolActivo)}
+                onEliminar={() => setPorEliminar(rolActivo)}
+              />
+            </>
+          )}
+          flush={!rolActivo}
+        >
+          {rolActivo ? (
+            <>
+              <div className="mca-row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                <Badge tone="indigo">{rolActivo.codigo}</Badge>
+                {rolActivo.plataformas.map((plataforma) => (
+                  <Badge key={plataforma} tone="neutral">
+                    <span className="mca-row" style={{ gap: 5 }}>
+                      <PlataformaIcono plataforma={plataforma} /> {plataforma}
+                    </span>
+                  </Badge>
+                ))}
+                <Badge tone={rolActivo.estado === 'Activo' ? 'success' : 'danger'}>
+                  {rolActivo.estado}
+                </Badge>
+                <span className="mca-muted" style={{ fontSize: 12 }}>
+                  {permisosOtorgados(rolActivo)} de {MODULOS_PERMISO.length * ACCIONES_PERMISO.length} permisos
+                </span>
+              </div>
+
+              {rolActivo.descripcion && (
+                <p style={{ margin: '0 0 16px', color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6 }}>
+                  {rolActivo.descripcion}
+                </p>
+              )}
+
+              <div className="mca-table-wrap">
+                <table className="mca-table mca-table--permissions">
+                  <thead>
+                    <tr>
+                      <th>Módulo</th>
+                      {ACCIONES_PERMISO.map((accion) => (
+                        <th key={accion.id} style={{ textAlign: 'center' }}>
+                          {accion.nombre}
+                        </th>
+                      ))}
+                      <th style={{ textAlign: 'right' }}>Todos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MODULOS_PERMISO.map((modulo) => {
+                      const acciones = rolActivo.permisos?.[modulo.id] || [];
+                      const todos = ACCIONES_PERMISO.every((accion) => acciones.includes(accion.id));
+                      return (
+                        <tr key={modulo.id}>
+                          <td>
+                            <strong>{modulo.nombre}</strong>
+                            <span className="mca-muted" style={{ display: 'block', fontSize: 11 }}>
+                              {acciones.length} de {ACCIONES_PERMISO.length} acciones
+                            </span>
+                          </td>
+                          {ACCIONES_PERMISO.map((accion) => (
+                            <td key={accion.id} style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={acciones.includes(accion.id)}
+                                onChange={() => alternarPermiso(modulo.id, accion.id)}
+                                aria-label={`${accion.nombre} ${modulo.nombre}`}
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  accentColor: 'var(--accent-yellow)',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            </td>
+                          ))}
+                          <td style={{ textAlign: 'right' }}>
+                            <Button size="sm" variant="ghost" onClick={() => alternarModulo(modulo.id)}>
+                              {todos ? 'Quitar todos' : 'Dar todos'}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <div className="mca-row" style={{ gap: 8, marginBottom: 10 }}>
+                  <UsersRound size={15} />
+                  <strong style={{ fontSize: 13 }}>Usuarios con este rol</strong>
+                  <Badge tone="neutral">{usuariosDelRol.length}</Badge>
+                </div>
+                {usuariosDelRol.length ? (
+                  <div className="mca-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    {usuariosDelRol.map((usuario) => (
+                      <span key={usuario.id} className="mca-chip">
+                        <span
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            display: 'grid',
+                            placeItems: 'center',
+                            backgroundColor: 'var(--bg-elevated)',
+                            color: 'var(--accent-yellow)',
+                            fontSize: 9,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {usuario.nombre.slice(0, 2).toUpperCase()}
+                        </span>
+                        {usuario.nombre}
+                        <Badge tone={usuario.estado === 'Activo' ? 'success' : 'danger'}>
+                          {usuario.estado}
+                        </Badge>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mca-muted" style={{ margin: 0, fontSize: 12 }}>
+                    Ningún usuario tiene asignado este rol todavía.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              icon={ShieldCheck}
+              title="Sin roles configurados"
+              message="Crea el primer rol para comenzar a asignar permisos."
+              action={<Button icon={Plus} variant="primary" onClick={abrirNuevo}>Nuevo rol</Button>}
+            />
+          )}
+        </Panel>
+
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
         <Panel
           title="Roles del sistema"
           subtitle={`${filtrados.length} de ${roles.length} roles`}
@@ -557,16 +710,13 @@ export function GestionRolesPermisos() {
         subtitle="El código se genera automáticamente y los permisos se configuran en la matriz."
         icon={ShieldCheck}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-rol">
-              {formulario?.id ? 'Guardar cambios' : 'Crear rol'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-rol">
+            {formulario?.id ? 'Guardar cambios' : 'Crear rol'}
+          </Button>
         }
       >
         {formulario && (
-          <form id="form-rol" className="mca-form-grid" onSubmit={guardar}>
+          <form id="form-rol" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
               label="Nombre del rol"
               required

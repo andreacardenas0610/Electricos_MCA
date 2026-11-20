@@ -2,22 +2,23 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { pool } from '../db.js';
-import { textoValido } from '../utils/validacion.js';
+import { correoValido, textoValido } from '../utils/validacion.js';
 
 const router = Router();
 
-const VIGENCIA_RECUPERACION = '30m';
+const VIGENCIA_RECUPERACION_MS = 30 * 60 * 1000;
+const VIGENCIA_VERIFICACION_MS = 24 * 60 * 60 * 1000;
 const VENTANA_SOLICITUDES_MS = 15 * 60 * 1000;
 const MAX_SOLICITUDES_RECUPERACION = 5;
 const solicitudesRecuperacion = new Map();
 
-// Sin SMTP el enlace se imprime en la consola del servidor y nunca se devuelve al navegador:
-// el token no queda expuesto a cualquiera que conozca el usuario.
 const MENSAJE_RECUPERACION = 'Si la cuenta existe y tiene un correo registrado, enviamos las instrucciones para restablecer la contraseña. Revisa también la bandeja de spam.';
+const MENSAJE_VERIFICACION = 'Si la cuenta existe y aún no está verificada, enviaremos un nuevo enlace a su correo.';
 
-function huellaPassword(hash) {
-  return crypto.createHash('sha256').update(String(hash || '')).digest('hex').slice(0, 24);
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 function origenFrontend() {
@@ -57,10 +58,32 @@ function construirCorreoRecuperacion(nombre, enlace) {
   return { subject, text };
 }
 
-async function enviarCorreoRecuperacion(destinatario, subject, text) {
-  const mailModule = await import('nodemailer');
-  const mailer = mailModule.default ?? mailModule;
-  const transporte = mailer.createTransport(
+function construirCorreoVerificacion(nombre, enlace) {
+  return {
+    subject: 'Verifica tu cuenta · Eléctricos MCA',
+    text: [
+      `Hola ${nombre || 'usuario'},`,
+      '',
+      'Confirma tu correo para activar el acceso móvil a Eléctricos MCA:',
+      enlace,
+      '',
+      'El enlace vence en 24 horas.',
+    ].join('\n'),
+  };
+}
+
+async function enviarCorreo(destinatario, subject, text, enlace) {
+  if (!process.env.SMTP_HOST && !process.env.SMTP_SERVICE) {
+    if (process.env.NODE_ENV === 'production') {
+      const error = new Error('El envío de correo no está configurado.');
+      error.status = 503;
+      throw error;
+    }
+    console.info(`[auth] SMTP no configurado. Enlace de desarrollo: ${enlace}`);
+    return;
+  }
+
+  const transporte = nodemailer.createTransport(
     process.env.SMTP_SERVICE
       ? { service: process.env.SMTP_SERVICE, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }
       : {
@@ -81,6 +104,30 @@ async function enviarCorreoRecuperacion(destinatario, subject, text) {
   });
 }
 
+async function crearToken(client, usuarioId, proposito, vigenciaMs) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  const expiraEn = new Date(Date.now() + vigenciaMs);
+  await client.query(
+    `UPDATE tokens_verificacion SET usado_en = now()
+     WHERE usuario_id = $1 AND proposito = $2 AND usado_en IS NULL`,
+    [usuarioId, proposito],
+  );
+  await client.query(
+    `INSERT INTO tokens_verificacion (usuario_id, token_hash, proposito, expira_en)
+     VALUES ($1, $2, $3, $4)`,
+    [usuarioId, hashToken(token), proposito, expiraEn],
+  );
+  return token;
+}
+
+async function enviarEnlaceCuenta(usuario, tipo, token) {
+  const esVerificacion = tipo === 'verificacion';
+  const enlace = `${origenFrontend()}/?${esVerificacion ? 'verificar' : 'recuperar'}=${encodeURIComponent(token)}`;
+  const mensaje = esVerificacion
+    ? construirCorreoVerificacion(usuario.nombre_completo, enlace)
+    : construirCorreoRecuperacion(usuario.nombre_completo, enlace);
+  await enviarCorreo(usuario.correo_electronico, mensaje.subject, mensaje.text, enlace);
+}
 
 router.post('/login', async (req, res, next) => {
   try {
@@ -96,41 +143,35 @@ router.post('/login', async (req, res, next) => {
     }
 
     const resultado = await pool.query(
-      `SELECT u.id, u.usuario, u.nombre_completo, u.correo_electronico, u.password_hash,
-              u.estado, u.rol_id, r.nombre AS rol
+      `SELECT u.id, u.usuario,
+              COALESCE(p.nombre_completo, u.nombre_completo) AS nombre_completo,
+              COALESCE(p.correo_electronico, u.correo_electronico) AS correo_electronico,
+              u.password_hash,
+              u.estado, u.verificado, u.rol_id, u.tercero_id,
+              r.nombre AS rol, r.plataformas,
+              COALESCE(p.nombre_completo, t.nombre_completo) AS tecnico_nombre
        FROM usuarios u
        JOIN roles r ON r.id = u.rol_id
+       LEFT JOIN terceros t ON t.id = u.tercero_id
+       LEFT JOIN personas p ON p.id = u.persona_id
        WHERE lower(u.usuario) = lower($1)
        LIMIT 1`,
       [nombreUsuario.trim()],
     );
 
-    let cuenta = resultado.rows[0]
-      ? { ...resultado.rows[0], tipoCuenta: 'usuario' }
-      : null;
-
-    if (!cuenta && plataforma === 'movil') {
-      const terceroResultado = await pool.query(
-        `SELECT id, nombre_completo, usuario, password_hash, estado
-         FROM terceros
-         WHERE lower(usuario) = lower($1)
-         LIMIT 1`,
-        [nombreUsuario.trim()],
-      );
-      if (terceroResultado.rows[0]) {
-        cuenta = { ...terceroResultado.rows[0], tipoCuenta: 'tercero' };
-      }
-    }
-
-    const esAdministrador = cuenta?.tipoCuenta === 'usuario'
-      && cuenta.rol === 'Administrador';
-    const esTecnicoMovil = cuenta?.tipoCuenta === 'tercero'
-      && plataforma === 'movil';
+    const cuenta = resultado.rows[0] || null;
+    const esAdministrador = cuenta?.rol === 'Administrador';
+    const plataformaRol = plataforma === 'web' ? 'Web' : 'Móvil';
+    const tieneAccesoPlataforma = cuenta?.plataformas?.includes(plataformaRol);
+    const tieneAcceso = plataforma === 'web'
+      ? esAdministrador && tieneAccesoPlataforma
+      : Boolean(cuenta?.tercero_id) && tieneAccesoPlataforma;
 
     if (
       !cuenta
       || cuenta.estado !== 'Activo'
-      || (!esAdministrador && !esTecnicoMovil)
+      || cuenta.verificado !== true
+      || !tieneAcceso
       || typeof cuenta.password_hash !== 'string'
       || !(await bcrypt.compare(password, cuenta.password_hash))
     ) {
@@ -140,9 +181,10 @@ router.post('/login', async (req, res, next) => {
     const token = jwt.sign(
       {
         id: cuenta.id,
-        tipoCuenta: cuenta.tipoCuenta,
-        rolId: cuenta.rol_id || null,
-        rol: cuenta.rol || 'Técnico tercero',
+        tipoCuenta: 'usuario',
+        terceroId: cuenta.tercero_id || null,
+        rolId: cuenta.rol_id,
+        rol: cuenta.rol,
         plataforma,
       },
       process.env.JWT_SECRET,
@@ -154,15 +196,138 @@ router.post('/login', async (req, res, next) => {
       usuario: {
         id: cuenta.id,
         usuario: cuenta.usuario,
-        nombre: cuenta.nombre_completo,
+        nombre: cuenta.tecnico_nombre || cuenta.nombre_completo,
         correo: cuenta.correo_electronico || null,
-        rol: cuenta.rol || 'Técnico tercero',
-        tipoCuenta: cuenta.tipoCuenta,
+        rol: cuenta.rol,
+        tipoCuenta: 'usuario',
+        terceroId: cuenta.tercero_id || null,
         plataforma,
       },
     });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.post('/registro', async (req, res, next) => {
+  const datos = req.body || {};
+  if (
+    !textoValido(datos.nombre)
+    || !textoValido(datos.usuario)
+    || !correoValido(datos.correo)
+    || !textoValido(datos.documento)
+    || typeof datos.password !== 'string'
+    || datos.password.length < 8
+  ) {
+    return res.status(400).json({
+      mensaje: 'Nombre, usuario, documento, correo válido y contraseña de al menos 8 caracteres son obligatorios.',
+    });
+  }
+
+  const client = await pool.connect();
+  let cuenta;
+  let token;
+  try {
+    await client.query('BEGIN');
+    const rolResultado = await client.query(
+      `SELECT id FROM roles
+       WHERE lower(nombre) = lower('Técnico') AND estado = 'Activo'
+       LIMIT 1`,
+    );
+    if (!rolResultado.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(503).json({ mensaje: 'El rol Técnico no está configurado.' });
+    }
+
+    const hash = await bcrypt.hash(datos.password, 12);
+    const tecnicoResultado = await client.query(
+      `INSERT INTO terceros
+         (nombre_completo, tipo_documento, documento, telefono, correo_electronico,
+          direccion, municipio, departamento, estado)
+       VALUES ($1, $2, $3, $4, lower($5), $6, $7, $8, 'Activo')
+       RETURNING id, nombre_completo`,
+      [
+        datos.nombre.trim(),
+        textoValido(datos.tipoDocumento) ? datos.tipoDocumento.trim() : 'Cédula',
+        datos.documento.trim(),
+        textoValido(datos.telefono) ? datos.telefono.trim() : null,
+        datos.correo.trim(),
+        textoValido(datos.direccion) ? datos.direccion.trim() : '',
+        textoValido(datos.municipio) ? datos.municipio.trim() : '',
+        textoValido(datos.departamento) ? datos.departamento.trim() : '',
+      ],
+    );
+    const usuarioResultado = await client.query(
+      `INSERT INTO usuarios
+         (nombre_completo, usuario, correo_electronico, password_hash,
+          estado, verificado, rol_id, tercero_id)
+       VALUES ($1, $2, lower($3), $4, 'Activo', FALSE, $5, $6)
+       RETURNING id, nombre_completo, correo_electronico`,
+      [
+        datos.nombre.trim(),
+        datos.usuario.trim(),
+        datos.correo.trim(),
+        hash,
+        rolResultado.rows[0].id,
+        tecnicoResultado.rows[0].id,
+      ],
+    );
+    cuenta = usuarioResultado.rows[0];
+    token = await crearToken(client, cuenta.id, 'verificacion', VIGENCIA_VERIFICACION_MS);
+    await client.query('COMMIT');
+
+    await enviarEnlaceCuenta(cuenta, 'verificacion', token);
+    return res.status(202).json({
+      mensaje: 'Cuenta creada. Revisa tu correo para verificarla antes de iniciar sesión.',
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/verificar', async (req, res, next) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  if (!token) return res.status(400).json({ mensaje: 'El enlace de verificación no es válido.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT tv.id, tv.usuario_id, u.estado
+       FROM tokens_verificacion tv
+       JOIN usuarios u ON u.id = tv.usuario_id
+       WHERE tv.token_hash = $1
+         AND tv.proposito = 'verificacion'
+         AND tv.usado_en IS NULL
+         AND tv.expira_en > now()
+       FOR UPDATE OF tv, u`,
+      [hashToken(token)],
+    );
+    const verificacion = rows[0];
+    if (!verificacion || verificacion.estado !== 'Activo') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'El enlace venció, ya fue usado o la cuenta no está activa.' });
+    }
+
+    await client.query(
+      'UPDATE usuarios SET verificado = TRUE, actualizado_en = now() WHERE id = $1',
+      [verificacion.usuario_id],
+    );
+    await client.query(
+      `UPDATE tokens_verificacion SET usado_en = now()
+       WHERE usuario_id = $1 AND proposito = 'verificacion' AND usado_en IS NULL`,
+      [verificacion.usuario_id],
+    );
+    await client.query('COMMIT');
+    return res.json({ mensaje: 'Correo verificado. Ya puedes iniciar sesión desde la aplicación móvil.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
   }
 });
 
@@ -178,7 +343,7 @@ router.post('/recuperar', async (req, res, next) => {
     if (!puedeSolicitarRecuperacion(clave)) return res.json({ mensaje: MENSAJE_RECUPERACION });
 
     const { rows } = await pool.query(
-      `SELECT id, nombre_completo, correo_electronico, password_hash, estado
+      `SELECT id, nombre_completo, correo_electronico, estado, verificado
        FROM usuarios
        WHERE lower(usuario) = lower($1)
           OR lower(coalesce(correo_electronico, '')) = lower($1)
@@ -187,27 +352,18 @@ router.post('/recuperar', async (req, res, next) => {
     );
     const cuenta = rows[0];
 
-    if (cuenta && cuenta.estado === 'Activo' && cuenta.correo_electronico) {
-      const token = jwt.sign(
-        { id: cuenta.id, tipo: 'recuperacion', huella: huellaPassword(cuenta.password_hash) },
-        process.env.JWT_SECRET,
-        { expiresIn: VIGENCIA_RECUPERACION, audience: 'recuperacion' },
-      );
-      const enlace = `${origenFrontend()}/?recuperar=${encodeURIComponent(token)}`;
-      const { subject, text } = construirCorreoRecuperacion(cuenta.nombre_completo, enlace);
-
-      if (process.env.SMTP_HOST || process.env.SMTP_SERVICE) {
-        try {
-          await enviarCorreoRecuperacion(cuenta.correo_electronico, subject, text);
-        } catch (error) {
-          const faltaPaquete = error?.code === 'ERR_MODULE_NOT_FOUND'
-            || /nodemailer/i.test(String(error?.message));
-          console.error(`[recuperación] No se pudo enviar el correo: ${faltaPaquete ? 'falta la librería nodemailer (npm install nodemailer en backend/)' : error.message}`);
-          console.log(`[recuperación] Enlace manual para la cuenta ${cuenta.id}: ${enlace}`);
-        }
-      } else {
-        console.log('[recuperación] SMTP no configurado. Enlace para restablecer la contraseña:');
-        console.log(enlace);
+    if (cuenta && cuenta.estado === 'Activo' && cuenta.verificado && cuenta.correo_electronico) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const token = await crearToken(client, cuenta.id, 'recuperacion', VIGENCIA_RECUPERACION_MS);
+        await client.query('COMMIT');
+        await enviarEnlaceCuenta(cuenta, 'recuperacion', token);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        return next(error);
+      } finally {
+        client.release();
       }
     }
 
@@ -227,38 +383,46 @@ router.post('/restablecer', async (req, res, next) => {
   }
 
   const invalido = { mensaje: 'El enlace venció o ya fue usado. Solicita uno nuevo.' };
-
+  const client = await pool.connect();
   try {
-    let datos;
-    try {
-      datos = jwt.verify(token.trim(), process.env.JWT_SECRET, { audience: 'recuperacion' });
-    } catch {
-      return res.status(400).json(invalido);
-    }
-    if (datos?.tipo !== 'recuperacion' || !datos?.id) return res.status(400).json(invalido);
-
-    const { rows } = await pool.query(
-      'SELECT id, estado, password_hash FROM usuarios WHERE id = $1',
-      [datos.id],
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT tv.id AS token_id, u.id, u.estado
+       FROM tokens_verificacion tv
+       JOIN usuarios u ON u.id = tv.usuario_id
+       WHERE tv.token_hash = $1
+         AND tv.proposito = 'recuperacion'
+         AND tv.usado_en IS NULL
+         AND tv.expira_en > now()
+       FOR UPDATE OF tv, u`,
+      [hashToken(token.trim())],
     );
     const cuenta = rows[0];
-    // La huella del hash actual invalida el enlace en cuanto la contraseña cambia.
-    if (
-      !cuenta
-      || cuenta.estado !== 'Activo'
-      || huellaPassword(cuenta.password_hash) !== datos.huella
-    ) {
+    if (!cuenta || cuenta.estado !== 'Activo') {
+      await client.query('ROLLBACK');
       return res.status(400).json(invalido);
     }
 
     const hash = await bcrypt.hash(password, 12);
-    await pool.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [hash, cuenta.id]);
+    await client.query(
+      'UPDATE usuarios SET password_hash = $1, actualizado_en = now() WHERE id = $2',
+      [hash, cuenta.id],
+    );
+    await client.query(
+      `UPDATE tokens_verificacion SET usado_en = now()
+       WHERE usuario_id = $1 AND proposito = 'recuperacion' AND usado_en IS NULL`,
+      [cuenta.id],
+    );
+    await client.query('COMMIT');
 
     return res.json({
       mensaje: 'Contraseña actualizada. Ya puedes iniciar sesión con la nueva contraseña.',
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     return next(error);
+  } finally {
+    client.release();
   }
 });
 

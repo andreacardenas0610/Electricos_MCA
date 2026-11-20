@@ -48,6 +48,7 @@ const TONO_ROL = {
   Operario: 'neutral',
 };
 
+<<<<<<< HEAD
 const FORMULARIO_USUARIO = (usuario = null) => {
   // La cuenta puede tener varios roles: el primero de la lista es el principal.
   const roles = usuario?.roles?.length
@@ -66,6 +67,19 @@ const FORMULARIO_USUARIO = (usuario = null) => {
     confirmar: '',
   };
 };
+=======
+const FORMULARIO_USUARIO = (usuario = null) => ({
+  nombre: usuario?.nombre || '',
+  usuario: usuario?.usuario || '',
+  correo: usuario?.correo || '',
+  telefono: usuario?.telefono || '',
+  terceroId: usuario?.terceroId || '',
+  rol: usuario?.rol || 'Operario',
+  zona: usuario?.zona || 'General',
+  password: '',
+  confirmar: '',
+});
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 
 export function GestionUsuarios() {
   const {
@@ -74,13 +88,14 @@ export function GestionUsuarios() {
     loading,
     reload: cargarDatos,
   } = useApiData(async () => {
-    const [usuarios, roles] = await Promise.all([
+    const [usuarios, roles, terceros] = await Promise.all([
       apiRequest('/usuarios'),
       apiRequest('/roles'),
+      apiRequest('/terceros'),
     ]);
-    return { usuarios, roles };
-  }, { usuarios: [], roles: [] });
-  const { usuarios, roles } = datos;
+    return { usuarios, roles, terceros };
+  }, { usuarios: [], roles: [], terceros: [] });
+  const { usuarios, roles, terceros } = datos;
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('Todos');
@@ -118,6 +133,13 @@ export function GestionUsuarios() {
 
   const rolesDisponibles = roles.filter((rol) => (
     rol.estado === 'Activo' || (formulario?.roles || []).includes(rol.nombre)
+  ));
+  const perfilesTecnicosDisponibles = terceros.filter((tercero) => (
+    tercero.estado === 'Activo'
+    && (!usuarios.some((usuario) => (
+      String(usuario.terceroId) === String(tercero.id)
+      && String(usuario.id) !== String(formulario?.id)
+    )))
   ));
 
   const abrirNuevo = () => {
@@ -225,8 +247,13 @@ export function GestionUsuarios() {
     if (formulario.password !== formulario.confirmar) {
       nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
     }
+<<<<<<< HEAD
     if (!formulario.roles?.length) {
       nuevosErrores.roles = 'Selecciona al menos un rol para la cuenta.';
+=======
+    if (formulario.rol === 'Técnico' && !formulario.terceroId) {
+      nuevosErrores.terceroId = 'Selecciona el perfil del técnico.';
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
@@ -244,6 +271,7 @@ export function GestionUsuarios() {
         rol: formulario.rol,
         roles: formulario.roles,
         zona: formulario.zona,
+        tercero_id: formulario.rol === 'Técnico' ? formulario.terceroId : null,
       };
       const guardado = await apiRequest(
         formulario.id ? `/usuarios/${encodeURIComponent(formulario.id)}` : '/usuarios',
@@ -365,7 +393,7 @@ export function GestionUsuarios() {
         flush
       >
         <div className="mca-table-wrap">
-          <table className="mca-table">
+          <table className="mca-table mca-table--users">
             <thead>
               <tr>
                 <th>Usuario</th>
@@ -455,15 +483,13 @@ export function GestionUsuarios() {
         subtitle="Los datos de acceso se validan contra el inicio de sesión."
         icon={formulario?.id ? UserCog : UserPlus}
         footer={
-          <>
-            <Button onClick={cerrarFormulario}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="form-usuario">
-              {formulario?.id ? 'Guardar cambios' : 'Crear usuario'}
-            </Button>
-          </>
+          <Button variant="primary" type="submit" form="form-usuario">
+            {formulario?.id ? 'Guardar cambios' : 'Crear usuario'}
+          </Button>
         }
       >
         {formulario && (
+<<<<<<< HEAD
           <form id="form-usuario" className="mca-form-grid" onSubmit={guardar}>
             <Field
               label="Cédula"
@@ -487,6 +513,9 @@ export function GestionUsuarios() {
                 </Button>
               </div>
             </Field>
+=======
+          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar} noValidate>
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             <Field label="Nombre completo" required error={errores.nombre}>
               <input
                 className="mca-input"
@@ -523,6 +552,7 @@ export function GestionUsuarios() {
                 placeholder="310 555 0000"
               />
             </Field>
+<<<<<<< HEAD
             <Field
               label="Roles"
               required
@@ -558,7 +588,48 @@ export function GestionUsuarios() {
                   );
                 })}
               </div>
+=======
+            <Field label="Rol" required hint="Define los permisos del usuario.">
+              <select
+                className="mca-select"
+                value={formulario.rol}
+                onChange={(evento) => {
+                  setCampo('rol', evento.target.value);
+                  if (evento.target.value !== 'Técnico') setCampo('terceroId', '');
+                }}
+              >
+                {rolesDisponibles.map((rol) => (
+                  <option key={rol.nombre} value={rol.nombre}>
+                    {rol.nombre}{rol.estado === 'Inactivo' ? ' (inactivo)' : ''}
+                  </option>
+                ))}
+              </select>
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             </Field>
+            {formulario.rol === 'Técnico' && (
+              <Field
+                label="Perfil de técnico"
+                required
+                error={errores.terceroId}
+                hint="La cuenta móvil quedará vinculada a este perfil."
+              >
+                <select
+                  className="mca-select"
+                  value={formulario.terceroId}
+                  onChange={(evento) => setCampo('terceroId', evento.target.value)}
+                >
+                  <option value="">Selecciona un técnico</option>
+                  {perfilesTecnicosDisponibles.map((tercero) => (
+                    <option key={tercero.id} value={tercero.id}>
+                      {tercero.nombre_completo} · {tercero.documento}
+                    </option>
+                  ))}
+                </select>
+                {!perfilesTecnicosDisponibles.length && (
+                  <small className="mca-muted">No hay perfiles activos sin una cuenta asociada.</small>
+                )}
+              </Field>
+            )}
             <Field label="Zona">
               <select
                 className="mca-select"

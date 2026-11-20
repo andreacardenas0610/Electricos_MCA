@@ -8,6 +8,27 @@ const prioridades = ['Baja', 'Media', 'Alta'];
 const bufferMinutos = 30;
 const diasMaximos = 60;
 
+function esTecnico(req) {
+  return req.usuario?.tipoCuenta === 'tercero'
+    || (req.usuario?.tipoCuenta === 'usuario'
+      && req.usuario?.plataforma === 'movil'
+      && Boolean(req.usuario?.terceroId));
+}
+
+export function accesoAgendamiento(req, res, next) {
+  if (req.usuario?.tipoCuenta === 'usuario' && req.usuario?.rol === 'Administrador') {
+    return next();
+  }
+  if (
+    esTecnico(req)
+    && req.method === 'GET'
+    && (req.path === '/' || /^\/\d+$/.test(req.path))
+  ) {
+    return next();
+  }
+  return res.status(403).json({ mensaje: 'No tienes permiso para esta operación de agenda.' });
+}
+
 function horaActualBogota() {
   const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
@@ -240,14 +261,30 @@ async function generarCodigo(client) {
   return `AG-${anio}-${String(ultimo + 1).padStart(4, '0')}`;
 }
 
-async function obtenerActividad(client, id) {
-  const { rows } = await client.query(`${consultaActividades} WHERE a.id = $1`, [id]);
+async function obtenerActividad(client, id, req = null) {
+  const limitarATecnico = req && esTecnico(req);
+  const tecnicoId = limitarATecnico
+    ? (req.usuario.tipoCuenta === 'tercero' ? req.usuario.id : req.usuario.terceroId)
+    : null;
+  const filtroTecnico = limitarATecnico ? 'AND a.tercero_id = $2' : '';
+  const parametros = limitarATecnico ? [id, tecnicoId] : [id];
+  const { rows } = await client.query(
+    `${consultaActividades} WHERE a.id = $1 ${filtroTecnico}`,
+    parametros,
+  );
   return rows[0] || null;
 }
 
 router.get('/', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(`${consultaActividades} ORDER BY a.fecha, a.hora_inicio`);
+    const filtroTecnico = esTecnico(req) ? 'WHERE a.tercero_id = $1' : '';
+    const parametros = esTecnico(req)
+      ? [req.usuario.tipoCuenta === 'tercero' ? req.usuario.id : req.usuario.terceroId]
+      : [];
+    const { rows } = await pool.query(
+      `${consultaActividades} ${filtroTecnico} ORDER BY a.fecha, a.hora_inicio`,
+      parametros,
+    );
     return res.json(rows);
   } catch (error) {
     return next(error);
@@ -348,7 +385,7 @@ router.get('/:id', async (req, res, next) => {
   const id = idValido(req.params.id);
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
   try {
-    const actividad = await obtenerActividad(pool, id);
+    const actividad = await obtenerActividad(pool, id, req);
     if (!actividad) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
     return res.json(actividad);
   } catch (error) {

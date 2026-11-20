@@ -3,20 +3,31 @@ import { CircleAlert, Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound, Zap } from
 import { ThemeContext } from '../../../shared/context/ThemeContext.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { RecuperacionContrasena } from './RecuperacionContrasena.jsx';
+import { Registro } from './AuthForms.jsx';
+import { VerificacionCuenta } from './VerificacionCuenta.jsx';
 import '../styles/auth.css';
 
-export function Login({ onLogin, tokenRecuperacion = '' }) {
+export function Login({ onLogin, tokenRecuperacion = '', tokenVerificacion = '' }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [vista, setVista] = useState(tokenRecuperacion ? 'recuperar' : 'login');
+  const [vista, setVista] = useState(
+    tokenVerificacion ? 'verificar' : tokenRecuperacion ? 'recuperar' : 'login',
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (!usuario.trim() || !password) {
+      setError({
+        titulo: 'Faltan datos',
+        detalle: 'Ingresa tu usuario y contraseña para continuar.',
+      });
+      return;
+    }
     setEnviando(true);
 
     try {
@@ -57,6 +68,19 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
     );
   }
 
+  if (vista === 'verificar') {
+    return (
+      <VerificacionCuenta
+        token={tokenVerificacion}
+        onBack={() => setVista('login')}
+      />
+    );
+  }
+
+  if (vista === 'registro') {
+    return <Registro onBack={() => setVista('login')} />;
+  }
+
   return (
     <main className="auth-page">
       <div className="auth-backdrop" aria-hidden="true" />
@@ -71,7 +95,7 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
           <span>GESTIÓN INDUSTRIAL</span>
         </header>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           {error && (
             <div className="auth-error" role="alert">
               <CircleAlert size={18} aria-hidden="true" />
@@ -89,7 +113,10 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
               <input
                 type="text"
                 value={usuario}
-                onChange={(e) => setUsuario(e.target.value)}
+                onChange={(e) => {
+                  setUsuario(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Ingresa tu usuario"
                 autoComplete="username"
                 required
@@ -104,7 +131,10 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
               <input
                 type={mostrarPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Ingresa tu contraseña"
                 autoComplete="current-password"
                 required
@@ -127,6 +157,9 @@ export function Login({ onLogin, tokenRecuperacion = '' }) {
           <div className="auth-links">
             <button type="button" onClick={() => setVista('recuperar')}>
               ¿Olvidaste tu contraseña?
+            </button>
+            <button type="button" onClick={() => setVista('registro')}>
+              ¿Eres técnico? Crear cuenta
             </button>
           </div>
 

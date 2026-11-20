@@ -9,6 +9,7 @@ import {
   Handshake,
   LogOut,
   PackageOpen,
+  Scale,
   Shield,
   UserRoundPlus,
   UsersRound,
@@ -16,7 +17,12 @@ import {
 } from 'lucide-react';
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
+<<<<<<< HEAD
 import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
+=======
+import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
+import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/sessionStore.js';
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 import { API_SESSION_EXPIRED } from '../../shared/api.js';
 
 // Importación de las vistas
@@ -29,23 +35,43 @@ import { ProgramacionActividades } from '../../features/activities/components/Pr
 import { GestionUsuarios } from '../../features/users/components/GestionUsuarios.jsx';
 import { GestionRolesPermisos } from '../../features/users/components/GestionRolesPermisos.jsx';
 import { Clientes, GestionTerceros, OrdenesServicio } from '../../features/management/components/ModulosGestion.jsx';
+import { Button, Modal } from '../../shared/components/ui.jsx';
 
-// El correo de recuperación llega como ?recuperar=<token>: se abre la pantalla
-// de contraseña nueva con el código ya cargado y se limpia la URL.
-function leerTokenRecuperacion() {
+const LICENCIAS_DEPENDENCIAS = [
+  { nombre: 'React y React DOM', licencia: 'MIT', url: 'https://opensource.org/license/mit' },
+  { nombre: 'Vite', licencia: 'MIT', url: 'https://opensource.org/license/mit' },
+  { nombre: 'Lucide React', licencia: 'ISC', url: 'https://opensource.org/license/isc-license-txt' },
+  { nombre: 'Express, CORS, jsonwebtoken y Multer', licencia: 'MIT', url: 'https://opensource.org/license/mit' },
+  { nombre: 'dotenv', licencia: 'BSD-2-Clause', url: 'https://opensource.org/license/bsd-2-clause' },
+  { nombre: 'bcryptjs', licencia: 'BSD-3-Clause', url: 'https://opensource.org/license/bsd-3-clause' },
+  { nombre: 'node-postgres (pg)', licencia: 'MIT', url: 'https://opensource.org/license/mit' },
+  { nombre: 'PostgreSQL (motor de base de datos)', licencia: 'PostgreSQL License', url: 'https://www.postgresql.org/about/licence/' },
+];
+
+function leerTokenParametro(nombre) {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('recuperar') || '';
-  if (token) window.history.replaceState({}, '', window.location.pathname);
+  const token = params.get(nombre) || '';
+  if (token) {
+    params.delete(nombre);
+    const consulta = params.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${consulta ? `?${consulta}` : ''}${window.location.hash}`,
+    );
+  }
   return token;
 }
 
 export function Dashboard() {
   const [sesion, setSesion] = useState(getLocalSession);
-  const [tokenRecuperacion] = useState(leerTokenRecuperacion);
+  const [tokenRecuperacion] = useState(() => leerTokenParametro('recuperar'));
+  const [tokenVerificacion] = useState(() => leerTokenParametro('verificar'));
   const autenticado = Boolean(sesion?.usuario);
 
   const [seccionActual, setSeccionActual] = useState('panel');
   const [mostrandoSplash, setMostrandoSplash] = useState(false);
+  const [mostrarLicencias, setMostrarLicencias] = useState(false);
 
   useEffect(() => {
     if (!mostrandoSplash) return undefined;
@@ -75,7 +101,13 @@ export function Dashboard() {
   };
 
   if (!autenticado) {
-    return <Login onLogin={handleLogin} tokenRecuperacion={tokenRecuperacion} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        tokenRecuperacion={tokenRecuperacion}
+        tokenVerificacion={tokenVerificacion}
+      />
+    );
   }
 
   if (mostrandoSplash) {
@@ -179,14 +211,23 @@ export function Dashboard() {
         boxShadow: '4px 0 20px rgba(0,0,0,0.2)',
         overflow: 'visible',
         zIndex: 10
+<<<<<<< HEAD
       }}>
         {/* Pista: avisa que el menú se expande al pasar el cursor */}
         <span className="mca-sidebar__pista" aria-hidden="true">
           <ChevronsRight size={16} strokeWidth={2.6} />
         </span>
         <div>
+=======
+      }}
+        onMouseLeave={(event) => {
+          event.currentTarget.querySelector(':focus')?.blur();
+        }}
+      >
+        <div className="sidebar-scroll mca-sidebar__content">
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
           {/* Header del Logo */}
-          <div style={{ padding: '0 8px', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="mca-sidebar__brand" style={{ padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '20px' }}>⚡</span>
@@ -202,32 +243,14 @@ export function Dashboard() {
           </div>
 
           {/* Menú Organizado por Secciones */}
-          <nav 
-            className="sidebar-scroll"
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '20px', 
-              maxHeight: 'calc(100vh - 270px)', 
-              overflowY: 'auto',
-              overscrollBehavior: 'contain',
-              paddingRight: '6px'
-            }}
-          >
+          <nav className="mca-sidebar__menu">
             {menuGrupos.map((grupo, index) => (
-              <div key={index}>
-                <span className="mca-sidebar__label" style={{ 
-                  fontSize: '10px', 
-                  fontWeight: '700', 
-                  color: 'var(--sidebar-muted)',
-                  letterSpacing: '1px', 
-                  padding: '0 12px 8px 12px', 
-                  display: 'block' 
-                }}>
+              <div className="mca-sidebar__group" key={index}>
+                <span className="mca-sidebar__label mca-sidebar__group-title">
                   {grupo.titulo}
                 </span>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="mca-sidebar__items">
                   {grupo.items.map((item) => {
                     const activo = seccionActual === item.id;
                     const Icono = item.icon;
@@ -235,14 +258,13 @@ export function Dashboard() {
                       <button
                         key={item.id}
                         onClick={() => setSeccionActual(item.id)}
-                        className={`sidebar-item ${activo ? 'is-active' : ''}`.trim()}
+                        className={`sidebar-item mca-sidebar__item ${activo ? 'is-active' : ''}`.trim()}
                         title={item.label}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: '12px',
                           width: '100%',
-                          padding: '10px 14px',
                           borderRadius: '8px',
                           border: 'none',
                           backgroundColor: activo ? 'var(--sidebar-active)' : 'transparent',
@@ -266,6 +288,7 @@ export function Dashboard() {
               </div>
             ))}
           </nav>
+<<<<<<< HEAD
         </div>
 
         {/* Acciones Inferiores y Perfil */}
@@ -303,53 +326,125 @@ export function Dashboard() {
             </div>
 
             {/* Botón Salir */}
+=======
+          <div className="mca-sidebar__bottom">
+>>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             <button
-              className="mca-sidebar__logout"
-              onClick={handleLogout}
-              title="Cerrar Sesión"
-              style={{ 
-                background: 'none', 
-                border: 'none', 
-                cursor: 'pointer', 
-                fontSize: '16px', 
-                padding: '4px',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--sidebar-muted)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--sidebar-hover)';
-                e.currentTarget.style.color = '#ef4444';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'var(--sidebar-muted)';
-              }}
+              type="button"
+              className="mca-sidebar__licenses"
+              onClick={() => setMostrarLicencias(true)}
+              title="Licencias de software"
             >
-              <LogOut size={20} strokeWidth={1.7} />
+              <Scale size={17} strokeWidth={1.8} />
+              <span className="mca-sidebar__label">Licencias de software</span>
             </button>
           </div>
-
         </div>
       </aside>
 
       {/* ÁREA DE CONTENIDO DINÁMICO */}
-      <main className="app-scroll" style={{ flex: 1, minWidth: 0, height: '100vh', backgroundColor: 'var(--bg-main)', overflowY: 'auto', overscrollBehavior: 'contain', width: '100%', boxSizing: 'border-box' }}>
-        {seccionActual === 'panel' && <PanelControl onNavegar={setSeccionActual} />}
-        {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
-        {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}
-        {seccionActual === 'materiales' && <Materiales />}
-        {seccionActual === 'servicios' && <CatalogoServicios />}
-        {seccionActual === 'Cotizacion' && <Cotizacion />}
-        {seccionActual === 'AbonosVentas' && <AbonosVentas />}
-        {seccionActual === 'programacion' && <ProgramacionActividades />}
-        {seccionActual === 'ordenes' && <OrdenesServicio usuario={sesion?.usuario} />}
-        {seccionActual === 'usuarios' && <GestionUsuarios />}
-        {seccionActual === 'roles' && <GestionRolesPermisos />}
-       
-      </main>
+      <div className="mca-app-main">
+        <header className="mca-topbar">
+          <div></div>
+          <div className="mca-topbar__actions">
+            <button
+              type="button"
+              className="mca-topbar__theme"
+              onClick={toggleTheme}
+              title={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              aria-label={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+              {tema === 'dark' ? <Sun size={17} strokeWidth={2} /> : <Moon size={17} strokeWidth={2} />}
+            </button>
+            <div className="mca-topbar__profile">
+              <div className="mca-topbar__avatar">
+                {(sesion?.usuario?.nombre || 'Administrador').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="mca-topbar__identity">
+                <strong>{sesion?.usuario?.nombre || sesion?.usuario?.usuario || 'Administrador'}</strong>
+                <span>{sesion?.usuario?.rol || 'Administrador'}</span>
+              </div>
+              <button
+                type="button"
+                className="mca-topbar__logout"
+                onClick={handleLogout}
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut size={17} strokeWidth={1.8} />
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="app-scroll" style={{ flex: 1, minHeight: 0, minWidth: 0, backgroundColor: 'var(--bg-main)', overflowY: 'auto', overscrollBehavior: 'contain', width: '100%', boxSizing: 'border-box' }}>
+          {seccionActual === 'panel' && <PanelControl onNavegar={setSeccionActual} />}
+          {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
+          {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}
+          {seccionActual === 'materiales' && <Materiales />}
+          {seccionActual === 'servicios' && <CatalogoServicios />}
+          {seccionActual === 'Cotizacion' && <Cotizacion />}
+          {seccionActual === 'AbonosVentas' && <AbonosVentas />}
+          {seccionActual === 'programacion' && <ProgramacionActividades />}
+          {seccionActual === 'ordenes' && <OrdenesServicio usuario={sesion?.usuario} />}
+          {seccionActual === 'usuarios' && <GestionUsuarios />}
+          {seccionActual === 'roles' && <GestionRolesPermisos />}
+        </main>
+      </div>
+
+      <Modal
+        open={mostrarLicencias}
+        onClose={() => setMostrarLicencias(false)}
+        title="Licencias de software"
+        subtitle="Información del producto y de las tecnologías utilizadas."
+        icon={Scale}
+        size="lg"
+        footer={
+          <Button variant="primary" onClick={() => setMostrarLicencias(false)}>
+            Entendido
+          </Button>
+        }
+      >
+        <div className="mca-licenses">
+          <section className="mca-license-product">
+            <div className="mca-license-product__eyebrow">PRODUCTO MCA</div>
+            <h3>Sistema de Gestión Operativa MCA</h3>
+            <p>
+              Software propietario desarrollado in-house. Según la ficha técnica, cuenta con
+              licencia privada para Eléctricos MCA S.A.S.
+            </p>
+            <div className="mca-license-product__meta">
+              <span><strong>Versión:</strong> 1.0.0</span>
+              <span><strong>Código:</strong> ADSO-3256538-MCA</span>
+              <span><strong>Esquema:</strong> licencia privada propietaria</span>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mca-licenses__heading">Licencias de terceros</h3>
+            <p className="mca-licenses__note">
+              Las dependencias conservan sus propios términos de licencia; la licencia privada del
+              producto no los reemplaza.
+            </p>
+            <div className="mca-licenses__list">
+              {LICENCIAS_DEPENDENCIAS.map((item) => (
+                <div className="mca-license-row" key={item.nombre}>
+                  <div>
+                    <strong>{item.nombre}</strong>
+                    <span>{item.licencia}</span>
+                  </div>
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    Ver licencia
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+          <p className="mca-licenses__source">
+            Datos del producto basados en la ficha técnica de software MCA. Consulta los archivos
+            package.json y los avisos de cada dependencia para el inventario completo.
+          </p>
+        </div>
+      </Modal>
 
     </div>
   );

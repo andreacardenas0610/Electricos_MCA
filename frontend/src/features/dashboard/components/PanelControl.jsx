@@ -368,7 +368,7 @@ export function PanelControl({ onNavegar }) {
               />
             ) : (
               <div className="mca-table-wrap">
-                <table className="mca-table">
+                <table className="mca-table mca-table--dashboard">
                   <thead>
                     <tr>
                       <th>Código</th>
