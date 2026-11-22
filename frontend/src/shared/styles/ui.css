@@ -2128,26 +2128,58 @@
   transition: width 0.22s ease, min-width 0.22s ease, padding 0.22s ease;
 }
 
-<<<<<<< HEAD
-/* Pista: pastilla amarilla que avisa que el menú se expande al pasar el cursor. */
+/* Pista: pestaña lateral amarilla con la palabra "Menú" y flechas: anuncia que el menú
+   se despliega al pasar el cursor. Late suavemente para que se note sin tener que adivinar. */
 .mca-sidebar__pista {
   position: absolute;
-  right: -11px;
+  right: -13px;
   top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   background: var(--accent-yellow);
   color: #1c1e26;
   border: 2px solid var(--bg-main);
   border-radius: 999px;
-  padding: 5px 7px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+  padding: 9px 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   opacity: 1;
+  transform: translateY(-50%);
   transition: opacity 0.18s ease;
+  animation: mca-pista-latido 2.6s ease-in-out infinite;
   z-index: 5;
   pointer-events: none;
+}
+
+.mca-sidebar__pista svg {
+  flex: 0 0 auto;
+}
+
+.mca-sidebar__pista-texto {
+  writing-mode: vertical-rl;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+@keyframes mca-pista-latido {
+  0%, 100% {
+    transform: translateY(-50%) translateX(0);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    transform: translateY(-50%) translateX(3px);
+    box-shadow: 0 4px 18px rgba(240, 197, 52, 0.65);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mca-sidebar__pista {
+    animation: none;
+  }
 }
 
 .mca-sidebar:hover .mca-sidebar__pista,
@@ -2228,10 +2260,10 @@
 .mca-btn--convertir:hover {
   background: linear-gradient(135deg, #ffe082 0%, #ffc93c 100%);
   box-shadow: 0 6px 18px rgba(255, 179, 0, 0.5);
-=======
+}
+
 .mca-sidebar button:focus:not(:focus-visible) {
   outline: none;
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 }
 
 .mca-sidebar:hover,
@@ -2250,8 +2282,59 @@
 }
 
 .mca-sidebar__brand {
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   margin-bottom: 28px;
+  padding: 0 6px;
+}
+
+.mca-sidebar__brand-marca {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.mca-sidebar__brand-rayo {
+  font-size: 20px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* Nombre corto ("MCA") visible solo con el menú recogido, debajo del rayo. */
+.mca-sidebar__brand-corto {
+  max-height: 18px;
+  overflow: hidden;
+  color: var(--accent-yellow);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  line-height: 18px;
+  white-space: nowrap;
+  opacity: 1;
+  transition: max-height 0.22s ease, opacity 0.14s ease;
+}
+
+.mca-sidebar:hover .mca-sidebar__brand,
+.mca-sidebar:focus-within .mca-sidebar__brand {
+  align-items: flex-start;
+  padding: 0 2px;
+}
+
+.mca-sidebar:hover .mca-sidebar__brand-marca,
+.mca-sidebar:focus-within .mca-sidebar__brand-marca {
+  justify-content: flex-start;
+}
+
+.mca-sidebar:hover .mca-sidebar__brand-corto,
+.mca-sidebar:focus-within .mca-sidebar__brand-corto {
+  max-height: 0;
+  opacity: 0;
 }
 
 .mca-sidebar__menu {
@@ -2430,6 +2513,14 @@
   color: var(--accent-text);
   font-size: 12px;
   font-weight: 800;
+  overflow: hidden;
+}
+
+.mca-topbar__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .mca-topbar__identity {
@@ -2572,6 +2663,13 @@
     padding: 12px 6px;
   }
 
+  /* Sin despliegue la pista de "Menú" no aplica: se oculta para no confundir. */
+  .mca-sidebar__pista,
+  .mca-sidebar:hover .mca-sidebar__pista,
+  .mca-sidebar:focus-within .mca-sidebar__pista {
+    display: none;
+  }
+
   .mca-topbar {
     min-height: 60px;
     padding: 8px 14px;
@@ -2659,9 +2757,10 @@
     padding-top: 4px;
   }
 
-  /* Sin despliegue tampoco hace falta la pista. */
+  /* La pista se mantiene: es la ayuda para descubrir que el menú se despliega. */
   .mca-sidebar__pista {
-    display: none;
+    padding: 7px 5px;
+    gap: 4px;
   }
 }
 

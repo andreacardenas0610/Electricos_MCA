@@ -5,7 +5,6 @@ import { resolverPersona } from '../utils/personas.js';
 
 const router = Router();
 
-<<<<<<< HEAD
 let columnaEsDuenoDisponible = false;
 let esquemaVerificado = false;
 
@@ -25,44 +24,32 @@ async function verificarEsquema() {
   esquemaVerificado = true;
 }
 
+// Consulta unificada: toma los datos de la persona (migraciones 009/010) y,
+// si la migración 008 ya se aplicó, también la marca de dueño.
 function consultaClientesSql() {
   return `
-    SELECT c.id, c.nombre_razon_social, c.documento_nit, c.tipo_cliente,
-           c.tipo_documento, c.es_empleado, c.tercero_id, t.nombre_completo AS empleado_nombre,
+    SELECT c.id,
+           COALESCE(p.nombre_completo, c.nombre_razon_social) AS nombre_razon_social,
+           COALESCE(p.documento, c.documento_nit) AS documento_nit,
+           c.tipo_cliente,
+           CASE WHEN c.tipo_cliente = 'Natural' THEN 'Cédula' ELSE 'NIT' END AS tipo_documento,
+           c.es_empleado, c.tercero_id,
+           COALESCE(pp.nombre_completo, t.nombre_completo) AS empleado_nombre,
            c.tipo_propiedad_id, tp.nombre AS tipo_propiedad, c.estado,
            ${columnaEsDuenoDisponible ? 'c.es_dueno,' : ''}
-           cc.nombre AS contacto, cc.telefono, cc.correo_electronico,
+           CASE WHEN c.tercero_id IS NOT NULL THEN pp.nombre_completo ELSE cc.nombre END AS contacto,
+           CASE WHEN c.tercero_id IS NOT NULL THEN pp.telefono ELSE cc.telefono END AS telefono,
+           CASE WHEN c.tercero_id IS NOT NULL THEN pp.correo_electronico ELSE cc.correo_electronico END AS correo_electronico,
            dc.direccion, dc.municipio, dc.departamento, c.fecha_registro
     FROM clientes c
+    LEFT JOIN personas p ON p.id = c.persona_id
     LEFT JOIN tipos_propiedad tp ON tp.id = c.tipo_propiedad_id
     LEFT JOIN terceros t ON t.id = c.tercero_id
+    LEFT JOIN personas pp ON pp.id = t.persona_id
     LEFT JOIN contactos_cliente cc ON cc.cliente_id = c.id AND cc.es_principal = TRUE
     LEFT JOIN direcciones_cliente dc ON dc.cliente_id = c.id AND dc.es_principal = TRUE
   `;
 }
-=======
-const consultaClientes = `
-  SELECT c.id,
-         COALESCE(p.nombre_completo, c.nombre_razon_social) AS nombre_razon_social,
-         COALESCE(p.documento, c.documento_nit) AS documento_nit,
-         c.tipo_cliente,
-         CASE WHEN c.tipo_cliente = 'Natural' THEN 'Cédula' ELSE 'NIT' END AS tipo_documento,
-         c.es_empleado, c.tercero_id,
-         COALESCE(pp.nombre_completo, t.nombre_completo) AS empleado_nombre,
-         c.tipo_propiedad_id, tp.nombre AS tipo_propiedad, c.estado,
-         CASE WHEN c.tercero_id IS NOT NULL THEN pp.nombre_completo ELSE cc.nombre END AS contacto,
-         CASE WHEN c.tercero_id IS NOT NULL THEN pp.telefono ELSE cc.telefono END AS telefono,
-         CASE WHEN c.tercero_id IS NOT NULL THEN pp.correo_electronico ELSE cc.correo_electronico END AS correo_electronico,
-         dc.direccion, dc.municipio, dc.departamento, c.fecha_registro
-  FROM clientes c
-  LEFT JOIN personas p ON p.id = c.persona_id
-  LEFT JOIN tipos_propiedad tp ON tp.id = c.tipo_propiedad_id
-  LEFT JOIN terceros t ON t.id = c.tercero_id
-  LEFT JOIN personas pp ON pp.id = t.persona_id
-  LEFT JOIN contactos_cliente cc ON cc.cliente_id = c.id AND cc.es_principal = TRUE
-  LEFT JOIN direcciones_cliente dc ON dc.cliente_id = c.id AND dc.es_principal = TRUE
-`;
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 
 const TIPOS_DOCUMENTO = ['Cédula', 'Cédula de extranjería', 'NIT', 'Pasaporte'];
 
@@ -175,38 +162,7 @@ router.post('/', async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-<<<<<<< HEAD
     await verificarEsquema();
-    const terceroId = await resolverTerceroEmpleado(client, req.body);
-    const base = [
-      req.body.nombre_razon_social.trim(),
-      req.body.documento_nit.trim(),
-      req.body.tipo_cliente,
-      req.body.tipo_documento,
-      terceroId,
-      terceroId ? true : false,
-      req.body.tipo_propiedad_id || null,
-      req.body.estado,
-    ];
-    const esDueno = req.body.es_dueno === true;
-    const { rows } = columnaEsDuenoDisponible
-      ? await client.query(
-        `INSERT INTO clientes
-           (nombre_razon_social, documento_nit, tipo_cliente, tipo_documento,
-            tercero_id, es_empleado, tipo_propiedad_id, estado, es_dueno)
-         VALUES ($1, $2, $3, COALESCE($4, 'Cédula'), $5, COALESCE($6, FALSE), $7, COALESCE($8, 'Activo'), COALESCE($9, FALSE))
-         RETURNING id`,
-        [...base, esDueno],
-      )
-      : await client.query(
-        `INSERT INTO clientes
-           (nombre_razon_social, documento_nit, tipo_cliente, tipo_documento,
-            tercero_id, es_empleado, tipo_propiedad_id, estado)
-         VALUES ($1, $2, $3, COALESCE($4, 'Cédula'), $5, COALESCE($6, FALSE), $7, COALESCE($8, 'Activo'))
-         RETURNING id`,
-        base,
-      );
-=======
     let personaDatos = {
       documento: req.body.documento_nit,
       tipoDocumento: req.body.tipo_documento,
@@ -214,7 +170,10 @@ router.post('/', async (req, res, next) => {
       telefono: req.body.telefono,
       correo: req.body.correo_electronico,
     };
-    const terceroId = Number(req.body.tercero_id) > 0 ? Number(req.body.tercero_id) : null;
+    // Si no llega tercero_id pero es empleado, se busca o crea su ficha de tercero.
+    const terceroId = Number(req.body.tercero_id) > 0
+      ? Number(req.body.tercero_id)
+      : await resolverTerceroEmpleado(client, req.body);
     if (terceroId) {
       const perfil = await client.query(
         `SELECT tipo_documento, documento, nombre_completo, telefono, correo_electronico, persona_id
@@ -241,25 +200,35 @@ router.post('/', async (req, res, next) => {
     const documentoCliente = terceroId
       ? personaDatos.documento
       : req.body.documento_nit.trim();
-    const { rows } = await client.query(
-      `INSERT INTO clientes
-         (nombre_razon_social, documento_nit, tipo_cliente, tipo_documento,
-          tercero_id, es_empleado, tipo_propiedad_id, estado, persona_id)
-       VALUES ($1, $2, $3, COALESCE($4, 'Cédula'), $5, COALESCE($6, FALSE), $7, COALESCE($8, 'Activo'), $9)
-       RETURNING id`,
-      [
-        nombreCliente,
-        documentoCliente,
-        req.body.tipo_cliente,
-        req.body.tipo_documento,
-        Number(req.body.tercero_id) > 0 ? Number(req.body.tercero_id) : null,
-        req.body.es_empleado === true || Number(req.body.tercero_id) > 0 ? true : false,
-        req.body.tipo_propiedad_id || null,
-        req.body.estado,
-        personaId,
-      ],
-    );
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+    const base = [
+      nombreCliente,
+      documentoCliente,
+      req.body.tipo_cliente,
+      req.body.tipo_documento,
+      terceroId || null,
+      Boolean(terceroId) || req.body.es_empleado === true,
+      req.body.tipo_propiedad_id || null,
+      req.body.estado,
+      personaId,
+    ];
+    const esDueno = req.body.es_dueno === true;
+    const { rows } = columnaEsDuenoDisponible
+      ? await client.query(
+        `INSERT INTO clientes
+           (nombre_razon_social, documento_nit, tipo_cliente, tipo_documento,
+            tercero_id, es_empleado, tipo_propiedad_id, estado, persona_id, es_dueno)
+         VALUES ($1, $2, $3, COALESCE($4, 'Cédula'), $5, COALESCE($6, FALSE), $7, COALESCE($8, 'Activo'), $9, COALESCE($10, FALSE))
+         RETURNING id`,
+        [...base, esDueno],
+      )
+      : await client.query(
+        `INSERT INTO clientes
+           (nombre_razon_social, documento_nit, tipo_cliente, tipo_documento,
+            tercero_id, es_empleado, tipo_propiedad_id, estado, persona_id)
+         VALUES ($1, $2, $3, COALESCE($4, 'Cédula'), $5, COALESCE($6, FALSE), $7, COALESCE($8, 'Activo'), $9)
+         RETURNING id`,
+        base,
+      );
     const clienteId = rows[0].id;
 
     if (req.body.contacto) {
@@ -299,42 +268,10 @@ router.put('/:id', async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-<<<<<<< HEAD
     await verificarEsquema();
-    const terceroId = await resolverTerceroEmpleado(client, req.body);
-    const base = [
-      req.body.nombre_razon_social.trim(),
-      req.body.documento_nit.trim(),
-      req.body.tipo_cliente,
-      req.body.tipo_documento,
-      terceroId,
-      terceroId ? true : false,
-      req.body.tipo_propiedad_id || null,
-      req.body.estado,
-    ];
-    const esDueno = req.body.es_dueno === true;
-    const actualizacion = columnaEsDuenoDisponible
-      ? await client.query(
-        `UPDATE clientes
-         SET nombre_razon_social = $1, documento_nit = $2, tipo_cliente = $3,
-             tipo_documento = COALESCE($4, tipo_documento, 'Cédula'),
-             tercero_id = $5, es_empleado = COALESCE($6, FALSE),
-             tipo_propiedad_id = $7, estado = COALESCE($8, 'Activo'),
-             es_dueno = COALESCE($9, FALSE)
-         WHERE id = $10`,
-        [...base, esDueno, id],
-      )
-      : await client.query(
-        `UPDATE clientes
-         SET nombre_razon_social = $1, documento_nit = $2, tipo_cliente = $3,
-             tipo_documento = COALESCE($4, tipo_documento, 'Cédula'),
-             tercero_id = $5, es_empleado = COALESCE($6, FALSE),
-             tipo_propiedad_id = $7, estado = COALESCE($8, 'Activo')
-         WHERE id = $9`,
-        [...base, id],
-      );
-=======
-    const terceroId = Number(req.body.tercero_id) > 0 ? Number(req.body.tercero_id) : null;
+    const terceroId = Number(req.body.tercero_id) > 0
+      ? Number(req.body.tercero_id)
+      : await resolverTerceroEmpleado(client, req.body);
     let personaDatos = {
       documento: req.body.documento_nit,
       tipoDocumento: req.body.tipo_documento,
@@ -377,27 +314,39 @@ router.put('/:id', async (req, res, next) => {
     const documentoCliente = terceroId
       ? personaDatos.documento
       : req.body.documento_nit.trim();
-    const actualizacion = await client.query(
-      `UPDATE clientes
-       SET nombre_razon_social = $1, documento_nit = $2, tipo_cliente = $3,
-           tipo_documento = COALESCE($4, tipo_documento, 'Cédula'),
-           tercero_id = $5, es_empleado = COALESCE($6, FALSE),
-           tipo_propiedad_id = $7, estado = COALESCE($8, 'Activo'), persona_id = $10
-       WHERE id = $9`,
-      [
-        nombreCliente,
-        documentoCliente,
-        req.body.tipo_cliente,
-        req.body.tipo_documento,
-        Number(req.body.tercero_id) > 0 ? Number(req.body.tercero_id) : null,
-        req.body.es_empleado === true || Number(req.body.tercero_id) > 0 ? true : false,
-        req.body.tipo_propiedad_id || null,
-        req.body.estado,
-        id,
-        personaId,
-      ],
-    );
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+    const base = [
+      nombreCliente,
+      documentoCliente,
+      req.body.tipo_cliente,
+      req.body.tipo_documento,
+      terceroId || null,
+      Boolean(terceroId) || req.body.es_empleado === true,
+      req.body.tipo_propiedad_id || null,
+      req.body.estado,
+      personaId,
+    ];
+    const esDueno = req.body.es_dueno === true;
+    const actualizacion = columnaEsDuenoDisponible
+      ? await client.query(
+        `UPDATE clientes
+         SET nombre_razon_social = $1, documento_nit = $2, tipo_cliente = $3,
+             tipo_documento = COALESCE($4, tipo_documento, 'Cédula'),
+             tercero_id = $5, es_empleado = COALESCE($6, FALSE),
+             tipo_propiedad_id = $7, estado = COALESCE($8, 'Activo'),
+             persona_id = $9, es_dueno = COALESCE($10, FALSE)
+         WHERE id = $11`,
+        [...base, esDueno, id],
+      )
+      : await client.query(
+        `UPDATE clientes
+         SET nombre_razon_social = $1, documento_nit = $2, tipo_cliente = $3,
+             tipo_documento = COALESCE($4, tipo_documento, 'Cédula'),
+             tercero_id = $5, es_empleado = COALESCE($6, FALSE),
+             tipo_propiedad_id = $7, estado = COALESCE($8, 'Activo'),
+             persona_id = $9
+         WHERE id = $10`,
+        [...base, id],
+      );
     if (!actualizacion.rowCount) {
       await client.query('ROLLBACK');
       return res.status(404).json({ mensaje: 'Cliente no encontrado.' });

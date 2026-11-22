@@ -6,16 +6,12 @@ import { resolverPersona } from '../utils/personas.js';
 
 const router = Router();
 const columnasUsuario = `
-<<<<<<< HEAD
-  u.id, u.nombre_completo AS nombre, u.usuario, u.documento_n AS documento,
-  u.correo_electronico AS correo, u.telefono, u.zona, u.estado,
-=======
   u.id, COALESCE(p.nombre_completo, u.nombre_completo) AS nombre, u.usuario,
+  u.documento_n AS documento,
   COALESCE(p.correo_electronico, u.correo_electronico) AS correo,
   COALESCE(p.telefono, u.telefono) AS telefono, u.zona, u.estado,
   u.verificado, u.tercero_id AS "terceroId",
   COALESCE(p.documento, t.documento) AS "documentoTecnico",
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
   u.rol_id, r.nombre AS rol
 `;
 
@@ -136,11 +132,12 @@ async function sincronizarRolesExtras(client, usuarioId, extras) {
 
 router.get('/', async (req, res, next) => {
   try {
-<<<<<<< HEAD
     const [usuarios, extras] = await Promise.all([
       pool.query(
         `SELECT ${columnasUsuario} FROM usuarios u
          JOIN roles r ON r.id = u.rol_id
+         LEFT JOIN terceros t ON t.id = u.tercero_id
+         LEFT JOIN personas p ON p.id = u.persona_id
          ORDER BY u.id DESC`,
       ),
       rolesAdicionales(),
@@ -164,6 +161,8 @@ router.get('/buscar-documento', async (req, res, next) => {
       pool.query(
         `SELECT ${columnasUsuario} FROM usuarios u
          JOIN roles r ON r.id = u.rol_id
+         LEFT JOIN terceros t ON t.id = u.tercero_id
+         LEFT JOIN personas p ON p.id = u.persona_id
          WHERE regexp_replace(u.documento_n, '[^0-9a-zA-Z]', '', 'g') = $1
          LIMIT 1`,
         [normalizarDocumento(documento)],
@@ -192,16 +191,6 @@ router.get('/buscar-documento', async (req, res, next) => {
       tercero: terceroResultado.rows[0] || null,
       cliente: clienteResultado.rows[0] || null,
     });
-=======
-    const { rows } = await pool.query(
-      `SELECT ${columnasUsuario} FROM usuarios u
-       JOIN roles r ON r.id = u.rol_id
-       LEFT JOIN terceros t ON t.id = u.tercero_id
-      LEFT JOIN personas p ON p.id = u.persona_id
-      ORDER BY u.id DESC`,
-    );
-    return res.json(rows.map((row) => ({ ...row, ultimoAcceso: 'Sin registro' })));
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
   } catch (error) {
     return next(error);
   }
@@ -211,29 +200,19 @@ router.get('/:id', async (req, res, next) => {
   const id = idValido(req.params.id);
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
   try {
-<<<<<<< HEAD
     const [usuario, extras] = await Promise.all([
       pool.query(
         `SELECT ${columnasUsuario} FROM usuarios u
-         JOIN roles r ON r.id = u.rol_id WHERE u.id = $1`,
+         JOIN roles r ON r.id = u.rol_id
+         LEFT JOIN terceros t ON t.id = u.tercero_id
+         LEFT JOIN personas p ON p.id = u.persona_id
+         WHERE u.id = $1`,
         [id],
       ),
       rolesAdicionales(),
     ]);
     if (!usuario.rows[0]) return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
     return res.json(filaUsuario(usuario.rows[0], extras));
-=======
-    const { rows } = await pool.query(
-      `SELECT ${columnasUsuario} FROM usuarios u
-       JOIN roles r ON r.id = u.rol_id
-       LEFT JOIN terceros t ON t.id = u.tercero_id
-       LEFT JOIN personas p ON p.id = u.persona_id
-       WHERE u.id = $1`,
-      [id],
-    );
-    if (!rows[0]) return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
-    return res.json({ ...rows[0], ultimoAcceso: 'Sin registro' });
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
   } catch (error) {
     return next(error);
   }
@@ -252,46 +231,11 @@ router.post('/', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: 'El rol seleccionado no existe o está inactivo.' });
     }
-<<<<<<< HEAD
     const extras = await resolverRolesExtras(client, datos.roles, rol.id);
     if (extras?.error) {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: extras.error });
     }
-    const documentoDuplicado = await client.query(
-      `SELECT 1 FROM usuarios
-       WHERE regexp_replace(documento_n, '[^0-9a-zA-Z]', '', 'g') = $1
-       LIMIT 1`,
-      [normalizarDocumento(datos.documento)],
-    );
-    if (documentoDuplicado.rows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ mensaje: 'Ya existe un usuario con ese documento.' });
-    }
-    const usuarioDuplicado = await client.query(
-      'SELECT 1 FROM usuarios WHERE lower(usuario) = lower($1) LIMIT 1',
-      [datos.usuario.trim()],
-    );
-    if (usuarioDuplicado.rows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
-    }
-    const passwordHash = await bcrypt.hash(datos.password, 12);
-    const { rows } = await client.query(
-      `INSERT INTO usuarios
-         (nombre_completo, usuario, documento_n, correo_electronico, telefono, zona,
-          password_hash, estado, rol_id)
-       VALUES ($1, $2, $3, lower($4), $5, $6, $7, $8, $9)
-       RETURNING id`,
-      [
-        datos.nombre.trim(), datos.usuario.trim(), datos.documento.trim(),
-        datos.correo.trim(),
-        datos.telefono || null, datos.zona || 'General', passwordHash,
-        datos.estado || 'Activo', rol.id,
-      ],
-    );
-    await sincronizarRolesExtras(client, rows[0].id, extras);
-=======
     const terceroId = datos.tercero_id ? idValido(datos.tercero_id) : null;
     const rolMovil = rol.plataformas?.includes('Móvil') && rol.nombre !== 'Administrador';
     if (rolMovil && !terceroId) {
@@ -321,6 +265,24 @@ router.post('/', async (req, res, next) => {
         await client.query('ROLLBACK');
         return res.status(409).json({ mensaje: 'El perfil técnico ya tiene una cuenta asociada.' });
       }
+    }
+    const documentoDuplicado = await client.query(
+      `SELECT 1 FROM usuarios
+       WHERE regexp_replace(documento_n, '[^0-9a-zA-Z]', '', 'g') = $1
+       LIMIT 1`,
+      [normalizarDocumento(datos.documento)],
+    );
+    if (documentoDuplicado.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'Ya existe un usuario con ese documento.' });
+    }
+    const usuarioDuplicado = await client.query(
+      'SELECT 1 FROM usuarios WHERE lower(usuario) = lower($1) LIMIT 1',
+      [datos.usuario.trim()],
+    );
+    if (usuarioDuplicado.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
     }
     const passwordHash = await bcrypt.hash(datos.password, 12);
     let personaId = null;
@@ -392,7 +354,7 @@ router.post('/', async (req, res, next) => {
         [datos.nombre.trim(), datos.correo.trim(), datos.telefono || null, terceroId],
       );
     }
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+    await sincronizarRolesExtras(client, rows[0].id, extras);
     const usuario = await client.query(
       `SELECT ${columnasUsuario} FROM usuarios u
        JOIN roles r ON r.id = u.rol_id
@@ -436,31 +398,11 @@ router.put('/:id', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: 'El rol seleccionado no existe o está inactivo.' });
     }
-<<<<<<< HEAD
     const extras = await resolverRolesExtras(client, datos.roles, rol.id);
     if (extras?.error) {
       await client.query('ROLLBACK');
       return res.status(400).json({ mensaje: extras.error });
     }
-    const documentoDuplicado = await client.query(
-      `SELECT 1 FROM usuarios
-       WHERE regexp_replace(documento_n, '[^0-9a-zA-Z]', '', 'g') = $1
-         AND id <> $2
-       LIMIT 1`,
-      [normalizarDocumento(datos.documento), id],
-    );
-    if (documentoDuplicado.rows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ mensaje: 'Ya existe otro usuario con ese documento.' });
-    }
-    const usuarioDuplicado = await client.query(
-      'SELECT 1 FROM usuarios WHERE lower(usuario) = lower($1) AND id <> $2 LIMIT 1',
-      [datos.usuario.trim(), id],
-    );
-    if (usuarioDuplicado.rows[0]) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
-=======
     const terceroId = datos.tercero_id ? idValido(datos.tercero_id) : null;
     const rolMovil = rol.plataformas?.includes('Móvil') && rol.nombre !== 'Administrador';
     if (rolMovil && !terceroId) {
@@ -480,6 +422,25 @@ router.put('/:id', async (req, res, next) => {
         await client.query('ROLLBACK');
         return res.status(409).json({ mensaje: 'El perfil técnico ya tiene una cuenta asociada.' });
       }
+    }
+    const documentoDuplicado = await client.query(
+      `SELECT 1 FROM usuarios
+       WHERE regexp_replace(documento_n, '[^0-9a-zA-Z]', '', 'g') = $1
+         AND id <> $2
+       LIMIT 1`,
+      [normalizarDocumento(datos.documento), id],
+    );
+    if (documentoDuplicado.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'Ya existe otro usuario con ese documento.' });
+    }
+    const usuarioDuplicado = await client.query(
+      'SELECT 1 FROM usuarios WHERE lower(usuario) = lower($1) AND id <> $2 LIMIT 1',
+      [datos.usuario.trim(), id],
+    );
+    if (usuarioDuplicado.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'El nombre de usuario ya está en uso.' });
     }
     let personaId = actuales[0].persona_id;
     let documentoPersona = null;
@@ -514,7 +475,6 @@ router.put('/:id', async (req, res, next) => {
         telefono: datos.telefono,
         correo: datos.correo,
       });
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     }
     const esCuentaPrincipal = actuales[0].usuario.toLowerCase() === 'admin';
     if (esCuentaPrincipal && rol.nombre !== 'Administrador') {
@@ -532,31 +492,24 @@ router.put('/:id', async (req, res, next) => {
     const passwordHash = datos.password ? await bcrypt.hash(datos.password, 12) : null;
     const { rows } = await client.query(
       `UPDATE usuarios
-<<<<<<< HEAD
-       SET nombre_completo = $1, usuario = $2, documento_n = $3,
+       SET nombre_completo = $1, usuario = $2,
+           documento_n = COALESCE($3, documento_n),
            correo_electronico = lower($4),
-           telefono = $5, zona = $6, rol_id = $7,
-           password_hash = COALESCE($8, password_hash),
-           estado = COALESCE($9, estado)
-=======
-       SET nombre_completo = $1, usuario = $2, correo_electronico = lower($3),
-           telefono = $4, zona = $5, rol_id = $6, tercero_id = $7,
-           password_hash = COALESCE($8, password_hash),
-           estado = COALESCE($9, estado), persona_id = COALESCE($11, persona_id),
+           telefono = $5, zona = $6, rol_id = $7, tercero_id = $8,
+           password_hash = COALESCE($9, password_hash),
+           estado = COALESCE($10, estado),
+           persona_id = COALESCE($11, persona_id),
            actualizado_en = now()
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
-       WHERE id = $10
+       WHERE id = $12
        RETURNING id`,
       [
-        datos.nombre.trim(), datos.usuario.trim(), datos.documento.trim(),
+        datos.nombre.trim(), datos.usuario.trim(), datos.documento.trim() || null,
         datos.correo.trim(),
         datos.telefono || null, datos.zona || 'General', rol.id,
-        terceroId, passwordHash, datos.estado || null, id, personaId,
+        terceroId, passwordHash, datos.estado || null, personaId, id,
       ],
     );
-<<<<<<< HEAD
     await sincronizarRolesExtras(client, rows[0].id, extras);
-=======
     if (terceroId) {
       await client.query(
         `UPDATE terceros
@@ -565,7 +518,6 @@ router.put('/:id', async (req, res, next) => {
         [datos.nombre.trim(), datos.correo.trim(), datos.telefono || null, terceroId],
       );
     }
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     const usuario = await client.query(
       `SELECT ${columnasUsuario} FROM usuarios u
        JOIN roles r ON r.id = u.rol_id

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import {
   CalendarPlus,
   ChevronsRight,
@@ -8,21 +8,19 @@ import {
   Gauge,
   Handshake,
   LogOut,
+  Moon,
   PackageOpen,
   Scale,
   Shield,
+  Sun,
   UserRoundPlus,
   UsersRound,
   Wrench,
 } from 'lucide-react';
 import { Login } from '../../features/auth/components/Login.jsx';
 import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
-<<<<<<< HEAD
-import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/localStore.js';
-=======
 import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
 import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/sessionStore.js';
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 import { API_SESSION_EXPIRED } from '../../shared/api.js';
 
 // Importación de las vistas
@@ -72,6 +70,7 @@ export function Dashboard() {
   const [seccionActual, setSeccionActual] = useState('panel');
   const [mostrandoSplash, setMostrandoSplash] = useState(false);
   const [mostrarLicencias, setMostrarLicencias] = useState(false);
+  const { theme: tema, toggleTheme } = useContext(ThemeContext);
 
   useEffect(() => {
     if (!mostrandoSplash) return undefined;
@@ -211,35 +210,30 @@ export function Dashboard() {
         boxShadow: '4px 0 20px rgba(0,0,0,0.2)',
         overflow: 'visible',
         zIndex: 10
-<<<<<<< HEAD
-      }}>
-        {/* Pista: avisa que el menú se expande al pasar el cursor */}
-        <span className="mca-sidebar__pista" aria-hidden="true">
-          <ChevronsRight size={16} strokeWidth={2.6} />
-        </span>
-        <div>
-=======
       }}
         onMouseLeave={(event) => {
           event.currentTarget.querySelector(':focus')?.blur();
         }}
       >
+        {/* Pista: pestaña lateral que avisa que el menú se expande al pasar el cursor */}
+        <span className="mca-sidebar__pista" aria-hidden="true">
+          <ChevronsRight size={15} strokeWidth={2.8} />
+          <span className="mca-sidebar__pista-texto">Menú</span>
+        </span>
         <div className="sidebar-scroll mca-sidebar__content">
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
           {/* Header del Logo */}
-          <div className="mca-sidebar__brand" style={{ padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '20px' }}>⚡</span>
-                <h1 className="mca-sidebar__label" style={{ color: 'var(--accent-yellow)', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
-                  Eléctricos MCA
-                </h1>
-              </div>
-              <span className="mca-sidebar__label" style={{ fontSize: '10px', color: 'var(--sidebar-muted)', letterSpacing: '1.2px', fontWeight: '700', display: 'block', marginTop: '4px', textTransform: 'uppercase' }}>
-                Gestión Industrial
-              </span>
+          <div className="mca-sidebar__brand">
+            <div className="mca-sidebar__brand-marca">
+              <span className="mca-sidebar__brand-rayo" aria-hidden="true">⚡</span>
+              <h1 className="mca-sidebar__label" style={{ color: 'var(--accent-yellow)', fontSize: '20px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
+                Eléctricos MCA
+              </h1>
             </div>
-
+            {/* Nombre corto: solo se ve con el menú recogido */}
+            <span className="mca-sidebar__brand-corto" aria-hidden="true">MCA</span>
+            <span className="mca-sidebar__label mca-sidebar__brand-lema" style={{ fontSize: '10px', color: 'var(--sidebar-muted)', letterSpacing: '1.2px', fontWeight: '700', marginTop: '4px', textTransform: 'uppercase' }}>
+              Gestión Industrial
+            </span>
           </div>
 
           {/* Menú Organizado por Secciones */}
@@ -288,57 +282,48 @@ export function Dashboard() {
               </div>
             ))}
           </nav>
-<<<<<<< HEAD
         </div>
 
         {/* Acciones Inferiores y Perfil */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '16px', borderTop: '1px solid var(--sidebar-border)' }}>
+        <div className="mca-sidebar__bottom">
 
           {/* Tarjeta de Usuario Conectado */}
           <div className="mca-sidebar__user" style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            justifyContent: 'space-between', 
             backgroundColor: 'var(--sidebar-user)', 
             padding: '10px 12px', 
             borderRadius: '8px',
             border: '1px solid var(--sidebar-border)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '50%', 
-                backgroundColor: 'var(--accent-yellow)', 
-                color: '#0f172a', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                fontWeight: 'bold', 
-                fontSize: '12px' 
-              }}>
-                {(sesion?.usuario?.nombre || 'Administrador').slice(0, 2).toUpperCase()}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <img
+                src="/avatar-usuario.png"
+                alt=""
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  flex: '0 0 auto',
+                }}
+              />
               <div className="mca-sidebar__label">
                 <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>{sesion?.usuario?.nombre || sesion?.usuario?.usuario}</span>
                 <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>{sesion?.usuario?.rol || 'Administrador'}</span>
               </div>
             </div>
-
-            {/* Botón Salir */}
-=======
-          <div className="mca-sidebar__bottom">
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
-            <button
-              type="button"
-              className="mca-sidebar__licenses"
-              onClick={() => setMostrarLicencias(true)}
-              title="Licencias de software"
-            >
-              <Scale size={17} strokeWidth={1.8} />
-              <span className="mca-sidebar__label">Licencias de software</span>
-            </button>
           </div>
+
+          <button
+            type="button"
+            className="mca-sidebar__licenses"
+            onClick={() => setMostrarLicencias(true)}
+            title="Licencias de software"
+          >
+            <Scale size={17} strokeWidth={1.8} />
+            <span className="mca-sidebar__label">Licencias de software</span>
+          </button>
         </div>
       </aside>
 
@@ -358,7 +343,7 @@ export function Dashboard() {
             </button>
             <div className="mca-topbar__profile">
               <div className="mca-topbar__avatar">
-                {(sesion?.usuario?.nombre || 'Administrador').slice(0, 2).toUpperCase()}
+                <img src="/avatar-usuario.png" alt="" />
               </div>
               <div className="mca-topbar__identity">
                 <strong>{sesion?.usuario?.nombre || sesion?.usuario?.usuario || 'Administrador'}</strong>

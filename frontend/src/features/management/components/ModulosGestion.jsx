@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Factory,
   Handshake,
   House,
   Mail,
@@ -37,12 +38,14 @@ import {
   Panel,
   SearchInput,
   Toast,
+  resumenErroresFormulario,
   useToast,
 } from '../../../shared/components/ui.jsx';
 import { formatearFecha } from '../../../shared/services/base.js';
 import {
   TIPOS_PERSONA,
   TIPOS_DOCUMENTO,
+  TIPOS_PROPIEDAD,
   normalizarCliente,
 } from '../../../shared/services/clientesService.js';
 import {
@@ -65,7 +68,6 @@ const TONO_PRIORIDAD = {
   Alta: 'warning',
 };
 
-<<<<<<< HEAD
 const ICONO_PROPIEDAD = {
   Residencial: House,
   Comercial: Building2,
@@ -101,24 +103,6 @@ const FORMULARIO_CLIENTE = (cliente = null) => {
     empleadoNombre: cliente?.empleadoNombre || '',
   };
 };
-=======
-const FORMULARIO_CLIENTE = (cliente = null) => ({
-  tipoPersona: cliente?.tipoCliente || 'Natural',
-  nombre: cliente?.nombre || '',
-  documento: cliente?.documento || '',
-  contacto: cliente?.contacto || '',
-  telefono: cliente?.telefono || '',
-  correo: cliente?.correo || '',
-  direccion: cliente?.direccion || '',
-  municipio: cliente?.municipio || '',
-  departamento: cliente?.departamento || '',
-  estado: cliente?.estado || 'Activo',
-  // Un empleado de la empresa también puede registrar compras: se vincula al tercero.
-  terceroId: cliente?.terceroId == null ? '' : String(cliente.terceroId),
-  esEmpleado: Boolean(cliente?.esEmpleado),
-  empleadoNombre: cliente?.empleadoNombre || '',
-});
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 
 const FORMULARIO_TECNICO = (tecnico = null, rolMovilDefault = '') => ({
   nombre: tecnico?.nombre || '',
@@ -250,7 +234,6 @@ export function Clientes() {
   };
 
   const setCampo = (campo, valor) => {
-<<<<<<< HEAD
     setFormulario((actual) => {
       const siguiente = { ...actual, [campo]: valor };
       // Si el dueño es persona natural, la persona de contacto es él mismo.
@@ -259,13 +242,6 @@ export function Clientes() {
       }
       return siguiente;
     });
-=======
-    setFormulario((actual) => ({
-      ...actual,
-      [campo]: valor,
-      ...(campo === 'tipoPersona' && valor !== actual.tipoPersona ? { documento: '' } : {}),
-    }));
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     setErrores((actuales) => ({ ...actuales, [campo]: undefined }));
   };
 
@@ -320,14 +296,10 @@ export function Clientes() {
       terceroId: valor || '',
       esEmpleado: Boolean(tecnico),
       empleadoNombre: tecnico?.nombre || '',
-<<<<<<< HEAD
       // El empleado es persona natural: cédula, nombre propio y residencia.
       tipoCliente: tecnico ? 'Natural' : actual.tipoCliente,
       tipoPropiedad: tecnico ? 'Residencial' : actual.tipoPropiedad,
       tipoDocumento: tecnico ? 'Cédula' : actual.tipoDocumento,
-=======
-      tipoPersona: tecnico ? 'Natural' : actual.tipoPersona,
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
       documento: tecnico ? tecnico.documento : actual.documento,
       nombre: tecnico ? tecnico.nombre : actual.nombre,
       telefono: tecnico && !actual.telefono ? tecnico.telefono : actual.telefono,
@@ -345,8 +317,11 @@ export function Clientes() {
     if (!formulario.nombre.trim()) {
       nuevosErrores.nombre = 'Escribe el nombre o razón social.';
     }
+    if (!formulario.tipoDocumento.trim()) {
+      nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
+    }
     if (!formulario.documento.trim()) {
-      nuevosErrores.documento = 'Escribe el número de la cédula o del NIT.';
+      nuevosErrores.documento = 'Escribe el número del documento o NIT.';
     }
     if (!formulario.telefono.trim()) {
       nuevosErrores.telefono = 'Escribe el número de la persona de contacto.';
@@ -356,28 +331,23 @@ export function Clientes() {
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
+      notify('warning', 'Mensaje flotante de validación', resumenErroresFormulario(nuevosErrores));
       return;
     }
 
     try {
-      const esJuridica = formulario.tipoPersona === 'Jurídico';
+      const tipoPropiedad = TIPOS_PROPIEDAD.find(
+        (tipo) => tipo.nombre === formulario.tipoPropiedad,
+      ) || TIPOS_PROPIEDAD[0];
       const payload = {
         nombre_razon_social: formulario.nombre.trim(),
         documento_nit: formulario.documento.trim(),
-<<<<<<< HEAD
         tipo_cliente: formulario.tipoCliente,
         tipo_documento: formulario.tipoDocumento,
         tercero_id: Number(formulario.terceroId) > 0 ? Number(formulario.terceroId) : null,
         es_empleado: formulario.esEmpleado === true || Number(formulario.terceroId) > 0,
         es_dueno: formulario.esDueno === true,
         tipo_propiedad_id: tipoPropiedad.id,
-=======
-        tipo_cliente: formulario.tipoPersona,
-        tipo_documento: esJuridica ? 'NIT' : 'Cédula',
-        tercero_id: Number(formulario.terceroId) > 0 ? Number(formulario.terceroId) : null,
-        es_empleado: formulario.esEmpleado === true || Number(formulario.terceroId) > 0,
-        tipo_propiedad_id: null,
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
         estado: formulario.estado,
         contacto: formulario.contacto.trim()
           || (formulario.esDueno && formulario.tipoCliente === 'Natural' ? formulario.nombre.trim() : ''),
@@ -397,8 +367,8 @@ export function Clientes() {
         'success',
         formulario.id ? 'Cliente actualizado' : 'Cliente creado',
         guardado.esEmpleado
-          ? `${guardado.nombre} · Persona ${guardado.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'} · registrado como empleado-cliente.`
-          : `${guardado.nombre} · Persona ${guardado.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'}.`,
+          ? `${guardado.nombre} · ${guardado.tipoPropiedad} · registrado como empleado-cliente.`
+          : `${guardado.nombre} · ${guardado.tipoPropiedad}.`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -414,15 +384,11 @@ export function Clientes() {
           nombre_razon_social: cliente.nombre,
           documento_nit: cliente.documento,
           tipo_cliente: cliente.tipoCliente,
-          tipo_documento: cliente.tipoCliente === 'Jurídico' ? 'NIT' : 'Cédula',
+          tipo_documento: cliente.tipoDocumento,
           tercero_id: Number(cliente.terceroId) > 0 ? Number(cliente.terceroId) : null,
           es_empleado: cliente.esEmpleado,
-<<<<<<< HEAD
           es_dueno: cliente.esDueno === true,
           tipo_propiedad_id: TIPOS_PROPIEDAD.find((tipo) => tipo.nombre === cliente.tipoPropiedad)?.id,
-=======
-          tipo_propiedad_id: null,
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
           estado: cliente.estado === 'Activo' ? 'Inactivo' : 'Activo',
           contacto: cliente.contacto,
           telefono: cliente.telefono,
@@ -485,24 +451,14 @@ export function Clientes() {
         <KpiCard
           label="Personas naturales"
           value={resumen.naturales}
-<<<<<<< HEAD
           hint="Cédula o pasaporte"
-=======
-          hint="Identificadas con cédula"
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
           icon={House}
           tone="info"
         />
         <KpiCard
-<<<<<<< HEAD
           label="Jurídicos"
           value={resumen.juridicos}
           hint="Empresas con NIT"
-=======
-          label="Personas jurídicas"
-          value={resumen.juridicos}
-          hint="Identificadas con NIT"
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
           icon={Building2}
           tone="indigo"
         />
@@ -523,34 +479,23 @@ export function Clientes() {
               style={{ width: 170 }}
               value={filtroTipo}
               onChange={(evento) => setFiltroTipo(evento.target.value)}
-<<<<<<< HEAD
               aria-label="Filtrar clientes por tipo"
             >
               <option value="Todos">Todos los tipos</option>
               <option value="Natural">Naturales</option>
               <option value="Jurídico">Jurídicos</option>
-=======
-              aria-label="Filtrar clientes por tipo de persona"
-            >
-              <option value="Todos">Todos los tipos</option>
-              {TIPOS_PERSONA.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo === 'Jurídico' ? 'Jurídica' : tipo}
-                </option>
-              ))}
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             </select>
           </>
         }
         flush
       >
-        <div className="mca-table-wrap mca-table-wrap--fit">
-          <table className="mca-table mca-table--fit mca-table--clientes">
+        <div className="mca-table-wrap">
+          <table className="mca-table">
             <thead>
               <tr>
-                <th>Cédula / NIT</th>
+                <th>Tipo doc. / NIT</th>
                 <th>Razón social / Nombre</th>
-                <th>Tipo de persona</th>
+                <th>Tipo</th>
                 <th>Persona de contacto</th>
                 <th>Nº de contacto</th>
                 <th>Departamento / Municipio</th>
@@ -576,16 +521,16 @@ export function Clientes() {
                 </tr>
               ) : (
                 filtrados.map((cliente) => {
-                  const Icono = cliente.tipoCliente === 'Natural' ? House : Building2;
+                  const Icono = ICONO_PROPIEDAD[cliente.tipoPropiedad] || Building2;
                   return (
                     <tr key={cliente.id} className={claseFilaEstado(cliente.estado, 'usuario')}>
-                      <td className="is-nowrap" data-label="Documento">
+                      <td className="is-nowrap">
                         <div>{cliente.tipoDocumento || '—'}</div>
                         <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
                           {cliente.documento || '—'}
                         </div>
                       </td>
-                      <td data-label="Razón social / Nombre">
+                      <td>
                         <div className="mca-cell-title">
                           <div className="mca-cell-icon">
                             <Icono size={15} strokeWidth={1.9} />
@@ -593,7 +538,7 @@ export function Clientes() {
                           <div>
                             <div className="is-primary">{cliente.nombre}</div>
                             <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
-                              {cliente.tipoCliente === 'Jurídico' ? 'Persona jurídica' : 'Persona natural'}
+                              {cliente.tipoCliente}
                             </div>
                             {cliente.esEmpleado && (
                               <Badge tone="indigo" className="mca-badge--inline">Es empleado</Badge>
@@ -604,21 +549,15 @@ export function Clientes() {
                           </div>
                         </div>
                       </td>
-<<<<<<< HEAD
                       <td>
                         <Badge tone={cliente.tipoCliente === 'Natural' ? 'info' : 'indigo'}>
                           {cliente.tipoCliente}
-=======
-                      <td data-label="Tipo">
-                        <Badge tone={cliente.tipoCliente === 'Natural' ? 'info' : 'indigo'}>
-                          {cliente.tipoCliente === 'Jurídico' ? 'Jurídica' : 'Natural'}
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
                         </Badge>
                         <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 4 }}>
                           {cliente.tipoPropiedad}
                         </div>
                       </td>
-                      <td data-label="Persona de contacto">
+                      <td>
                         <div>{cliente.contacto || '—'}</div>
                         {cliente.correo && (
                           <div className="mca-soft" style={{ fontSize: 10.5, marginTop: 2 }}>
@@ -626,13 +565,13 @@ export function Clientes() {
                           </div>
                         )}
                       </td>
-                      <td className="is-nowrap" data-label="Teléfono">
+                      <td className="is-nowrap">
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Phone size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>{cliente.telefono || '—'}</span>
                         </div>
                       </td>
-                      <td data-label="Departamento / Municipio">
+                      <td>
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>
@@ -641,7 +580,7 @@ export function Clientes() {
                           </span>
                         </div>
                       </td>
-                      <td data-label="Estado">
+                      <td>
                         <EstadoToggle
                           estado={cliente.estado}
                           estados={ESTADOS.usuario}
@@ -649,7 +588,7 @@ export function Clientes() {
                           onClick={() => cambiarEstado(cliente)}
                         />
                       </td>
-                      <td className="mca-center" data-label="Acciones">
+                      <td className="mca-center">
                         <div className="mca-row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
                           <AccionesFila
                             onVer={() => setDetalleId(cliente.id)}
@@ -675,15 +614,17 @@ export function Clientes() {
         icon={Building2}
         size="md"
         footer={
-          <Button variant="primary" type="submit" form="form-cliente">
-            {formulario?.id ? 'Guardar cambios' : 'Crear cliente'}
-          </Button>
+          <>
+            <Button onClick={cerrarFormulario}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-cliente">
+              {formulario?.id ? 'Guardar cambios' : 'Crear cliente'}
+            </Button>
+          </>
         }
       >
         {formulario && (
           <form id="form-cliente" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
-<<<<<<< HEAD
               label="Tipo de cliente"
               required
               full
@@ -705,28 +646,10 @@ export function Clientes() {
                 >
                   Jurídico
                 </button>
-=======
-              label="Tipo de persona"
-              full
-              tooltip="Una persona natural se identifica con cédula; una persona jurídica se identifica con NIT."
-            >
-              <div className="mca-row" style={{ gap: 8 }}>
-                {TIPOS_PERSONA.map((tipo) => (
-                  <Button
-                    key={tipo}
-                    size="sm"
-                    variant={formulario.tipoPersona === tipo ? 'primary' : 'ghost'}
-                    onClick={() => setCampo('tipoPersona', tipo)}
-                  >
-                    {tipo === 'Jurídico' ? 'Jurídica' : tipo}
-                  </Button>
-                ))}
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
               </div>
             </Field>
 
             <Field
-<<<<<<< HEAD
               label="Tipo de documento"
               required
               error={errores.tipoDocumento}
@@ -757,32 +680,18 @@ export function Clientes() {
                 formulario.tipoCliente === 'Jurídico'
                   ? 'Número completo del NIT, incluyendo el dígito de verificación.'
                   : 'Número completo del documento de identidad, sin puntos de más.'
-=======
-              label={formulario.tipoPersona === 'Natural' ? 'Número de cédula' : 'NIT'}
-              required
-              error={errores.documento}
-              tooltip={
-                formulario.tipoPersona === 'Natural'
-                  ? 'Número de cédula de la persona natural.'
-                  : 'Número completo del NIT del cliente, incluyendo el dígito de verificación.'
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
               }
             >
               <input
                 className="mca-input"
                 value={formulario.documento}
                 onChange={(evento) => setCampo('documento', evento.target.value)}
-<<<<<<< HEAD
                 placeholder={formulario.tipoCliente === 'Jurídico' ? '900.123.456-7' : '1.020.304.050'}
                 autoFocus
-=======
-                placeholder={formulario.tipoPersona === 'Natural' ? '1.020.304.050' : '900.123.456-7'}
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
               />
             </Field>
 
             <Field
-<<<<<<< HEAD
               label={formulario.tipoCliente === 'Jurídico' ? 'Razón social' : 'Nombre completo'}
               required
               error={errores.nombre}
@@ -790,27 +699,13 @@ export function Clientes() {
                 formulario.tipoCliente === 'Jurídico'
                   ? 'Razón social registrada de la empresa, tal como aparece en el RUT.'
                   : 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
-=======
-              label={formulario.tipoPersona === 'Natural' ? 'Nombre completo' : 'Razón social'}
-              required
-              error={errores.nombre}
-              tooltip={
-                formulario.tipoPersona === 'Natural'
-                  ? 'Nombre completo del cliente, tal como aparece en su documento de identidad.'
-                  : 'Razón social registrada de la empresa, tal como aparece en el RUT.'
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
               }
             >
               <input
                 className="mca-input"
                 value={formulario.nombre}
                 onChange={(evento) => setCampo('nombre', evento.target.value)}
-<<<<<<< HEAD
                 placeholder={formulario.tipoCliente === 'Jurídico' ? 'Empresa S.A.S.' : 'Ana María Gómez'}
-=======
-                placeholder={formulario.tipoPersona === 'Natural' ? 'Ana María Gómez' : 'Empresa S.A.S.'}
-                autoFocus
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
               />
             </Field>
 
@@ -996,7 +891,7 @@ export function Clientes() {
         title={clienteDetalle?.nombre}
         subtitle={
           clienteDetalle
-            ? `${clienteDetalle.documento} · Persona ${clienteDetalle.tipoCliente === 'Jurídico' ? 'jurídica' : 'natural'}`
+            ? `${clienteDetalle.documento} · ${clienteDetalle.tipoPropiedad}`
             : ''
         }
         icon={Building2}
@@ -1017,15 +912,10 @@ export function Clientes() {
             <DetailItem label="Tipo de documento">{clienteDetalle.tipoDocumento || '—'}</DetailItem>
             <DetailItem label="Documento / NIT">{clienteDetalle.documento || '—'}</DetailItem>
             <DetailItem label="Razón social / Nombre">{clienteDetalle.nombre || '—'}</DetailItem>
-<<<<<<< HEAD
             <DetailItem label="Tipo de cliente">{clienteDetalle.tipoCliente}</DetailItem>
             <DetailItem label="Tipo de propiedad">{clienteDetalle.tipoPropiedad}</DetailItem>
             <DetailItem label="¿Es el dueño?">
               {clienteDetalle.esDueno ? 'Sí, el solicitante es el dueño' : 'No'}
-=======
-            <DetailItem label="Tipo de persona">
-              {clienteDetalle.tipoCliente === 'Jurídico' ? 'Jurídica' : 'Natural'}
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             </DetailItem>
             <DetailItem label="Empleado">
               {clienteDetalle.esEmpleado
@@ -1076,25 +966,16 @@ export function GestionTerceros() {
     loading: cargandoTecnicos,
     reload: cargarTecnicos,
   } = useApiData(async () => {
-<<<<<<< HEAD
-    const [tecnicosApi, ordenesApi, clientesApi] = await Promise.all([
+    const [tecnicosApi, ordenesApi, clientesApi, rolesApi] = await Promise.all([
       apiRequest('/terceros'),
       apiRequest('/ordenes-servicio'),
       apiRequest('/clientes'),
-    ]);
-    return {
-      tecnicos: tecnicosApi.map(normalizarTecnico),
-      clientes: clientesApi.map(normalizarCliente),
-=======
-    const [tecnicosApi, ordenesApi, rolesApi] = await Promise.all([
-      apiRequest('/terceros'),
-      apiRequest('/ordenes-servicio'),
       apiRequest('/roles'),
     ]);
     return {
       tecnicos: tecnicosApi.map(normalizarTecnico),
+      clientes: clientesApi.map(normalizarCliente),
       roles: rolesApi,
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
       actividades: ordenesApi.map((orden) => ({
         id: orden.id,
         tecnicoId: orden.tercero_id,
@@ -1107,11 +988,7 @@ export function GestionTerceros() {
         cliente: orden.cliente || '',
       })),
     };
-<<<<<<< HEAD
-  }, { tecnicos: [], clientes: [], actividades: [] });
-=======
-  }, { tecnicos: [], actividades: [], roles: [] });
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+  }, { tecnicos: [], clientes: [], actividades: [], roles: [] });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
@@ -1201,19 +1078,15 @@ export function GestionTerceros() {
 
   const abrirEdicion = (tecnico) => {
     setDetalleId(null);
-<<<<<<< HEAD
+    const rolDefault = rolesMoviles.find((rol) => rol.nombre === 'Técnico')?.id
+      || rolesMoviles[0]?.id
+      || '';
     setFormulario({
-      ...FORMULARIO_TECNICO(tecnico),
+      ...FORMULARIO_TECNICO(tecnico, rolDefault),
       id: tecnico.id,
       // Casilla «¿Es cliente?»: refleja si ya tiene ficha de cliente vinculada.
       esCliente: Boolean(clienteDeTercero.has(String(tecnico.id))),
     });
-=======
-    const rolDefault = rolesMoviles.find((rol) => rol.nombre === 'Técnico')?.id
-      || rolesMoviles[0]?.id
-      || '';
-    setFormulario({ ...FORMULARIO_TECNICO(tecnico, rolDefault), id: tecnico.id });
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     setErrores({});
   };
 
@@ -1312,11 +1185,7 @@ export function GestionTerceros() {
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
-<<<<<<< HEAD
-        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'}.${vinculoCliente}`,
-=======
-        `${guardado.nombre} · acceso móvil: ${guardado.usuario || formulario.usuario} (${guardado.rol || 'rol asignado'}).`,
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'} · acceso móvil: ${guardado.usuario || formulario.usuario} (${guardado.rol || 'rol asignado'}).${vinculoCliente}`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -1572,20 +1441,7 @@ export function GestionTerceros() {
                           <div className="is-primary">{tecnico.nombre}</div>
                         </div>
                       </td>
-<<<<<<< HEAD
-                      <td className="is-nowrap">
-=======
-                      <td data-label="Departamento / Municipio">
-                        <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                          <MapPin size={13} strokeWidth={1.9} className="mca-soft" />
-                          <span>
-                            {tecnico.departamento || '—'}
-                            {tecnico.municipio ? ` · ${tecnico.municipio}` : ''}
-                          </span>
-                        </div>
-                      </td>
                       <td className="is-nowrap" data-label="Teléfono">
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
                         <div className="mca-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <Phone size={13} strokeWidth={1.9} className="mca-soft" />
                           <span>{tecnico.telefono || '—'}</span>
@@ -1602,7 +1458,6 @@ export function GestionTerceros() {
                           {asignados} {asignados === 1 ? 'servicio' : 'servicios'}
                         </Badge>
                       </td>
-<<<<<<< HEAD
                       <td>
                         {clienteDeTercero.has(String(tecnico.id)) ? (
                           <Badge tone="success">Es cliente</Badge>
@@ -1617,10 +1472,7 @@ export function GestionTerceros() {
                           </Button>
                         )}
                       </td>
-                      <td>
-=======
                       <td data-label="Estado">
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
                         <EstadoToggle
                           estado={tecnico.estado}
                           estados={ESTADOS.usuario}

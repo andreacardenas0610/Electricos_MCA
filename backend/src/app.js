@@ -56,11 +56,7 @@ function esOrigenDeDesarrollo(origin) {
 
 app.use(cors({
   origin(origin, callback) {
-<<<<<<< HEAD
-    if (!origin || allowedOrigins.includes(origin) || esOrigenDeDesarrollo(origin)) {
-=======
-    if (!origin || allowedOrigins.has(origin)) {
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
+    if (!origin || allowedOrigins.has(origin) || esOrigenDeDesarrollo(origin)) {
       return callback(null, true);
     }
 

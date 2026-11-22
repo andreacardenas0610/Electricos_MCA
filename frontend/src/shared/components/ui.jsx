@@ -1,23 +1,18 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
   Info,
-  Moon,
   Search,
-  Sun,
   X,
   XCircle,
 } from 'lucide-react';
-import { ThemeContext } from '../context/ThemeContext.jsx';
-
 export function PageShell({ children, className = '' }) {
   return <div className={`mca-page ${className}`.trim()}>{children}</div>;
 }
 
 export function PageHeader({ title, subtitle, icon: Icon, eyebrow, actions }) {
-  const { theme, toggleTheme } = useContext(ThemeContext);
   return (
     <header className="mca-page-header">
       <div>
@@ -36,30 +31,6 @@ export function PageHeader({ title, subtitle, icon: Icon, eyebrow, actions }) {
       </div>
       <div className="mca-page-actions">
         {actions}
-        <div className="mca-theme-switch" role="group" aria-label="Tema de la interfaz">
-          <button
-            type="button"
-            className={theme === 'light' ? 'is-active' : ''}
-            onClick={() => {
-              if (theme !== 'light') toggleTheme();
-            }}
-            title="Modo claro"
-            aria-pressed={theme === 'light'}
-          >
-            <Sun size={14} strokeWidth={2.1} /> Claro
-          </button>
-          <button
-            type="button"
-            className={theme === 'dark' ? 'is-active' : ''}
-            onClick={() => {
-              if (theme !== 'dark') toggleTheme();
-            }}
-            title="Modo oscuro"
-            aria-pressed={theme === 'dark'}
-          >
-            <Moon size={14} strokeWidth={2.1} /> Oscuro
-          </button>
-        </div>
       </div>
     </header>
   );
@@ -463,6 +434,14 @@ export function useToast() {
   }, []);
 
   return { toast, notify, close };
+}
+
+// Une los mensajes de validación pendientes para el toast flotante de cada formulario.
+export function resumenErroresFormulario(errores = {}) {
+  const pendientes = Object.values(errores).flat().filter(Boolean);
+  return pendientes.length
+    ? `Completa los mensajes obligatorios: ${pendientes.join(' ')}`
+    : '';
 }
 
 export function Combobox({

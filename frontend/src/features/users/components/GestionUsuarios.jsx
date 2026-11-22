@@ -48,7 +48,6 @@ const TONO_ROL = {
   Operario: 'neutral',
 };
 
-<<<<<<< HEAD
 const FORMULARIO_USUARIO = (usuario = null) => {
   // La cuenta puede tener varios roles: el primero de la lista es el principal.
   const roles = usuario?.roles?.length
@@ -60,6 +59,7 @@ const FORMULARIO_USUARIO = (usuario = null) => {
     usuario: usuario?.usuario || '',
     correo: usuario?.correo || '',
     telefono: usuario?.telefono || '',
+    terceroId: usuario?.terceroId || '',
     rol: roles[0] || 'Operario',
     roles,
     zona: usuario?.zona || 'General',
@@ -67,19 +67,6 @@ const FORMULARIO_USUARIO = (usuario = null) => {
     confirmar: '',
   };
 };
-=======
-const FORMULARIO_USUARIO = (usuario = null) => ({
-  nombre: usuario?.nombre || '',
-  usuario: usuario?.usuario || '',
-  correo: usuario?.correo || '',
-  telefono: usuario?.telefono || '',
-  terceroId: usuario?.terceroId || '',
-  rol: usuario?.rol || 'Operario',
-  zona: usuario?.zona || 'General',
-  password: '',
-  confirmar: '',
-});
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
 
 export function GestionUsuarios() {
   const {
@@ -247,13 +234,11 @@ export function GestionUsuarios() {
     if (formulario.password !== formulario.confirmar) {
       nuevosErrores.confirmar = 'Las contraseñas no coinciden.';
     }
-<<<<<<< HEAD
     if (!formulario.roles?.length) {
       nuevosErrores.roles = 'Selecciona al menos un rol para la cuenta.';
-=======
+    }
     if (formulario.rol === 'Técnico' && !formulario.terceroId) {
       nuevosErrores.terceroId = 'Selecciona el perfil del técnico.';
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
@@ -489,8 +474,7 @@ export function GestionUsuarios() {
         }
       >
         {formulario && (
-<<<<<<< HEAD
-          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar}>
+          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar} noValidate>
             <Field
               label="Cédula"
               required
@@ -513,9 +497,6 @@ export function GestionUsuarios() {
                 </Button>
               </div>
             </Field>
-=======
-          <form id="form-usuario" className="mca-form-grid" onSubmit={guardar} noValidate>
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             <Field label="Nombre completo" required error={errores.nombre}>
               <input
                 className="mca-input"
@@ -552,7 +533,6 @@ export function GestionUsuarios() {
                 placeholder="310 555 0000"
               />
             </Field>
-<<<<<<< HEAD
             <Field
               label="Roles"
               required
@@ -582,29 +562,14 @@ export function GestionUsuarios() {
                         )}
                       </span>
                       <span className="mca-check__meta">
-                        {rol.descripcion || rol.codigo || ''}
+                        {rol.estado === 'Inactivo'
+                          ? 'Inactivo'
+                          : (rol.descripcion || rol.codigo || '')}
                       </span>
                     </label>
                   );
                 })}
               </div>
-=======
-            <Field label="Rol" required hint="Define los permisos del usuario.">
-              <select
-                className="mca-select"
-                value={formulario.rol}
-                onChange={(evento) => {
-                  setCampo('rol', evento.target.value);
-                  if (evento.target.value !== 'Técnico') setCampo('terceroId', '');
-                }}
-              >
-                {rolesDisponibles.map((rol) => (
-                  <option key={rol.nombre} value={rol.nombre}>
-                    {rol.nombre}{rol.estado === 'Inactivo' ? ' (inactivo)' : ''}
-                  </option>
-                ))}
-              </select>
->>>>>>> e427bd1c3ca2c661480a0d7f15ca33a29dffa92d
             </Field>
             {formulario.rol === 'Técnico' && (
               <Field
