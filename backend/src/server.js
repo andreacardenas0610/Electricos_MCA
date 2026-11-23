@@ -1,5 +1,11 @@
+import path from 'node:path';
 import dotenv from 'dotenv';
+
 dotenv.config();
+// Respaldo: si alguna variable (por ejemplo el correo) quedó en el .env de la
+// raíz del repositorio en lugar de backend/.env, también se tiene en cuenta.
+// Las variables de backend/.env conservan prioridad porque dotenv no sobreescribe.
+dotenv.config({ path: path.resolve(import.meta.dirname, '../../.env') });
 
 import app from './app.js';
 import { pool } from './db.js';
