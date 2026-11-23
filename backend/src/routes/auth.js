@@ -2,9 +2,9 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 import { pool } from '../db.js';
 import { correoValido, textoValido } from '../utils/validacion.js';
+import { configuracionCorreo, enviarCorreo } from '../utils/correo.js';
 
 const router = Router();
 
@@ -21,12 +21,33 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function origenFrontend() {
-  const origenes = String(process.env.FRONTEND_URL || 'http://localhost:5173')
+function esOrigenPrivado(origin) {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (!['http:', 'https:'].includes(protocol)) return false;
+    return hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      || /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+      || /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
+// El enlace debe abrir el frontend desde donde se pidió la recuperación (localhost,
+// la IP de la red o el dominio de FRONTEND_URL), no siempre localhost.
+function origenFrontend(req) {
+  const configurados = String(process.env.FRONTEND_URL || '')
     .split(',')
     .map((item) => item.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  return origenes[0] || 'http://localhost:5173';
+
+  const origenPeticion = req?.headers?.origin || '';
+  if (esOrigenPrivado(origenPeticion)) return new URL(origenPeticion).origin;
+
+  return configurados[0] || 'http://localhost:5173';
 }
 
 function puedeSolicitarRecuperacion(clave) {
@@ -72,36 +93,8 @@ function construirCorreoVerificacion(nombre, enlace) {
   };
 }
 
-async function enviarCorreo(destinatario, subject, text, enlace) {
-  if (!process.env.SMTP_HOST && !process.env.SMTP_SERVICE) {
-    if (process.env.NODE_ENV === 'production') {
-      const error = new Error('El envío de correo no está configurado.');
-      error.status = 503;
-      throw error;
-    }
-    console.info(`[auth] SMTP no configurado. Enlace de desarrollo: ${enlace}`);
-    return;
-  }
-
-  const transporte = nodemailer.createTransport(
-    process.env.SMTP_SERVICE
-      ? { service: process.env.SMTP_SERVICE, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }
-      : {
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      },
-  );
-  await transporte.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: destinatario,
-    subject,
-    text,
-  });
+async function enviarCorreoCuenta(destinatario, subject, text) {
+  await enviarCorreo({ destinatario, subject, text });
 }
 
 async function crearToken(client, usuarioId, proposito, vigenciaMs) {
@@ -120,13 +113,31 @@ async function crearToken(client, usuarioId, proposito, vigenciaMs) {
   return token;
 }
 
-async function enviarEnlaceCuenta(usuario, tipo, token) {
+async function enviarEnlaceCuenta(usuario, tipo, token, req) {
   const esVerificacion = tipo === 'verificacion';
-  const enlace = `${origenFrontend()}/?${esVerificacion ? 'verificar' : 'recuperar'}=${encodeURIComponent(token)}`;
+  const enlace = `${origenFrontend(req)}/?${esVerificacion ? 'verificar' : 'recuperar'}=${encodeURIComponent(token)}`;
   const mensaje = esVerificacion
     ? construirCorreoVerificacion(usuario.nombre_completo, enlace)
     : construirCorreoRecuperacion(usuario.nombre_completo, enlace);
-  await enviarCorreo(usuario.correo_electronico, mensaje.subject, mensaje.text, enlace);
+
+  // Sin proveedor de correo el servidor no puede enviar nada: en desarrollo se
+  // devuelve el enlace para poder probar el resto del flujo; en producción es un error.
+  if (!configuracionCorreo().configurado) {
+    if (process.env.NODE_ENV === 'production') {
+      const error = new Error('El envío de correo no está configurado en el servidor.');
+      error.status = 503;
+      throw error;
+    }
+    console.info('[auth] Correo no configurado. Enlace de desarrollo generado.');
+    return { enlace, enviado: false };
+  }
+
+  await enviarCorreo({
+    destinatario: usuario.correo_electronico,
+    subject: mensaje.subject,
+    text: mensaje.text,
+  });
+  return { enlace, enviado: true };
 }
 
 router.post('/login', async (req, res, next) => {
@@ -276,9 +287,10 @@ router.post('/registro', async (req, res, next) => {
     token = await crearToken(client, cuenta.id, 'verificacion', VIGENCIA_VERIFICACION_MS);
     await client.query('COMMIT');
 
-    await enviarEnlaceCuenta(cuenta, 'verificacion', token);
+    const envio = await enviarEnlaceCuenta(cuenta, 'verificacion', token, req);
     return res.status(202).json({
       mensaje: 'Cuenta creada. Revisa tu correo para verificarla antes de iniciar sesión.',
+      ...(envio.enviado ? {} : { enlaceDesarrollo: envio.enlace, correoConfigurado: false }),
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -352,22 +364,35 @@ router.post('/recuperar', async (req, res, next) => {
     );
     const cuenta = rows[0];
 
-    if (cuenta && cuenta.estado === 'Activo' && cuenta.verificado && cuenta.correo_electronico) {
+    // La verificación del correo no bloquea la recuperación: el enlace va justamente
+    // al correo registrado y sirve para confirmar que la persona lo controla.
+    let envio = null;
+    if (cuenta && cuenta.estado === 'Activo' && cuenta.correo_electronico) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         const token = await crearToken(client, cuenta.id, 'recuperacion', VIGENCIA_RECUPERACION_MS);
         await client.query('COMMIT');
-        await enviarEnlaceCuenta(cuenta, 'recuperacion', token);
+        envio = await enviarEnlaceCuenta(cuenta, 'recuperacion', token, req);
       } catch (error) {
         await client.query('ROLLBACK');
+        // Un fallo del proveedor de correo debe verse: si no, la persona cree que
+        // el enlace salió y se queda esperando un mensaje que nunca llegará.
+        if (!error.status) {
+          error.status = 502;
+          error.message = 'No pudimos enviar el correo de recuperación. Revisa la configuración de correo del servidor.';
+        }
         return next(error);
       } finally {
         client.release();
       }
     }
 
-    return res.json({ mensaje: MENSAJE_RECUPERACION });
+    return res.json({
+      mensaje: MENSAJE_RECUPERACION,
+      // Solo en desarrollo y sin proveedor de correo: permite continuar el flujo.
+      ...(envio && !envio.enviado ? { enlaceDesarrollo: envio.enlace, correoConfigurado: false } : {}),
+    });
   } catch (error) {
     return next(error);
   }

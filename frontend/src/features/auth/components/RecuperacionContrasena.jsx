@@ -18,6 +18,7 @@ export function RecuperacionContrasena({ onBack, tokenInicial = '' }) {
   const [password, setPassword] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [aviso, setAviso] = useState(null);
+  const [enlaceDesarrollo, setEnlaceDesarrollo] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   const solicitar = async (evento) => {
@@ -35,6 +36,9 @@ export function RecuperacionContrasena({ onBack, tokenInicial = '' }) {
         body: { identificador: identificador.trim() },
       });
       setAviso({ tipo: 'success', texto: resultado.mensaje });
+      // Sin proveedor de correo configurado, el servidor entrega el enlace para
+      // terminar la prueba del flujo en desarrollo.
+      setEnlaceDesarrollo(resultado.enlaceDesarrollo || '');
       setPaso(2);
     } catch (error) {
       setAviso({ tipo: 'error', texto: error.message });
@@ -143,6 +147,17 @@ export function RecuperacionContrasena({ onBack, tokenInicial = '' }) {
             Pega el enlace completo o solo el código que recibiste y define una contraseña de mínimo
             8 caracteres.
           </p>
+          {enlaceDesarrollo && (
+            <p className="auth-dev-link" role="status">
+              El servidor no tiene correo configurado todavía.
+              {' '}
+              <a href={enlaceDesarrollo} target="_blank" rel="noreferrer">
+                Abrir el enlace de recuperación
+              </a>
+              {' '}
+              para continuar la prueba (solo desarrollo).
+            </p>
+          )}
           {aviso && (
             <p className={aviso.tipo === 'success' ? 'auth-success' : 'auth-error'} role="status">
               {aviso.texto}

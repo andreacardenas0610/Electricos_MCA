@@ -9,6 +9,7 @@ import {
 } from './middleware/auth.js';
 
 import { manejarErrores } from './middleware/errores.js';
+import { configuracionCorreo } from './utils/correo.js';
 
 import authRoutes from './routes/auth.js';
 import clientesRoutes from './routes/clientes.js';
@@ -71,7 +72,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (req, res) => {
-  res.json({ estado: 'ok' });
+  res.json({ estado: 'ok', correo: configuracionCorreo() });
 });
 
 app.use('/api/auth', authRoutes);
