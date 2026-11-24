@@ -342,7 +342,7 @@ export function Dashboard() {
           {seccionActual === 'AbonosVentas' && <AbonosVentas />}
           {seccionActual === 'programacion' && <ProgramacionActividades />}
           {seccionActual === 'ordenes' && <OrdenesServicio usuario={sesion?.usuario} />}
-          {seccionActual === 'usuarios' && <GestionUsuarios />}
+          {seccionActual === 'usuarios' && <GestionUsuarios usuario={sesion?.usuario} />}
           {seccionActual === 'roles' && <GestionRolesPermisos />}
         </main>
       </div>

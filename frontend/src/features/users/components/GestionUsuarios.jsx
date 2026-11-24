@@ -52,7 +52,7 @@ const FORMULARIO_USUARIO = (usuario = null) => {
   // La cuenta puede tener varios roles: el primero de la lista es el principal.
   const roles = usuario?.roles?.length
     ? [...usuario.roles]
-    : [usuario?.rol || 'Operario'];
+    : (usuario?.rol ? [usuario.rol] : []);
   return {
     documento: usuario?.documento || '',
     nombre: usuario?.nombre || '',
@@ -60,7 +60,7 @@ const FORMULARIO_USUARIO = (usuario = null) => {
     correo: usuario?.correo || '',
     telefono: usuario?.telefono || '',
     terceroId: usuario?.terceroId || '',
-    rol: roles[0] || 'Operario',
+    rol: roles[0] || '',
     roles,
     zona: usuario?.zona || 'General',
     password: '',
@@ -68,21 +68,22 @@ const FORMULARIO_USUARIO = (usuario = null) => {
   };
 };
 
-export function GestionUsuarios() {
+export function GestionUsuarios({ usuario: usuarioSesion }) {
   const {
     data: datos,
     error,
     loading,
     reload: cargarDatos,
   } = useApiData(async () => {
-    const [usuarios, roles, terceros] = await Promise.all([
+    const [usuarios, roles, terceros, clientes] = await Promise.all([
       apiRequest('/usuarios'),
       apiRequest('/roles'),
       apiRequest('/terceros'),
+      apiRequest('/clientes'),
     ]);
-    return { usuarios, roles, terceros };
-  }, { usuarios: [], roles: [], terceros: [] });
-  const { usuarios, roles, terceros } = datos;
+    return { usuarios, roles, terceros, clientes };
+  }, { usuarios: [], roles: [], terceros: [], clientes: [] });
+  const { usuarios, roles, terceros, clientes } = datos;
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState('Todos');
@@ -91,6 +92,27 @@ export function GestionUsuarios() {
   const [detalleId, setDetalleId] = useState(null);
   const [porEliminar, setPorEliminar] = useState(null);
   const { toast, notify, close } = useToast();
+
+  const esUsuarioActual = (usuario) => (
+    Boolean(usuarioSesion?.id)
+    && String(usuarioSesion.id) === String(usuario?.id)
+  );
+
+  const perfilesVinculados = (usuario) => {
+    if (!usuario) return { tercero: null, cliente: null };
+    const tercero = terceros.find((item) => (
+      String(item.id) === String(usuario.terceroId)
+    )) || null;
+    const documento = String(usuario.documento || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase();
+    const cliente = clientes.find((item) => (
+      (tercero && String(item.terceroId) === String(tercero.id))
+      || (
+        documento
+        && String(item.documento || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase() === documento
+      )
+    )) || null;
+    return { tercero, cliente };
+  };
 
   const resumen = useMemo(() => ({
     total: usuarios.length,
@@ -293,6 +315,11 @@ export function GestionUsuarios() {
 
   const confirmarEliminar = async () => {
     if (!porEliminar) return;
+    if (esUsuarioActual(porEliminar)) {
+      notify('warning', 'Acción no permitida', 'No puedes eliminar tu propia cuenta.');
+      setPorEliminar(null);
+      return;
+    }
     try {
       await apiRequest(`/usuarios/${encodeURIComponent(porEliminar.id)}`, { method: 'DELETE' });
       await cargarDatos();
@@ -443,7 +470,7 @@ export function GestionUsuarios() {
                     <AccionesFila
                       onVer={() => setDetalleId(usuario.id)}
                       onEditar={() => abrirEdicion(usuario)}
-                      onEliminar={() => setPorEliminar(usuario)}
+                      onEliminar={esUsuarioActual(usuario) ? undefined : () => setPorEliminar(usuario)}
                     />
                   </td>
                 </tr>
@@ -639,7 +666,7 @@ export function GestionUsuarios() {
         open={Boolean(usuarioDetalle)}
         onClose={() => setDetalleId(null)}
         title={usuarioDetalle?.nombre || 'Detalle del usuario'}
-        subtitle={`@${usuarioDetalle?.usuario || ''} · ${usuarioDetalle?.rol || ''}`}
+        subtitle={`${usuarioDetalle?.usuario || ''} · ${usuarioDetalle?.rol || ''}`}
         icon={UsersRound}
         footer={
           <>
@@ -656,7 +683,7 @@ export function GestionUsuarios() {
           <>
             <DetailGrid>
               <DetailItem label="Nombre">{usuarioDetalle.nombre}</DetailItem>
-              <DetailItem label="Usuario">@{usuarioDetalle.usuario}</DetailItem>
+              <DetailItem label="Usuario">{usuarioDetalle.usuario}</DetailItem>
               <DetailItem label="Cédula">{usuarioDetalle.documento || '—'}</DetailItem>
               <DetailItem label="Correo">{usuarioDetalle.correo || '—'}</DetailItem>
               <DetailItem label="Teléfono">{usuarioDetalle.telefono || '—'}</DetailItem>
@@ -714,7 +741,18 @@ export function GestionUsuarios() {
       <ConfirmDialog
         open={Boolean(porEliminar)}
         title="Eliminar usuario"
-        message={`¿Seguro que deseas eliminar a ${porEliminar?.nombre || 'este usuario'}? Perderá el acceso a la plataforma.`}
+        message={(() => {
+          if (!porEliminar) return '';
+          const { tercero, cliente } = perfilesVinculados(porEliminar);
+          const perfiles = [
+            tercero ? 'su perfil de tercero' : '',
+            cliente ? 'su ficha de cliente' : '',
+          ].filter(Boolean);
+          const consecuencia = perfiles.length
+            ? ` También se eliminarán ${perfiles.join(' y ')} vinculado(s) a esta cuenta.`
+            : '';
+          return `¿Seguro que deseas eliminar a ${porEliminar.nombre || 'este usuario'}? Perderá el acceso a la plataforma.${consecuencia}`;
+        })()}
         confirmLabel="Eliminar usuario"
         onCancel={() => setPorEliminar(null)}
         onConfirm={confirmarEliminar}

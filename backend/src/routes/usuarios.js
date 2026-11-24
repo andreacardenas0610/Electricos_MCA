@@ -577,16 +577,100 @@ router.delete('/:id', async (req, res, next) => {
   if (Number(req.usuario.id) === id) {
     return res.status(400).json({ mensaje: 'No puedes eliminar tu propia cuenta.' });
   }
+
+  const client = await pool.connect();
   try {
-    const resultado = await pool.query(
-      `DELETE FROM usuarios
-       WHERE id = $1 AND lower(usuario) <> 'admin'`,
+    await client.query('BEGIN');
+    const { rows: cuentas } = await client.query(
+      `SELECT u.id, u.usuario, u.persona_id, u.tercero_id, t.persona_id AS tercero_persona_id
+       FROM usuarios u
+       LEFT JOIN terceros t ON t.id = u.tercero_id
+       WHERE u.id = $1
+       FOR UPDATE OF u`,
       [id],
     );
-    if (!resultado.rowCount) return res.status(404).json({ mensaje: 'Usuario no encontrado o cuenta admin protegida.' });
+    const cuenta = cuentas[0];
+    if (!cuenta || cuenta.usuario.toLowerCase() === 'admin') {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ mensaje: 'Usuario no encontrado o cuenta admin protegida.' });
+    }
+
+    const personaId = cuenta.persona_id || cuenta.tercero_persona_id;
+    const perfiles = personaId
+      ? await client.query(
+        `SELECT DISTINCT c.id
+         FROM clientes c
+         WHERE c.tercero_id = $1
+            OR ($2::bigint IS NOT NULL AND c.persona_id = $2)`,
+        [cuenta.tercero_id, personaId],
+      )
+      : await client.query(
+        `SELECT c.id FROM clientes c
+         WHERE c.tercero_id = $1`,
+        [cuenta.tercero_id],
+      );
+    const clienteIds = perfiles.rows.map((fila) => fila.id);
+
+    for (const clienteId of clienteIds) {
+      const dependencias = await client.query(
+        `SELECT
+           (SELECT COUNT(*) FROM ordenes_servicio WHERE cliente_id = $1) AS ordenes,
+           (SELECT COUNT(*) FROM agenda_actividades WHERE cliente_id = $1) AS agenda`,
+        [clienteId],
+      );
+      const uso = dependencias.rows[0];
+      if (Number(uso.ordenes) > 0 || Number(uso.agenda) > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          mensaje: 'No se puede eliminar el usuario porque su ficha de cliente tiene órdenes o servicios agendados.',
+        });
+      }
+    }
+
+    if (cuenta.tercero_id) {
+      const dependencias = await client.query(
+        `SELECT
+           (SELECT COUNT(*) FROM ordenes_servicio WHERE tercero_id = $1) AS ordenes,
+           (SELECT COUNT(*) FROM agenda_actividades WHERE tercero_id = $1) AS agenda`,
+        [cuenta.tercero_id],
+      );
+      const uso = dependencias.rows[0];
+      if (Number(uso.ordenes) > 0 || Number(uso.agenda) > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          mensaje: 'No se puede eliminar el usuario porque su perfil de tercero tiene órdenes o servicios agendados.',
+        });
+      }
+    }
+
+    await client.query('DELETE FROM usuarios WHERE id = $1', [id]);
+    for (const clienteId of clienteIds) {
+      await client.query('DELETE FROM clientes WHERE id = $1', [clienteId]);
+    }
+    if (cuenta.tercero_id) {
+      await client.query('DELETE FROM terceros WHERE id = $1', [cuenta.tercero_id]);
+    }
+    if (personaId) {
+      const restantes = await client.query(
+        `SELECT
+           (SELECT COUNT(*) FROM usuarios WHERE persona_id = $1) AS usuarios,
+           (SELECT COUNT(*) FROM terceros WHERE persona_id = $1) AS terceros,
+           (SELECT COUNT(*) FROM clientes WHERE persona_id = $1) AS clientes`,
+        [personaId],
+      );
+      const uso = restantes.rows[0];
+      if (!Number(uso.usuarios) && !Number(uso.terceros) && !Number(uso.clientes)) {
+        await client.query('DELETE FROM personas WHERE id = $1', [personaId]);
+      }
+    }
+
+    await client.query('COMMIT');
     return res.status(204).end();
   } catch (error) {
+    await client.query('ROLLBACK');
     return next(error);
+  } finally {
+    client.release();
   }
 });
 
