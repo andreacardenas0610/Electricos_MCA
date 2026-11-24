@@ -94,7 +94,10 @@ export function EstadoToggle({ estado, estados = ESTADOS.usuario, onClick, width
       type="button"
       onClick={onClick}
       disabled={!onClick || bloqueado}
-      title={motivo || (onClick && !bloqueado ? 'Haz clic para cambiar el estado' : undefined)}
+      data-mca-tooltip={
+        motivo || (onClick && !bloqueado ? 'Haz clic para cambiar el estado' : undefined)
+      }
+      aria-label={motivo || (onClick && !bloqueado ? `Cambiar estado: ${config.nombre}` : `Estado: ${config.nombre}`)}
       className={`mca-estado mca-estado--${TONO[clave] || 'info'}${bloqueado ? ' mca-estado--bloqueado' : ''}`}
       style={{
         width: ancho,

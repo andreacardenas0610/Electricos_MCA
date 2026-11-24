@@ -354,6 +354,43 @@
   color: var(--danger-text);
 }
 
+.mca-action-tooltip {
+  position: fixed;
+  z-index: 99999;
+  max-width: 260px;
+  width: max-content;
+  transform: translate(-50%, -100%);
+  padding: 6px 9px;
+  border: 1px solid var(--accent-yellow-border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  pointer-events: none;
+  animation: mca-action-tooltip-enter 0.12s ease-out;
+}
+
+.mca-action-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--accent-yellow-border);
+  border-bottom: 1px solid var(--accent-yellow-border);
+  background: var(--bg-card);
+}
+
+@keyframes mca-action-tooltip-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Contador de materiales del servicio: reemplaza la antigua columna del «>». */
 .mca-material-toggle {
   display: inline-flex;
@@ -492,32 +529,6 @@
   position: relative;
 }
 
-/* Mensaje flotante: al pasar el mouse sobre el campo explica qué se debe diligenciar. */
-.mca-field-tip {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 90;
-  display: none;
-  padding: 8px 11px;
-  border: 1px solid var(--accent-yellow-border);
-  border-left: 4px solid var(--accent-yellow);
-  border-radius: var(--radius-sm);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-card);
-  color: var(--text-main);
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.5;
-  pointer-events: none;
-}
-
-.mca-field:hover > .mca-field-tip,
-.mca-field:focus-within > .mca-field-tip {
-  display: block;
-}
-
 .mca-field--full {
   grid-column: 1 / -1;
 }
@@ -636,9 +647,8 @@
   width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  /* Scroll fijo: la tabla conserva su altura y solo se desplaza el cuerpo. */
   max-height: min(62vh, 620px);
-  overscroll-behavior: contain;
+  overscroll-behavior-y: auto;
   scrollbar-width: thin;
 }
 
@@ -992,8 +1002,16 @@
   white-space: normal;
 }
 
-.mca-table:not(.mca-table--sub) .mca-row {
-  flex-wrap: wrap !important;
+.mca-table:not(.mca-table--sub) th:last-child,
+.mca-table:not(.mca-table--sub) td:last-child {
+  width: 190px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.mca-table:not(.mca-table--sub) td:last-child .mca-row {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
 }
 
 .mca-table:not(.mca-table--sub) .mca-row > span,
@@ -2319,6 +2337,7 @@
   opacity: 1;
   transition: max-height 0.22s ease, opacity 0.14s ease;
 }
+
 
 .mca-sidebar:hover .mca-sidebar__brand,
 .mca-sidebar:focus-within .mca-sidebar__brand {

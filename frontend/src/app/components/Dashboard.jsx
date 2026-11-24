@@ -284,37 +284,8 @@ export function Dashboard() {
           </nav>
         </div>
 
-        {/* Acciones Inferiores y Perfil */}
+        {/* Acciones inferiores */}
         <div className="mca-sidebar__bottom">
-
-          {/* Tarjeta de Usuario Conectado */}
-          <div className="mca-sidebar__user" style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            backgroundColor: 'var(--sidebar-user)', 
-            padding: '10px 12px', 
-            borderRadius: '8px',
-            border: '1px solid var(--sidebar-border)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-              <img
-                src="/avatar-usuario.png"
-                alt=""
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  flex: '0 0 auto',
-                }}
-              />
-              <div className="mca-sidebar__label">
-                <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>{sesion?.usuario?.nombre || sesion?.usuario?.usuario}</span>
-                <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>{sesion?.usuario?.rol || 'Administrador'}</span>
-              </div>
-            </div>
-          </div>
-
           <button
             type="button"
             className="mca-sidebar__licenses"
@@ -361,7 +332,7 @@ export function Dashboard() {
             </div>
           </div>
         </header>
-        <main className="app-scroll" style={{ flex: 1, minHeight: 0, minWidth: 0, backgroundColor: 'var(--bg-main)', overflowY: 'auto', overscrollBehavior: 'contain', width: '100%', boxSizing: 'border-box' }}>
+        <main className="app-scroll" style={{ flex: 1, minHeight: 0, minWidth: 0, backgroundColor: 'var(--bg-main)', overflowY: 'auto', overscrollBehaviorY: 'auto', width: '100%', boxSizing: 'border-box' }}>
           {seccionActual === 'panel' && <PanelControl onNavegar={setSeccionActual} />}
           {seccionActual === 'clientes' && <Clientes usuario={sesion?.usuario} />}
           {seccionActual === 'terceros' && <GestionTerceros usuario={sesion?.usuario} />}

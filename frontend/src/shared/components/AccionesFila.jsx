@@ -20,31 +20,31 @@ export function AccionesFila({
   return (
     <div className="mca-row" style={{ justifyContent: alineacion, flexWrap: 'nowrap', gap: 6 }}>
       {onVer && (
-        <button type="button" className="mca-icon-btn" onClick={onVer} title="Ver detalle">
+        <button type="button" className="mca-icon-btn" onClick={onVer} data-mca-tooltip="Ver detalle" aria-label="Ver detalle">
           <Eye {...iconProps} />
         </button>
       )}
 
       {onEditar && (
-        <button type="button" className="mca-icon-btn" onClick={onEditar} title="Editar">
+        <button type="button" className="mca-icon-btn" onClick={onEditar} data-mca-tooltip="Editar" aria-label="Editar">
           <Pencil {...iconProps} />
         </button>
       )}
 
       {onPdf && (
-        <button type="button" className="mca-icon-btn" onClick={onPdf} title="Generar PDF">
+        <button type="button" className="mca-icon-btn" onClick={onPdf} data-mca-tooltip="Generar PDF" aria-label="Generar PDF">
           <FileText {...iconProps} />
         </button>
       )}
 
       {onCorreo && (
-        <button type="button" className="mca-icon-btn" onClick={onCorreo} title="Enviar cotización al correo">
+        <button type="button" className="mca-icon-btn" onClick={onCorreo} data-mca-tooltip="Enviar cotización al correo" aria-label="Enviar cotización al correo">
           <Mail {...iconProps} />
         </button>
       )}
 
       {onAbono && (
-        <button type="button" className="mca-icon-btn" onClick={onAbono} title="Registrar abono">
+        <button type="button" className="mca-icon-btn" onClick={onAbono} data-mca-tooltip="Registrar abono" aria-label="Registrar abono">
           <CircleDollarSign {...iconProps} />
         </button>
       )}
@@ -54,7 +54,8 @@ export function AccionesFila({
           type="button"
           className="mca-icon-btn mca-icon-btn--danger"
           onClick={onEliminar}
-          title="Eliminar"
+          data-mca-tooltip="Eliminar"
+          aria-label="Eliminar"
         >
           <Trash2 size={15} strokeWidth={1.9} />
         </button>

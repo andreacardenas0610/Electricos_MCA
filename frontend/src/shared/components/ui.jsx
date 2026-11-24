@@ -8,6 +8,98 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+
+export function GlobalTooltip() {
+  const [tooltip, setTooltip] = useState(null);
+  const temporizador = useRef(null);
+  const activo = useRef(null);
+
+  const ocultar = useCallback(() => {
+    if (temporizador.current) window.clearTimeout(temporizador.current);
+    temporizador.current = null;
+    activo.current = null;
+    setTooltip(null);
+  }, []);
+
+  useEffect(() => {
+    const mostrar = (elemento) => {
+      const texto = elemento?.getAttribute('data-mca-tooltip')?.trim();
+      if (!texto) return;
+      if (activo.current === elemento) return;
+
+      activo.current = elemento;
+      if (temporizador.current) window.clearTimeout(temporizador.current);
+      temporizador.current = window.setTimeout(() => {
+        const rect = elemento.getBoundingClientRect();
+        const centroElemento = rect.left + rect.width / 2;
+        const centroSeguro = Math.max(
+          130,
+          Math.min(centroElemento, window.innerWidth - 130),
+        );
+        setTooltip({
+          texto,
+          centro: centroSeguro,
+          arriba: Math.max(12, rect.top - 8),
+        });
+      }, 650);
+    };
+
+    const sobreElemento = (event) => {
+      const elemento = event.target.closest(
+        '.mca-icon-btn[data-mca-tooltip], .mca-estado[data-mca-tooltip]',
+      );
+      if (elemento) mostrar(elemento);
+    };
+
+    const salirElemento = (event) => {
+      const elemento = event.target.closest(
+        '.mca-icon-btn[data-mca-tooltip], .mca-estado[data-mca-tooltip]',
+      );
+      if (elemento && (!event.relatedTarget || !elemento.contains(event.relatedTarget))) {
+        if (activo.current === elemento) ocultar();
+      }
+    };
+
+    const enfocarElemento = (event) => {
+      const elemento = event.target.closest(
+        '.mca-icon-btn[data-mca-tooltip], .mca-estado[data-mca-tooltip]',
+      );
+      if (elemento) mostrar(elemento);
+    };
+
+    document.addEventListener('mouseover', sobreElemento);
+    document.addEventListener('mouseout', salirElemento);
+    document.addEventListener('focusin', enfocarElemento);
+    document.addEventListener('focusout', ocultar, true);
+    document.addEventListener('click', ocultar, true);
+    document.addEventListener('scroll', ocultar, true);
+    window.addEventListener('resize', ocultar);
+
+    return () => {
+      document.removeEventListener('mouseover', sobreElemento);
+      document.removeEventListener('mouseout', salirElemento);
+      document.removeEventListener('focusin', enfocarElemento);
+      document.removeEventListener('focusout', ocultar, true);
+      document.removeEventListener('click', ocultar, true);
+      document.removeEventListener('scroll', ocultar, true);
+      window.removeEventListener('resize', ocultar);
+      if (temporizador.current) window.clearTimeout(temporizador.current);
+    };
+  }, [ocultar]);
+
+  if (!tooltip) return null;
+
+  return createPortal(
+    <div
+      className="mca-action-tooltip"
+      role="tooltip"
+      style={{ left: tooltip.centro, top: tooltip.arriba }}
+    >
+      {tooltip.texto}
+    </div>,
+    document.body,
+  );
+}
 export function PageShell({ children, className = '' }) {
   return <div className={`mca-page ${className}`.trim()}>{children}</div>;
 }
@@ -222,23 +314,12 @@ const DESCRIPCIONES_CAMPO = {
 };
 
 export function Field({ label, required, hint, error, full = false, tooltip, children }) {
-  // El mensaje flotante muestra la explicación completa al pasar el mouse sobre el campo.
-  const descripcionPorEtiqueta = label
-    ? DESCRIPCIONES_CAMPO[String(label).trim().toLowerCase()]
-    : undefined;
-  const mensajeFlotante = tooltip || hint || descripcionPorEtiqueta;
-
   return (
     <div className={`mca-field ${full ? 'mca-field--full' : ''} ${error ? 'has-error' : ''}`.trim()}>
       {label && (
         <span className="mca-label">
           {label}
           {required && <span className="mca-required">*</span>}
-        </span>
-      )}
-      {mensajeFlotante && (
-        <span className="mca-field-tip" role="tooltip">
-          {mensajeFlotante}
         </span>
       )}
       {children}
