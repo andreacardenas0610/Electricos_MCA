@@ -22,6 +22,7 @@ import { SplashScreen } from '../../shared/components/SplashScreen.jsx';
 import { ThemeContext } from '../../shared/context/ThemeContext.jsx';
 import { clearLocalSession, getLocalSession, setLocalSession } from '../../shared/sessionStore.js';
 import { API_SESSION_EXPIRED } from '../../shared/api.js';
+import { AvatarUsuario } from '../../shared/components/AvatarUsuario.jsx';
 
 // Importación de las vistas
 import { PanelControl } from '../../features/dashboard/components/PanelControl.jsx';
@@ -286,6 +287,31 @@ export function Dashboard() {
 
         {/* Acciones inferiores */}
         <div className="mca-sidebar__bottom">
+
+          {/* Tarjeta de Usuario Conectado */}
+          <div className="mca-sidebar__user" style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            backgroundColor: 'var(--sidebar-user)', 
+            padding: '10px 12px', 
+            borderRadius: '8px',
+            border: '1px solid var(--sidebar-border)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <AvatarUsuario
+                nombre={sesion?.usuario?.nombre || sesion?.usuario?.usuario}
+                usuario={sesion?.usuario?.usuario}
+                genero={sesion?.usuario?.genero}
+                rol={sesion?.usuario?.rol}
+                size={32}
+              />
+              <div className="mca-sidebar__label">
+                <span style={{ color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', display: 'block', lineHeight: 1.2 }}>{sesion?.usuario?.nombre || sesion?.usuario?.usuario}</span>
+                <span style={{ color: 'var(--sidebar-muted)', fontSize: '10px', display: 'block' }}>{sesion?.usuario?.rol || 'Administrador'}</span>
+              </div>
+            </div>
+          </div>
+
           <button
             type="button"
             className="mca-sidebar__licenses"
@@ -314,7 +340,13 @@ export function Dashboard() {
             </button>
             <div className="mca-topbar__profile">
               <div className="mca-topbar__avatar">
-                <img src="/avatar-usuario.png" alt="" />
+                <AvatarUsuario
+                  nombre={sesion?.usuario?.nombre || sesion?.usuario?.usuario}
+                  usuario={sesion?.usuario?.usuario}
+                  genero={sesion?.usuario?.genero}
+                  rol={sesion?.usuario?.rol}
+                  size={34}
+                />
               </div>
               <div className="mca-topbar__identity">
                 <strong>{sesion?.usuario?.nombre || sesion?.usuario?.usuario || 'Administrador'}</strong>

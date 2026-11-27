@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
   CalendarDays,
@@ -22,6 +22,7 @@ import { claseFilaEstado } from '../../../shared/utils/estadosFila.js';
 import { CampoDepartamento, CampoMunicipio } from '../../../shared/components/UbicacionColombia.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { useApiData } from '../../../shared/useApiData.js';
+import { ConsumosEvidenciasOrden } from './ConsumosEvidenciasOrden.jsx';
 import {
   Badge,
   Button,
@@ -120,6 +121,21 @@ const FORMULARIO_TECNICO = (tecnico = null, rolMovilDefault = '') => ({
   rolId: tecnico?.rol_id ? String(tecnico.rol_id) : String(rolMovilDefault || ''),
   tieneUsuario: Boolean(tecnico?.usuario_id),
 });
+
+// Misma regla que el backend: tec_ + inicial del nombre + primer apellido.
+// "Sandra Milena Quintero" → tec_squintero · "Juan José Giraldo" → tec_jgiraldo.
+function usuarioSugeridoTecnico(nombreCompleto) {
+  const limpiar = (texto) => String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+  const palabras = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
+  if (!palabras.length) return '';
+  const inicial = limpiar(palabras[0]).charAt(0);
+  const apellido = limpiar(palabras.length >= 4 ? palabras[2] : (palabras[1] || palabras[0])).slice(0, 20);
+  return `tec_${inicial}${apellido}`;
+}
 
 const FORMULARIO_ORDEN = (orden = null, codigo = '') => ({
   codigo: orden?.codigo || codigo,
@@ -1076,7 +1092,7 @@ export function GestionTerceros() {
     setErrores({});
   };
 
-  const abrirEdicion = (tecnico) => {
+  const abrirEdicion = async (tecnico) => {
     setDetalleId(null);
     const rolDefault = rolesMoviles.find((rol) => rol.nombre === 'Técnico')?.id
       || rolesMoviles[0]?.id
@@ -1088,6 +1104,23 @@ export function GestionTerceros() {
       esCliente: Boolean(clienteDeTercero.has(String(tecnico.id))),
     });
     setErrores({});
+    // Trae la ficha fresca del tercero para cargar el usuario móvil actual
+    // aunque el listado esté desactualizado.
+    try {
+      const fresco = normalizarTecnico(await apiRequest(`/terceros/${tecnico.id}`));
+      setFormulario((actual) => (
+        actual && String(actual.id) === String(tecnico.id)
+          ? {
+              ...actual,
+              usuario: fresco.usuario || actual.usuario,
+              rolId: fresco.rol_id ? String(fresco.rol_id) : actual.rolId,
+              tieneUsuario: Boolean(fresco.usuario_id),
+            }
+          : actual
+      ));
+    } catch {
+      // Si falla la consulta se conserva lo que ya traía el listado.
+    }
   };
 
   const cerrarFormulario = () => {
@@ -1106,19 +1139,13 @@ export function GestionTerceros() {
     if (!formulario.nombre.trim()) nuevosErrores.nombre = 'Escribe el nombre del tercero.';
     if (!formulario.tipoDocumento.trim()) nuevosErrores.tipoDocumento = 'Selecciona el tipo de documento.';
     if (!formulario.documento.trim()) nuevosErrores.documento = 'Escribe el número del documento.';
-    if (!formulario.telefono.trim()) nuevosErrores.telefono = 'Escribe el teléfono.';
     if (!formulario.correo.trim() || !CORREO_VALIDO.test(formulario.correo.trim())) {
       nuevosErrores.correo = 'Ingresa un correo electrónico válido para el acceso móvil.';
     }
-    if (!formulario.usuario.trim()) nuevosErrores.usuario = 'Escribe el usuario para iniciar sesión.';
     if (!formulario.rolId) nuevosErrores.rolId = 'Selecciona un rol habilitado para móvil.';
-    if ((!formulario.id || !formulario.tieneUsuario) && formulario.password.length < 8) {
-      nuevosErrores.password = 'Escribe una contraseña de al menos 8 caracteres.';
-    } else if (formulario.password && formulario.password.length < 8) {
+    // Usuario y contraseña son opcionales: si quedan vacíos, el servidor los genera.
+    if (formulario.password && formulario.password.length < 8) {
       nuevosErrores.password = 'La contraseña debe tener al menos 8 caracteres.';
-    }
-    if (!formulario.municipio.trim()) {
-      nuevosErrores.municipio = 'Escribe el municipio donde reside.';
     }
     if (Object.keys(nuevosErrores).length) {
       setErrores(nuevosErrores);
@@ -1182,10 +1209,14 @@ export function GestionTerceros() {
         vinculoCliente = ' La ficha de cliente vinculada se conserva.';
       }
 
+      const usuarioFinal = guardado.usuario_acceso || guardado.usuario || formulario.usuario;
+      const claveGenerada = guardado.password_inicial
+        ? ` · contraseña inicial: ${guardado.password_inicial}`
+        : '';
       notify(
         'success',
         formulario.id ? 'Tercero actualizado' : 'Tercero creado',
-        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'} · acceso móvil: ${guardado.usuario || formulario.usuario} (${guardado.rol || 'rol asignado'}).${vinculoCliente}`,
+        `${guardado.nombre} · reside en ${guardado.municipio || 'sin municipio'} · acceso móvil: ${usuarioFinal || 'pendiente'} (${guardado.rol || 'rol asignado'})${claveGenerada}.${vinculoCliente}`,
       );
       cerrarFormulario();
     } catch (error) {
@@ -1563,7 +1594,6 @@ export function GestionTerceros() {
 
             <Field
               label="Teléfono"
-              required
               error={errores.telefono}
               tooltip="Línea directa para coordinar la visita técnica."
             >
@@ -1593,15 +1623,17 @@ export function GestionTerceros() {
 
             <Field
               label="Usuario móvil"
-              required
               error={errores.usuario}
+              hint={formulario.usuario
+                ? 'Este es el usuario con el que entra a la app móvil.'
+                : `Si lo dejas vacío se genera automático: ${usuarioSugeridoTecnico(formulario.nombre) || 'tec_apellido'}`}
               tooltip="Nombre de usuario para iniciar sesión desde la aplicación móvil."
             >
               <input
                 className="mca-input"
                 value={formulario.usuario}
                 onChange={(evento) => setCampo('usuario', evento.target.value)}
-                placeholder="usuario.tecnico"
+                placeholder={usuarioSugeridoTecnico(formulario.nombre) || 'usuario.tecnico'}
               />
             </Field>
 
@@ -1624,9 +1656,11 @@ export function GestionTerceros() {
             </Field>
 
             <Field
-              label={formulario.tieneUsuario ? 'Cambiar contraseña (opcional)' : 'Contraseña móvil'}
-              required={!formulario.tieneUsuario}
+              label={formulario.tieneUsuario ? 'Cambiar contraseña (opcional)' : 'Contraseña móvil (opcional)'}
               error={errores.password}
+              hint={formulario.tieneUsuario
+                ? 'Déjala vacía para conservar la contraseña actual.'
+                : 'Si la dejas vacía se usa el número de documento.'}
               tooltip="La contraseña se guarda protegida y no se vuelve a mostrar."
             >
               <input
@@ -1635,14 +1669,14 @@ export function GestionTerceros() {
                 autoComplete="new-password"
                 value={formulario.password}
                 onChange={(evento) => setCampo('password', evento.target.value)}
-                placeholder={formulario.tieneUsuario ? 'Dejar vacía para conservarla' : 'Mínimo 8 caracteres'}
+                placeholder={formulario.tieneUsuario
+                  ? 'Dejar vacía para conservarla'
+                  : 'Vacía = número de documento · mínimo 8 caracteres'}
               />
             </Field>
 
             <Field
               label="Departamento"
-              required
-              error={errores.departamento}
               tooltip="Departamento donde reside; limita la lista de municipios."
             >
               <CampoDepartamento
@@ -1655,9 +1689,8 @@ export function GestionTerceros() {
 
             <Field
               label="Municipio donde reside"
-              required
               error={errores.municipio}
-              hint="Se usa para asignar técnicos cerca del sitio del servicio."
+              hint="Opcional. Se usa para asignar técnicos cerca del sitio del servicio."
               tooltip="Municipio o ciudad de residencia del tercero."
             >
               <CampoMunicipio
@@ -2021,13 +2054,16 @@ export function OrdenesServicio() {
     tecnicos: [],
     servicios: [],
     catalogos: { prioridades: [], estados: [] },
-  });
+  }, { intervaloMs: 15000 });
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [formulario, setFormulario] = useState(null);
   const [errores, setErrores] = useState({});
   const [detalleId, setDetalleId] = useState(null);
   const [porEliminar, setPorEliminar] = useState(null);
+  const [serviciosCliente, setServiciosCliente] = useState([]);
+  const [cargandoServiciosCliente, setCargandoServiciosCliente] = useState(false);
+  const [verTodoCatalogo, setVerTodoCatalogo] = useState(false);
   const { toast, notify, close } = useToast();
 
   const filtrados = useMemo(() => {
@@ -2051,23 +2087,84 @@ export function OrdenesServicio() {
     [datos.clientes],
   );
 
-  const opcionesServicios = useMemo(
-    () => datos.servicios
-      .filter((servicio) => servicio.estado === 'Activo')
-      .map((servicio) => ({
-        value: String(servicio.id),
-        label: servicio.nombre,
-        meta: [servicio.tiempo, servicio.categoria].filter(Boolean).join(' · '),
-        search: servicio.desc,
-      })),
-    [datos.servicios],
+  const opcionesServiciosCliente = useMemo(
+    () => new Set(serviciosCliente.map((servicio) => String(servicio.id))),
+    [serviciosCliente],
   );
+
+  const clienteIdFormulario = formulario?.clienteId ? String(formulario.clienteId) : '';
+
+  // Al elegir el cliente se traen los servicios que ya tiene en cotizaciones,
+  // órdenes y agenda para proponerlos en la nueva orden.
+  useEffect(() => {
+    setVerTodoCatalogo(false);
+    if (!clienteIdFormulario) {
+      setServiciosCliente([]);
+      setCargandoServiciosCliente(false);
+      return undefined;
+    }
+    let vigente = true;
+    setCargandoServiciosCliente(true);
+    apiRequest(`/ordenes-servicio/clientes/${clienteIdFormulario}/servicios`)
+      .then((filas) => {
+        if (vigente) setServiciosCliente(Array.isArray(filas) ? filas : []);
+      })
+      .catch(() => {
+        if (vigente) setServiciosCliente([]);
+      })
+      .finally(() => {
+        if (vigente) setCargandoServiciosCliente(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [clienteIdFormulario]);
+
+  const opcionesServicios = useMemo(() => {
+    const activos = datos.servicios.filter((servicio) => servicio.estado === 'Activo');
+    // Si la orden que se edita ya trae un servicio ajeno a la lista del cliente,
+    // se muestra el catálogo completo para no perder esa selección.
+    const servicioActualVisible = !formulario?.servicioId
+      || opcionesServiciosCliente.has(String(formulario.servicioId));
+    const soloDelCliente = !verTodoCatalogo
+      && opcionesServiciosCliente.size > 0
+      && servicioActualVisible;
+    const visibles = soloDelCliente
+      ? activos.filter((servicio) => opcionesServiciosCliente.has(String(servicio.id)))
+      : [...activos].sort((a, b) => (
+        Number(opcionesServiciosCliente.has(String(b.id)))
+        - Number(opcionesServiciosCliente.has(String(a.id)))
+      ));
+    return visibles.map((servicio) => ({
+      value: String(servicio.id),
+      label: servicio.nombre,
+      meta: [
+        opcionesServiciosCliente.has(String(servicio.id)) ? 'Ya trabajado con el cliente' : '',
+        servicio.tiempo,
+        servicio.categoria,
+      ].filter(Boolean).join(' · '),
+      search: servicio.desc,
+    }));
+  }, [datos.servicios, opcionesServiciosCliente, formulario?.servicioId, verTodoCatalogo]);
+
+  const seleccionarCliente = (valor) => {
+    setFormulario((actual) => ({
+      ...actual,
+      clienteId: valor,
+      servicioId: String(actual?.clienteId) === String(valor) ? actual.servicioId : '',
+    }));
+    setErrores((actuales) => ({ ...actuales, clienteId: undefined, servicioId: undefined }));
+  };
 
   const opcionesTecnicos = useMemo(
     () => datos.tecnicos.map((tecnico) => ({
       value: String(tecnico.id),
       label: tecnico.nombre,
-      meta: `${tecnico.especialidad}${tecnico.estado === 'Inactivo' ? ' · Inactivo' : ''}`,
+      meta: [
+        tecnico.especialidad,
+        tecnico.estado === 'Inactivo' ? 'Inactivo' : '',
+        !tecnico.usuario ? 'Sin cuenta móvil' : '',
+      ].filter(Boolean).join(' · '),
     })),
     [datos.tecnicos],
   );
@@ -2106,11 +2203,10 @@ export function OrdenesServicio() {
   const setCampo = (campo, valor) => {
     setFormulario((actual) => {
       const siguiente = { ...actual, [campo]: valor };
-      if (
-        campo === 'fecha'
-        && !['Finalizada', 'Cancelada', 'En ejecución'].includes(actual.estado)
-      ) {
-        siguiente.estado = valor ? 'Programada' : 'Pendiente';
+      // La tabla estados_orden_servicio no tiene «Programada»: la fecha se
+      // muestra aparte y el estado sigue siendo uno de los del catálogo.
+      if (campo === 'fecha' && siguiente.estado === 'Programada') {
+        siguiente.estado = 'Pendiente';
       }
       return siguiente;
     });
@@ -2132,14 +2228,21 @@ export function OrdenesServicio() {
     }
 
     try {
+      const estadoId = idCatalogoPorNombre(datos.catalogos.estados, formulario.estado)
+        ?? idCatalogoPorNombre(datos.catalogos.estados, 'Pendiente');
+      if (!estadoId) {
+        notify('error', 'No se pudo guardar', 'No se cargaron los estados de la orden. Recarga la página e inténtalo de nuevo.');
+        return;
+      }
       const payload = {
         codigo: formulario.codigo,
         cliente_id: Number(formulario.clienteId),
         servicio_id: Number(formulario.servicioId),
         fecha_programada: formulario.fecha || null,
         tercero_id: Number(formulario.responsableId),
-        prioridad_id: idCatalogoPorNombre(datos.catalogos.prioridades, formulario.prioridad),
-        estado_id: idCatalogoPorNombre(datos.catalogos.estados, formulario.estado),
+        prioridad_id: idCatalogoPorNombre(datos.catalogos.prioridades, formulario.prioridad)
+          ?? idCatalogoPorNombre(datos.catalogos.prioridades, 'Media'),
+        estado_id: estadoId,
         descripcion: formulario.descripcion,
       };
       const resultado = await apiRequest(
@@ -2404,7 +2507,7 @@ export function OrdenesServicio() {
             <Field label="Cliente" required error={errores.clienteId} full>
               <Combobox
                 value={formulario.clienteId}
-                onChange={(valor) => setCampo('clienteId', valor)}
+                onChange={seleccionarCliente}
                 options={opcionesClientes}
                 placeholder="Buscar cliente por nombre, NIT o contacto..."
                 emptyText="No hay clientes que coincidan"
@@ -2429,14 +2532,35 @@ export function OrdenesServicio() {
               />
             </Field>
 
-            <Field label="Servicio" required error={errores.servicioId} full>
+            <Field
+              label="Servicio"
+              required
+              error={errores.servicioId}
+              full
+              hint={
+                !clienteIdFormulario
+                  ? 'Selecciona el cliente para ver los servicios que ya tiene.'
+                  : cargandoServiciosCliente
+                    ? 'Buscando los servicios del cliente...'
+                    : serviciosCliente.length
+                      ? `Este cliente ya tiene ${serviciosCliente.length} servicio(s) en cotizaciones, órdenes o agenda.`
+                      : 'Este cliente no tiene servicios registrados; se muestra el catálogo completo.'
+              }
+            >
               <Combobox
                 value={formulario.servicioId}
                 onChange={(valor) => setCampo('servicioId', valor)}
                 options={opcionesServicios}
-                placeholder="Buscar servicio del catálogo..."
-                emptyText="No hay servicios activos que coincidan"
+                placeholder={clienteIdFormulario ? 'Buscar entre los servicios del cliente...' : 'Buscar servicio del catálogo...'}
+                emptyText="No hay servicios que coincidan"
               />
+              {clienteIdFormulario && serviciosCliente.length > 0 && (
+                <Button variant="ghost" onClick={() => setVerTodoCatalogo((valor) => !valor)}>
+                  {verTodoCatalogo
+                    ? `Mostrar solo los servicios del cliente (${serviciosCliente.length})`
+                    : `Ver todo el catálogo (${datos.servicios.length})`}
+                </Button>
+              )}
             </Field>
 
             <Field label="Duración estimada" hint="Calculada desde el servicio seleccionado.">
@@ -2463,8 +2587,8 @@ export function OrdenesServicio() {
               error={errores.fecha}
               hint={
                 ESTADOS_CON_FECHA.includes(formulario.estado)
-                  ? 'Obligatoria para órdenes programadas o en ejecución.'
-                  : 'Al asignar fecha, la orden pasa a Programada.'
+                  ? 'Obligatoria para órdenes en ejecución.'
+                  : 'Con fecha, la orden se muestra como programada en el listado.'
               }
             >
               <input
@@ -2560,6 +2684,13 @@ export function OrdenesServicio() {
               {ordenDetalle.descripcion || '—'}
             </DetailItem>
           </DetailGrid>
+        )}
+        {ordenDetalle && (
+          <ConsumosEvidenciasOrden
+            ordenId={ordenDetalle.id}
+            bloqueada={ordenFinalizada(ordenDetalle)}
+            notify={notify}
+          />
         )}
       </Modal>
 

@@ -78,7 +78,7 @@ export function Materiales() {
     error: errorMateriales,
     loading: cargandoMateriales,
     reload: cargarMateriales,
-  } = useApiData(() => apiRequest('/materiales').then((lista) => lista.map(normalizarMaterial)), []);
+  } = useApiData(() => apiRequest('/materiales').then((lista) => lista.map(normalizarMaterial)), [], { intervaloMs: 30000 });
   const {
     data: categorias,
     error: errorCategorias,

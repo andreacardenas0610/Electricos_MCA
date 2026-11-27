@@ -73,6 +73,7 @@ export function Registro({ onBack }) {
     usuario: '',
     correo: '',
     documento: '',
+    genero: 'Prefiere no decirlo',
     password: '',
     confirmar: '',
   });
@@ -113,6 +114,7 @@ export function Registro({ onBack }) {
           usuario: datos.usuario.trim(),
           correo: datos.correo.trim(),
           documento: datos.documento.trim(),
+          genero: datos.genero,
           password: datos.password,
         },
       });
@@ -123,6 +125,7 @@ export function Registro({ onBack }) {
         usuario: '',
         correo: '',
         documento: '',
+        genero: 'Prefiere no decirlo',
         password: '',
         confirmar: '',
       });
@@ -142,6 +145,22 @@ export function Registro({ onBack }) {
         <CampoAuth nombre="usuario" etiqueta="USUARIO" tipo="text" valor={datos.usuario} onChange={cambiar} autoComplete="username" error={errores.usuario} />
         <CampoAuth nombre="correo" etiqueta="CORREO ELECTRÓNICO" tipo="email" valor={datos.correo} onChange={cambiar} autoComplete="email" error={errores.correo} />
         <CampoAuth nombre="documento" etiqueta="DOCUMENTO" tipo="text" valor={datos.documento} onChange={cambiar} autoComplete="off" error={errores.documento} />
+        <fieldset className="auth-genero">
+          <legend>GÉNERO</legend>
+          <p className="auth-genero__ayuda">Elige la imagen con la que aparecerás en la plataforma.</p>
+          {['Mujer', 'Hombre', 'Prefiere no decirlo'].map((opcion) => (
+            <label key={opcion} className={datos.genero === opcion ? 'is-active' : ''}>
+              <input
+                type="radio"
+                name="genero"
+                value={opcion}
+                checked={datos.genero === opcion}
+                onChange={cambiar}
+              />
+              <span>{opcion}</span>
+            </label>
+          ))}
+        </fieldset>
         <CampoAuth nombre="password" etiqueta="CONTRASEÑA" tipo="password" valor={datos.password} onChange={cambiar} autoComplete="new-password" error={errores.password} />
         <CampoAuth nombre="confirmar" etiqueta="CONFIRMAR CONTRASEÑA" tipo="password" valor={datos.confirmar} onChange={cambiar} autoComplete="new-password" error={errores.confirmar} />
         <button className="auth-submit" type="submit" disabled={enviando}>

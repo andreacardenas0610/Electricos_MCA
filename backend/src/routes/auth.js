@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
+import { verificarToken } from '../middleware/auth.js';
 import { correoValido, textoValido } from '../utils/validacion.js';
 import { configuracionCorreo, enviarCorreo } from '../utils/correo.js';
 
@@ -16,6 +17,16 @@ const solicitudesRecuperacion = new Map();
 
 const MENSAJE_RECUPERACION = 'Si la cuenta existe y tiene un correo registrado, enviamos las instrucciones para restablecer la contraseña. Revisa también la bandeja de spam.';
 const MENSAJE_VERIFICACION = 'Si la cuenta existe y aún no está verificada, enviaremos un nuevo enlace a su correo.';
+
+const GENEROS = ['Mujer', 'Hombre', 'Prefiere no decirlo'];
+
+// Acepta variantes razonables y cae al valor neutro (avatar gris).
+function normalizarGenero(valor) {
+  const texto = String(valor || '').trim().toLowerCase();
+  if (texto === 'mujer' || texto === 'femenino') return 'Mujer';
+  if (texto === 'hombre' || texto === 'masculino') return 'Hombre';
+  return 'Prefiere no decirlo';
+}
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -159,6 +170,7 @@ router.post('/login', async (req, res, next) => {
               COALESCE(p.correo_electronico, u.correo_electronico) AS correo_electronico,
               u.password_hash,
               u.estado, u.verificado, u.rol_id, u.tercero_id,
+              COALESCE(u.genero, 'Prefiere no decirlo') AS genero,
               r.nombre AS rol, r.plataformas,
               COALESCE(p.nombre_completo, t.nombre_completo) AS tecnico_nombre
        FROM usuarios u
@@ -189,6 +201,20 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ mensaje: 'Usuario o contraseña incorrectos, o cuenta sin acceso a esta plataforma.' });
     }
 
+    // Roles adicionales (migración 008). Si la tabla aún no existe, se usa el principal.
+    let roles = [cuenta.rol];
+    try {
+      const { rows } = await pool.query(
+        `SELECT r.nombre FROM usuarios_roles ur
+         JOIN roles r ON r.id = ur.rol_id
+         WHERE ur.usuario_id = $1`,
+        [cuenta.id],
+      );
+      roles = [...new Set([cuenta.rol, ...rows.map((fila) => fila.nombre)])].filter(Boolean);
+    } catch {
+      roles = [cuenta.rol];
+    }
+
     const token = jwt.sign(
       {
         id: cuenta.id,
@@ -210,10 +236,75 @@ router.post('/login', async (req, res, next) => {
         nombre: cuenta.tecnico_nombre || cuenta.nombre_completo,
         correo: cuenta.correo_electronico || null,
         rol: cuenta.rol,
+        roles,
+        genero: cuenta.genero,
         tipoCuenta: 'usuario',
         terceroId: cuenta.tercero_id || null,
         plataforma,
       },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// Autoservicio del técnico: cambiar su usuario y/o contraseña desde la app móvil.
+router.put('/mi-cuenta', verificarToken, async (req, res, next) => {
+  try {
+    const usuario = String(req.body?.usuario || '').trim();
+    const passwordActual = typeof req.body?.passwordActual === 'string' ? req.body.passwordActual : '';
+    const passwordNueva = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!/^[a-zA-Z0-9._-]{3,40}$/.test(usuario)) {
+      return res.status(400).json({
+        mensaje: 'El usuario debe tener entre 3 y 40 caracteres (letras, números, punto, guion o guion bajo).',
+      });
+    }
+    if (!passwordActual) {
+      return res.status(400).json({ mensaje: 'Escribe tu contraseña actual para confirmar los cambios.' });
+    }
+    if (passwordNueva && passwordNueva.length < 8) {
+      return res.status(400).json({ mensaje: 'La nueva contraseña debe tener al menos 8 caracteres.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, usuario, password_hash, estado
+       FROM usuarios
+       WHERE id = $1
+       LIMIT 1`,
+      [req.usuario?.id],
+    );
+    const cuenta = rows[0];
+    const coincide = cuenta
+      && cuenta.estado === 'Activo'
+      && typeof cuenta.password_hash === 'string'
+      && await bcrypt.compare(passwordActual, cuenta.password_hash);
+    if (!coincide) {
+      return res.status(401).json({ mensaje: 'La contraseña actual no es correcta.' });
+    }
+
+    const duplicado = await pool.query(
+      'SELECT id FROM usuarios WHERE lower(usuario) = lower($1) AND id <> $2 LIMIT 1',
+      [usuario, cuenta.id],
+    );
+    if (duplicado.rows[0]) {
+      return res.status(409).json({ mensaje: 'Ese nombre de usuario ya está en uso.' });
+    }
+
+    const hash = passwordNueva ? await bcrypt.hash(passwordNueva, 12) : null;
+    await pool.query(
+      `UPDATE usuarios
+       SET usuario = $1,
+           password_hash = COALESCE($2, password_hash),
+           actualizado_en = now()
+       WHERE id = $3`,
+      [usuario, hash, cuenta.id],
+    );
+    return res.json({
+      mensaje: passwordNueva
+        ? 'Usuario y contraseña actualizados.'
+        : 'Usuario actualizado.',
+      usuario,
     });
   } catch (error) {
     return next(error);
@@ -268,20 +359,31 @@ router.post('/registro', async (req, res, next) => {
         textoValido(datos.departamento) ? datos.departamento.trim() : '',
       ],
     );
+    // La columna genero llega con la migración 011; si aún no está, el registro sigue funcionando.
+    const genero = normalizarGenero(datos.genero);
+    const tieneGenero = (await client.query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'usuarios' AND column_name = 'genero'`,
+    )).rowCount > 0;
+    const columnasUsuario = [
+      'nombre_completo', 'usuario', 'correo_electronico', 'password_hash',
+      'estado', 'verificado', 'rol_id', 'tercero_id',
+    ];
+    const valoresUsuario = [
+      datos.nombre.trim(),
+      datos.usuario.trim(),
+      datos.correo.trim(),
+      hash,
+      rolResultado.rows[0].id,
+      tecnicoResultado.rows[0].id,
+    ];
+    if (tieneGenero) columnasUsuario.push('genero');
+    if (tieneGenero) valoresUsuario.push(genero);
     const usuarioResultado = await client.query(
-      `INSERT INTO usuarios
-         (nombre_completo, usuario, correo_electronico, password_hash,
-          estado, verificado, rol_id, tercero_id)
-       VALUES ($1, $2, lower($3), $4, 'Activo', FALSE, $5, $6)
+      `INSERT INTO usuarios (${columnasUsuario.join(', ')})
+       VALUES ($1, $2, lower($3), $4, 'Activo', FALSE, $5, $6${tieneGenero ? ', $7' : ''})
        RETURNING id, nombre_completo, correo_electronico`,
-      [
-        datos.nombre.trim(),
-        datos.usuario.trim(),
-        datos.correo.trim(),
-        hash,
-        rolResultado.rows[0].id,
-        tecnicoResultado.rows[0].id,
-      ],
+      valoresUsuario,
     );
     cuenta = usuarioResultado.rows[0];
     token = await crearToken(client, cuenta.id, 'verificacion', VIGENCIA_VERIFICACION_MS);

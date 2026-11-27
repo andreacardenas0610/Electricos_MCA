@@ -99,6 +99,34 @@ async function enviar(path, { method = 'GET', body, ...options }) {
   }
 }
 
+// Las evidencias viven detrás del token: un <img src> no puede enviar el Bearer,
+// así que se descargan con fetch y se entregan como URL temporal (blob:).
+export async function apiBlobUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path) && !path.startsWith(API_BASE_URL)) return path;
+
+  const headers = new Headers();
+  const sessionRaw = sessionStorage.getItem('mca_session');
+  if (sessionRaw) {
+    try {
+      const session = JSON.parse(sessionRaw);
+      if (session?.token) headers.set('Authorization', `Bearer ${session.token}`);
+    } catch {
+      // Sesión corrupta: se ignora y la petición seguirá sin token.
+    }
+  }
+
+  const destino = path.startsWith('/api/')
+    ? `${API_BASE_URL.replace(/\/api$/i, '')}${path}`
+    : `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+
+  const response = await fetch(destino, { headers });
+  if (!response.ok) throw new Error(`No se pudo cargar la evidencia (${response.status}).`);
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function apiRequest(path, options = {}) {
   const { method = 'GET' } = options;
   const esLectura = method === 'GET';

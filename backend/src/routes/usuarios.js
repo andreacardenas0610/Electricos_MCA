@@ -12,8 +12,21 @@ const columnasUsuario = `
   COALESCE(p.telefono, u.telefono) AS telefono, u.zona, u.estado,
   u.verificado, u.tercero_id AS "terceroId",
   COALESCE(p.documento, t.documento) AS "documentoTecnico",
+  COALESCE(u.genero, 'Prefiere no decirlo') AS genero,
   u.rol_id, r.nombre AS rol
 `;
+
+const GENEROS = ['Mujer', 'Hombre', 'Prefiere no decirlo'];
+
+// Guarda el género solo cuando la migración 011 ya creó la columna.
+async function guardarGenero(client, usuarioId, genero) {
+  if (!GENEROS.includes(genero)) return;
+  try {
+    await client.query('UPDATE usuarios SET genero = $1 WHERE id = $2', [genero, usuarioId]);
+  } catch (error) {
+    if (!String(error?.message || '').includes('genero')) throw error;
+  }
+}
 
 // Tabla usuarios_roles (migración 008). Mientras no exista en la base,
 // todo sigue funcionando con el rol principal (rol_id).
@@ -74,6 +87,9 @@ function validar(datos, crear = false) {
   }
   if (datos.estado && !['Activo', 'Inactivo'].includes(datos.estado)) {
     errores.push('estado debe ser Activo o Inactivo.');
+  }
+  if (datos.genero != null && datos.genero !== '' && !GENEROS.includes(datos.genero)) {
+    errores.push('genero debe ser Mujer, Hombre o Prefiere no decirlo.');
   }
   return errores;
 }
@@ -355,6 +371,7 @@ router.post('/', async (req, res, next) => {
       );
     }
     await sincronizarRolesExtras(client, rows[0].id, extras);
+    await guardarGenero(client, rows[0].id, datos.genero);
     const usuario = await client.query(
       `SELECT ${columnasUsuario} FROM usuarios u
        JOIN roles r ON r.id = u.rol_id
@@ -510,6 +527,7 @@ router.put('/:id', async (req, res, next) => {
       ],
     );
     await sincronizarRolesExtras(client, rows[0].id, extras);
+    await guardarGenero(client, rows[0].id, datos.genero);
     if (terceroId) {
       await client.query(
         `UPDATE terceros

@@ -377,6 +377,158 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// Genera una orden de servicio por cada servicio de la cotización aprobada.
+// Es idempotente: si la orden de ese servicio ya existe, la omite.
+router.post('/:codigo/generar-ordenes', async (req, res, next) => {
+  if (!(req.usuario?.tipoCuenta === 'usuario' && req.usuario?.rol === 'Administrador')) {
+    return res.status(403).json({ mensaje: 'Solo el administrador puede generar órdenes desde una cotización.' });
+  }
+  const codigo = String(req.params.codigo || '').trim();
+  if (!codigo) return res.status(400).json({ mensaje: 'El código de la cotización es obligatorio.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cotizacionResultado = await client.query(
+      `SELECT codigo, estado, cliente_id, direccion
+       FROM cotizaciones WHERE codigo = $1 FOR UPDATE`,
+      [codigo],
+    );
+    const cotizacion = cotizacionResultado.rows[0];
+    if (!cotizacion) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ mensaje: 'Cotización no encontrada.' });
+    }
+    if (!cotizacion.cliente_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'La cotización no tiene un cliente vinculado; no se puede crear la orden.' });
+    }
+    if (cotizacion.estado !== 'Aprobado') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        mensaje: `La cotización está ${cotizacion.estado}. Solo se generan órdenes cuando está Aprobada.`,
+      });
+    }
+
+    const itemsResultado = await client.query(
+      `SELECT referencia_id, descripcion, cantidad
+       FROM cotizacion_items
+       WHERE cotizacion_codigo = $1 AND tipo = 'servicio'
+       ORDER BY orden, id`,
+      [codigo],
+    );
+    const items = itemsResultado.rows;
+    if (!items.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ mensaje: 'La cotización no tiene servicios; solo se generan órdenes de sus servicios.' });
+    }
+
+    const servicioIds = [...new Set(
+      items.map((item) => Number(item.referencia_id)).filter((id) => Number.isInteger(id) && id > 0),
+    )];
+    const serviciosResultado = await client.query(
+      'SELECT id, nombre FROM servicios WHERE id = ANY($1::int[])',
+      [servicioIds],
+    );
+    const servicios = new Map(serviciosResultado.rows.map((servicio) => [Number(servicio.id), servicio]));
+
+    const prioridadResultado = await client.query(
+      `SELECT id FROM prioridades
+       ORDER BY CASE lower(nombre) WHEN 'media' THEN 0 ELSE 1 END, id
+       LIMIT 1`,
+    );
+    const estadoResultado = await client.query(
+      "SELECT id FROM estados_orden_servicio WHERE lower(nombre) = 'pendiente' LIMIT 1",
+    );
+    const prioridadId = prioridadResultado.rows[0]?.id;
+    const estadoId = estadoResultado.rows[0]?.id;
+    if (!prioridadId || !estadoId) {
+      await client.query('ROLLBACK');
+      return res.status(503).json({ mensaje: 'Faltan la prioridad o el estado Pendiente en la configuración.' });
+    }
+
+    // Serializa la numeración de órdenes para que dos cotizaciones no repitan código.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('ordenes-codigo'))");
+    const anio = new Date().getFullYear();
+    const existentes = await client.query(
+      'SELECT codigo FROM ordenes_servicio WHERE codigo LIKE $1',
+      [`OS-${anio}-%`],
+    );
+    let consecutivo = existentes.rows.reduce((mayor, fila) => {
+      const coincidencia = fila.codigo.match(new RegExp(`^OS-${anio}-(\\d+)$`));
+      return coincidencia ? Math.max(mayor, Number(coincidencia[1])) : mayor;
+    }, 0);
+
+    const creadas = [];
+    const omitidas = [];
+    for (const item of items) {
+      const servicio = servicios.get(Number(item.referencia_id));
+      if (!servicio) {
+        omitidas.push({ servicio: item.descripcion, motivo: 'El servicio ya no existe en el catálogo.' });
+        continue;
+      }
+      const yaExiste = await client.query(
+        `SELECT codigo FROM ordenes_servicio
+         WHERE cotizacion_codigo = $1 AND servicio_id = $2
+         LIMIT 1`,
+        [codigo, servicio.id],
+      );
+      if (yaExiste.rows[0]) {
+        omitidas.push({
+          servicio: servicio.nombre,
+          motivo: `Ya tiene la orden ${yaExiste.rows[0].codigo}.`,
+        });
+        continue;
+      }
+
+      consecutivo += 1;
+      const codigoOrden = `OS-${anio}-${String(consecutivo).padStart(4, '0')}`;
+      const cantidad = Number(item.cantidad) || 1;
+      const detalle = cantidad > 1 ? `${item.descripcion} (cantidad ${cantidad})` : item.descripcion;
+      const ordenResultado = await client.query(
+        `INSERT INTO ordenes_servicio
+           (codigo, cliente_id, servicio_id, prioridad_id, estado_id,
+            descripcion, direccion, cotizacion_codigo)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, codigo`,
+        [
+          codigoOrden,
+          cotizacion.cliente_id,
+          servicio.id,
+          prioridadId,
+          estadoId,
+          `Cotización ${codigo} · ${detalle}`,
+          cotizacion.direccion || '',
+          codigo,
+        ],
+      );
+      await client.query(
+        `INSERT INTO historial_estados_orden
+           (orden_servicio_id, usuario_id, estado_nuevo_id, comentario)
+         VALUES ($1, $2, $3, $4)`,
+        [ordenResultado.rows[0].id, req.usuario.id, estadoId, `Orden generada desde la cotización ${codigo}`],
+      );
+      creadas.push({
+        id: ordenResultado.rows[0].id,
+        codigo: ordenResultado.rows[0].codigo,
+        servicio: servicio.nombre,
+      });
+    }
+
+    await client.query('COMMIT');
+    return res.status(201).json({
+      mensaje: `${creadas.length} orden(es) de servicio generada(s).`,
+      creadas,
+      omitidas,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
 router.put('/:codigo', async (req, res, next) => {
   const datos = req.body || {};
   const errores = validar(datos);

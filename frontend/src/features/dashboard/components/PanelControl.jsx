@@ -105,7 +105,7 @@ export function PanelControl({ onNavegar }) {
     clientes: [],
     tecnicos: [],
     incidencias: [],
-  });
+  }, { intervaloMs: 30000 });
 
   const [rangoMeses, setRangoMeses] = useState(6);
   const [detalleId, setDetalleId] = useState(null);

@@ -2815,3 +2815,13 @@
     max-width: none;
   }
 }
+
+/* Indicador de carga giratorio reutilizable (consumidos y evidencias). */
+.mca-spin {
+  animation: mca-spin 0.9s linear infinite;
+  vertical-align: -2px;
+}
+
+@keyframes mca-spin {
+  to { transform: rotate(360deg); }
+}

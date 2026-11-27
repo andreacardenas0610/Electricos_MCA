@@ -70,9 +70,13 @@ const consultaActividades = `
     SELECT os.id, os.codigo, oe.nombre AS estado
     FROM ordenes_servicio os
     JOIN estados_orden_servicio oe ON oe.id = os.estado_id
-    WHERE os.cliente_id = a.cliente_id
-      AND os.servicio_id = a.servicio_id
-    ORDER BY CASE WHEN oe.nombre IN ('Pendiente', 'En Espera de Repuestos') THEN 0 ELSE 1 END,
+    WHERE os.id = a.orden_servicio_id
+      OR (a.orden_servicio_id IS NULL
+        AND os.cliente_id = a.cliente_id
+        AND os.servicio_id = a.servicio_id)
+    ORDER BY CASE WHEN os.id = a.orden_servicio_id THEN 0
+                  WHEN oe.nombre IN ('Pendiente', 'En Espera de Repuestos') THEN 1
+                  ELSE 2 END,
              os.id DESC
     LIMIT 1
   ) o ON TRUE
@@ -80,6 +84,8 @@ const consultaActividades = `
 
 // Estados de orden que todavía no tienen fecha de servicio: los que la agenda debe programar.
 const estadosAgendables = ['Pendiente', 'En Espera de Repuestos'];
+// Al editar una actividad ya creada se permite mantener la orden en curso.
+const estadosEditables = [...estadosAgendables, 'En Ejecución'];
 
 function minutos(hora) {
   const [h, m] = hora.split(':').map(Number);
@@ -157,7 +163,7 @@ async function validarOrden(client, datos, idActual = null) {
   if (String(orden.cliente_id) !== String(datos.clienteId)) {
     return { error: `La orden ${orden.codigo} no pertenece al cliente seleccionado.` };
   }
-  if (!estadosAgendables.includes(orden.estado)) {
+  if (!(idActual ? estadosEditables : estadosAgendables).includes(orden.estado)) {
     return { error: `La orden ${orden.codigo} está ${orden.estado}; solo se agendan las órdenes ${estadosAgendables.join(' o ')}.` };
   }
   if (String(orden.servicio_id) !== String(datos.servicioId)) {
@@ -273,6 +279,74 @@ async function obtenerActividad(client, id, req = null) {
     parametros,
   );
   return rows[0] || null;
+}
+
+// Mismo servicio visto desde la agenda y desde la orden: al cambiar el estado
+// del calendario se refleja en la orden para que el móvil muestre lo mismo.
+const estadoOrdenPorAgenda = {
+  'En proceso': 'En Ejecución',
+  'Completada': 'Finalizada',
+  'Cancelada': 'Cancelada',
+};
+
+async function sincronizarOrdenDesdeAgenda(client, actividad, estadoAgenda, usuarioId) {
+  const nombreOrden = estadoOrdenPorAgenda[estadoAgenda];
+  if (!nombreOrden) return;
+
+  let ordenId = actividad.orden_servicio_id;
+  if (!ordenId) {
+    const { rows } = await client.query(
+      `SELECT os.id FROM ordenes_servicio os
+       JOIN estados_orden_servicio e ON e.id = os.estado_id
+       WHERE os.cliente_id = $1 AND os.servicio_id = $2
+         AND e.nombre IN ('Pendiente', 'En Ejecución', 'En Espera de Repuestos')
+       ORDER BY CASE WHEN e.nombre = 'Pendiente' THEN 0 ELSE 1 END, os.id DESC
+       LIMIT 1`,
+      [actividad.cliente_id, actividad.servicio_id],
+    );
+    ordenId = rows[0]?.id;
+  }
+  if (!ordenId) return;
+
+  const { rows: ordenActual } = await client.query(
+    `SELECT os.estado_id, e.nombre
+     FROM ordenes_servicio os
+     JOIN estados_orden_servicio e ON e.id = os.estado_id
+     WHERE os.id = $1
+     FOR UPDATE OF os`,
+    [ordenId],
+  );
+  const actual = ordenActual[0];
+  const puedeCambiar = actual
+    && actual.nombre !== 'Finalizada'
+    && actual.nombre !== 'Cancelada'
+    && actual.nombre !== nombreOrden;
+
+  if (puedeCambiar) {
+    const { rows: nuevo } = await client.query(
+      'SELECT id FROM estados_orden_servicio WHERE lower(nombre) = lower($1)',
+      [nombreOrden],
+    );
+    if (nuevo[0]) {
+      await client.query(
+        'UPDATE ordenes_servicio SET estado_id = $1, actualizado_en = now() WHERE id = $2',
+        [nuevo[0].id, ordenId],
+      );
+      await client.query(
+        `INSERT INTO historial_estados_orden
+           (orden_servicio_id, usuario_id, estado_anterior_id, estado_nuevo_id, comentario)
+         VALUES ($1, $2, $3, $4, 'Estado actualizado desde la agenda')`,
+        [ordenId, usuarioId || null, actual.estado_id, nuevo[0].id],
+      );
+    }
+  }
+
+  await client.query(
+    `UPDATE agenda_actividades
+     SET orden_servicio_id = COALESCE(orden_servicio_id, $1)
+     WHERE id = $2`,
+    [ordenId, actividad.id],
+  );
 }
 
 router.get('/', async (req, res, next) => {
@@ -430,15 +504,34 @@ router.post('/', async (req, res, next) => {
     const { rows } = await client.query(
       `INSERT INTO agenda_actividades
          (codigo, cliente_id, servicio_id, tercero_id, fecha, hora_inicio, hora_fin,
-          horas, estado, prioridad, descripcion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          horas, estado, prioridad, descripcion, orden_servicio_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         codigo, datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
         datos.prioridad || 'Media', datos.descripcion || '',
+        idValido(datos.ordenServicioId) || null,
       ],
     );
+    // Si no eligieron orden, se vincula la orden pendiente del mismo cliente y
+    // servicio para que el técnico la vea en el inicio del móvil.
+    if (!idValido(datos.ordenServicioId)) {
+      await client.query(
+        `UPDATE agenda_actividades a
+         SET orden_servicio_id = o.id
+         FROM (
+           SELECT os.id FROM ordenes_servicio os
+           JOIN estados_orden_servicio e ON e.id = os.estado_id
+           WHERE os.cliente_id = $1 AND os.servicio_id = $2
+             AND e.nombre IN ('Pendiente', 'En Espera de Repuestos')
+           ORDER BY os.id DESC
+           LIMIT 1
+         ) o
+         WHERE a.id = $3 AND a.orden_servicio_id IS NULL`,
+        [datos.clienteId, datos.servicioId, rows[0].id],
+      );
+    }
     const actividad = await obtenerActividad(client, rows[0].id);
     await client.query('COMMIT');
     return res.status(201).json(actividad);
@@ -461,7 +554,7 @@ router.put('/:id', async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const actual = await client.query(
-      'SELECT id, estado, cliente_id, servicio_id FROM agenda_actividades WHERE id = $1 FOR UPDATE',
+      'SELECT id, estado, cliente_id, servicio_id, orden_servicio_id FROM agenda_actividades WHERE id = $1 FOR UPDATE',
       [id],
     );
     if (!actual.rows[0]) {
@@ -511,13 +604,27 @@ router.put('/:id', async (req, res, next) => {
       `UPDATE agenda_actividades
        SET cliente_id = $1, servicio_id = $2, tercero_id = $3, fecha = $4,
            hora_inicio = $5, hora_fin = $6, horas = $7, estado = $8,
-           prioridad = $9, descripcion = $10, actualizado_en = now()
+           prioridad = $9, descripcion = $10,
+           orden_servicio_id = $12::bigint,
+           actualizado_en = now()
        WHERE id = $11`,
       [
         datos.clienteId, datos.servicioId, datos.tecnicoId, datos.fecha,
         datos.horaInicio, horaFin, referencia.horas, datos.estado || 'Programada',
         datos.prioridad || 'Media', datos.descripcion || '', id,
+        idValido(datos.ordenServicioId) || null,
       ],
+    );
+    await sincronizarOrdenDesdeAgenda(
+      client,
+      {
+        id,
+        cliente_id: datos.clienteId,
+        servicio_id: datos.servicioId,
+        orden_servicio_id: idValido(datos.ordenServicioId) || null,
+      },
+      datos.estado || 'Programada',
+      req.usuario?.tipoCuenta === 'usuario' ? req.usuario.id : null,
     );
     const actividad = await obtenerActividad(client, id);
     await client.query('COMMIT');
@@ -535,24 +642,49 @@ router.patch('/:id/estado', async (req, res, next) => {
   const { estado } = req.body || {};
   if (!id) return res.status(400).json({ mensaje: 'El id no es válido.' });
   if (!estados.includes(estado)) return res.status(400).json({ mensaje: 'estado no es válido.' });
+
+  const client = await pool.connect();
   try {
-    const { rows: existente } = await pool.query('SELECT estado FROM agenda_actividades WHERE id = $1', [id]);
-    if (!existente[0]) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    await client.query('BEGIN');
+    const { rows: existente } = await client.query(
+      `SELECT id, estado, cliente_id, servicio_id, orden_servicio_id
+       FROM agenda_actividades WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    if (!existente[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    }
     if (existente[0].estado === 'Completada' && estado !== 'Completada') {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         mensaje: 'El servicio ya está Completada y queda bloqueada. No se puede cambiar su estado.',
       });
     }
 
-    const resultado = await pool.query(
+    const resultado = await client.query(
       `UPDATE agenda_actividades SET estado = $1, actualizado_en = now()
        WHERE id = $2 RETURNING id`,
       [estado, id],
     );
-    if (!resultado.rowCount) return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    if (!resultado.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ mensaje: 'Actividad no encontrada.' });
+    }
+
+    await sincronizarOrdenDesdeAgenda(
+      client,
+      existente[0],
+      estado,
+      req.usuario?.tipoCuenta === 'usuario' ? req.usuario.id : null,
+    );
+    await client.query('COMMIT');
     return res.json(await obtenerActividad(pool, id));
   } catch (error) {
+    await client.query('ROLLBACK');
     return next(error);
+  } finally {
+    client.release();
   }
 });
 

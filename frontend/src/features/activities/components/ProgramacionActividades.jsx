@@ -136,7 +136,7 @@ export function ProgramacionActividades() {
       servicios: servicios.map(normalizarServicio),
       tecnicos: terceros.map(normalizarTecnico).filter((tecnico) => tecnico.estado !== 'Inactivo'),
     };
-  }, { actividades: [], clientes: [], servicios: [], tecnicos: [] });
+  }, { actividades: [], clientes: [], servicios: [], tecnicos: [] }, { intervaloMs: 15000 });
   const { actividades, clientes, servicios, tecnicos } = data;
 
   const [busqueda, setBusqueda] = useState('');

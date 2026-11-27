@@ -13,6 +13,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
+import { AvatarUsuario, ChipInicialesRol } from '../../../shared/components/AvatarUsuario.jsx';
 import { apiRequest } from '../../../shared/api.js';
 import { useApiData } from '../../../shared/useApiData.js';
 import { EstadoToggle, ESTADOS } from '../../../shared/components/EstadoToggle.jsx';
@@ -62,6 +63,7 @@ const FORMULARIO_USUARIO = (usuario = null) => {
     terceroId: usuario?.terceroId || '',
     rol: roles[0] || '',
     roles,
+    genero: usuario?.genero || 'Prefiere no decirlo',
     zona: usuario?.zona || 'General',
     password: '',
     confirmar: '',
@@ -144,7 +146,7 @@ export function GestionUsuarios({ usuario: usuarioSesion }) {
     rol.estado === 'Activo' || (formulario?.roles || []).includes(rol.nombre)
   ));
   const perfilesTecnicosDisponibles = terceros.filter((tercero) => (
-    tercero.estado === 'Activo'
+    (tercero.estado === 'Activo' || String(tercero.id) === String(formulario?.terceroId))
     && (!usuarios.some((usuario) => (
       String(usuario.terceroId) === String(tercero.id)
       && String(usuario.id) !== String(formulario?.id)
@@ -277,6 +279,7 @@ export function GestionUsuarios({ usuario: usuarioSesion }) {
         telefono: formulario.telefono,
         rol: formulario.rol,
         roles: formulario.roles,
+        genero: formulario.genero,
         zona: formulario.zona,
         tercero_id: formulario.rol === 'Técnico' ? formulario.terceroId : null,
       };
@@ -422,24 +425,22 @@ export function GestionUsuarios({ usuario: usuarioSesion }) {
                 <tr key={usuario.id} className={claseFilaEstado(usuario.estado, 'usuario')}>
                   <td>
                     <div className="mca-row" style={{ gap: 10 }}>
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 10,
-                          display: 'grid',
-                          placeItems: 'center',
-                          backgroundColor: 'var(--bg-elevated)',
-                          color: 'var(--accent-yellow)',
-                          fontWeight: 800,
-                          fontSize: 12,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {usuario.nombre.slice(0, 2).toUpperCase()}
-                      </div>
+                      <AvatarUsuario
+                        nombre={usuario.nombre}
+                        usuario={usuario.usuario}
+                        genero={usuario.genero}
+                        rol={usuario.rol}
+                        size={36}
+                      />
                       <div>
-                        <strong style={{ display: 'block' }}>{usuario.nombre}</strong>
+                        <div className="mca-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                          <strong style={{ display: 'block' }}>{usuario.nombre}</strong>
+                          <ChipInicialesRol
+                            nombre={usuario.nombre}
+                            rol={usuario.rol}
+                            title="Iniciales del nombre + inicial del rol principal"
+                          />
+                        </div>
                         <span className="mca-muted" style={{ fontSize: 11 }}>@{usuario.usuario}</span>
                       </div>
                     </div>
@@ -559,6 +560,17 @@ export function GestionUsuarios({ usuario: usuarioSesion }) {
                 onChange={(evento) => setCampo('telefono', evento.target.value)}
                 placeholder="310 555 0000"
               />
+            </Field>
+            <Field label="Género" hint="Elige la imagen con la que se identifica la cuenta.">
+              <select
+                className="mca-select"
+                value={formulario.genero}
+                onChange={(evento) => setCampo('genero', evento.target.value)}
+              >
+                {['Mujer', 'Hombre', 'Prefiere no decirlo'].map((opcion) => (
+                  <option key={opcion} value={opcion}>{opcion}</option>
+                ))}
+              </select>
             </Field>
             <Field
               label="Roles"
@@ -687,6 +699,7 @@ export function GestionUsuarios({ usuario: usuarioSesion }) {
               <DetailItem label="Cédula">{usuarioDetalle.documento || '—'}</DetailItem>
               <DetailItem label="Correo">{usuarioDetalle.correo || '—'}</DetailItem>
               <DetailItem label="Teléfono">{usuarioDetalle.telefono || '—'}</DetailItem>
+              <DetailItem label="Género">{usuarioDetalle.genero || 'Prefiere no decirlo'}</DetailItem>
               <DetailItem label="Rol">
                 <Badge tone={TONO_ROL[usuarioDetalle.rol] || 'neutral'}>{usuarioDetalle.rol}</Badge>
               </DetailItem>

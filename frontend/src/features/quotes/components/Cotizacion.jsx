@@ -8,6 +8,7 @@ import {
   Mail,
   Plus,
   Trash2,
+  Wrench,
 } from 'lucide-react';
 
 import { AccionesFila } from '../../../shared/components/AccionesFila.jsx';
@@ -463,6 +464,26 @@ export function Cotizacion() {
 
   // El estado ya no se mueve con un clic: aprobarlo lo hace únicamente el abono del 30%.
   // Rechazar sí sigue siendo una decisión del asesor, por eso queda como acción explícita.
+  // Crea una orden de servicio por cada servicio de la cotización aprobada.
+  const generarOrdenes = async (cotizacion) => {
+    try {
+      const resultado = await apiRequest(
+        `/cotizaciones/${encodeURIComponent(cotizacion.id)}/generar-ordenes`,
+        { method: 'POST' },
+      );
+      const creadas = resultado.creadas?.length || 0;
+      const omitidas = resultado.omitidas?.length || 0;
+      notify(
+        creadas ? 'success' : 'info',
+        'Órdenes de servicio',
+        `${creadas} creada(s)${omitidas ? ` · ${omitidas} omitida(s)` : ''}.`,
+      );
+      await cargarDatos();
+    } catch (error) {
+      notify('error', 'No se pudieron generar las órdenes', error.message);
+    }
+  };
+
   const handleRechazar = async (cotizacion) => {
     if (!cotizacion) return;
     try {
@@ -870,6 +891,9 @@ export function Cotizacion() {
                           onEditar={() => abrirEditar(cotizacion)}
                           onPdf={() => handlePdf(cotizacion)}
                           onCorreo={() => abrirEnvioCorreo(cotizacion)}
+                          onOrdenes={cotizacion.estadoCotizacion === 'Aprobado'
+                            ? () => generarOrdenes(cotizacion)
+                            : undefined}
                           onAbono={() => {
                             setCotizacionDetalle(cotizacion);
                             setErroresAbono({});
@@ -1427,6 +1451,11 @@ export function Cotizacion() {
             >
               Enviar por correo
             </Button>
+            {cotizacionDetalle?.estadoCotizacion === 'Aprobado' && (
+              <Button icon={Wrench} onClick={() => generarOrdenes(cotizacionDetalle)}>
+                Generar órdenes
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={() => {

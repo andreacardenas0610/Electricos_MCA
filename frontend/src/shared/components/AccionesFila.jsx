@@ -1,5 +1,5 @@
 import React from 'react';
-import { CircleDollarSign, Eye, FileText, Mail, Pencil, Trash2 } from 'lucide-react';
+import { CircleDollarSign, Eye, FileText, Mail, Pencil, Trash2, Wrench } from 'lucide-react';
 
 export function AccionesFila({
   onVer,
@@ -7,6 +7,7 @@ export function AccionesFila({
   onPdf,
   onCorreo,
   onAbono,
+  onOrdenes,
   onEliminar,
   color,
   alineacion = 'center',
@@ -46,6 +47,17 @@ export function AccionesFila({
       {onAbono && (
         <button type="button" className="mca-icon-btn" onClick={onAbono} data-mca-tooltip="Registrar abono" aria-label="Registrar abono">
           <CircleDollarSign {...iconProps} />
+        </button>
+      )}
+
+      {onOrdenes && (
+        <button
+          type="button"
+          className="mca-icon-btn"
+          onClick={onOrdenes}
+          title="Generar órdenes de servicio desde los servicios de la cotización"
+        >
+          <Wrench {...iconProps} />
         </button>
       )}
 
